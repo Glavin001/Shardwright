@@ -142,15 +142,17 @@ fn transverse_isotropic_axial() {
 #[test]
 fn eigensolver_matches_dense() {
     // a mesh just above the dense threshold so the iterative path is used
-    let solid = box_mesh(DVec3::ZERO, DVec3::new(2.0, 1.0, 0.7));
-    let m = tetrahedralize(&solid, 0.3, 0);
+    let solid = box_mesh(DVec3::ZERO, DVec3::new(1.0, 0.5, 0.4));
+    let m = tetrahedralize(&solid, 0.2, 0);
     let mats = vec![ElasticMaterial::isotropic(100.0, 0.25, 2.0); m.tets.len()];
     let k = assemble_stiffness(&m, &mats);
     let mm = assemble_lumped_mass(&m, &mats);
     let n = k.n_rows;
-    assert!(n > 240 && n < 1500, "dofs {n}");
+    assert!(n > 240 && n < 700, "dofs {n}");
+    let t0 = std::time::Instant::now();
     let defl = rigid_modes(&m.verts);
     let res = smallest_eigenpairs(&k, &mm, &defl, &EigenOptions { n: 8, seed: 3, ..Default::default() }).unwrap();
+    eprintln!("n {n} iters {} res {} t {:?}", res.iterations, res.max_residual, t0.elapsed());
     assert!(res.converged);
     // dense reference: M^{-1/2} K M^{-1/2}
     let kd = k.to_dense();

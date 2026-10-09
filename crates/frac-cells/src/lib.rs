@@ -7,3 +7,6 @@ pub mod planes;
 pub mod complex;
 pub mod clip;
 pub mod tri2d;
+pub mod cellset;
+pub mod seeding;
+pub mod recipes;

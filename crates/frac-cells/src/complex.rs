@@ -37,8 +37,9 @@ pub struct CCell {
     /// Half-spaces `(plane, sign)`: inside iff `sign * f <= 0`.
     pub halfspaces: Vec<(PlaneId, i8)>,
     pub faces: Vec<u32>,
-    /// For facet planes split into several faces: subdivision planes.
-    pub facet_subdiv: Vec<(PlaneId, Vec<PlaneId>)>,
+    /// For facet planes split into several faces: the interior face-edge
+    /// segments, as (other plane of the line, end constraints).
+    pub facet_subdiv: Vec<(PlaneId, Vec<(PlaneId, [(PlaneId, i8); 2])>)>,
     pub aabb_min: P3,
     pub aabb_max: P3,
 }
@@ -398,36 +399,29 @@ impl Complex {
                 }
             }
         }
-        // facet subdivisions
-        for (ci, (lo, hi)) in boxes.iter().enumerate() {
-            let mut by_plane: BTreeMap<PlaneId, Vec<usize>> = BTreeMap::new();
+        // facet subdivisions: lines of face edges that run through the
+        // interior of a cell's facet (i.e. not along the cell's own planes)
+        for ci in 0..n {
+            let own: std::collections::BTreeSet<PlaneId> = cells[ci].halfspaces.iter().map(|h| h.0).collect();
+            let mut by_plane: BTreeMap<PlaneId, Vec<(PlaneId, [(PlaneId, i8); 2])>> = BTreeMap::new();
             for &f in &cells[ci].faces {
-                by_plane.entry(faces[f as usize].plane).or_default().push(f as usize);
-            }
-            for (p, fs) in by_plane {
-                if fs.len() < 2 {
-                    continue;
-                }
-                let (ax, _) = bp.planes[p as usize];
-                let ax = ax as usize;
-                let mut qs: Vec<PlaneId> = Vec::new();
-                for &f in &fs {
-                    for &v in &faces[f].loop_verts {
-                        let pv = verts[v as usize];
-                        for oa in [(ax + 1) % 3, (ax + 2) % 3] {
-                            if pv[oa] > lo[oa] && pv[oa] < hi[oa] {
-                                qs.push(get_plane(oa as u8, pv[oa], &mut bp));
-                            }
-                        }
+                let fc = &faces[f as usize];
+                for &e in &fc.loop_edges {
+                    let ce = &edges[e as usize];
+                    let l = ce.line;
+                    let other = if l.0 == fc.plane { l.1 } else { l.0 };
+                    if !own.contains(&other) {
+                        by_plane.entry(fc.plane).or_default().push((other, ce.end));
                     }
                 }
+            }
+            for (p, mut qs) in by_plane {
                 qs.sort_unstable();
                 qs.dedup();
-                if !qs.is_empty() {
-                    cells[ci].facet_subdiv.push((p, qs));
-                }
+                cells[ci].facet_subdiv.push((p, qs));
             }
         }
+        let _ = boxes;
         let mut cx = Complex { planes: PlaneSystem::Boxes(bp), verts, edges, faces, cells, sites };
         cx.finish_aabbs();
         Ok(cx)

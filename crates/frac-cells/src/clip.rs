@@ -73,8 +73,8 @@ pub struct Clipper<'a> {
     bbox: Aabb,
     /// (cell, plane) -> neighbor cells across that plane.
     nbr: Vec<BTreeMap<PlaneId, Vec<u32>>>,
-    /// Facet subdivision planes per cell.
-    subdiv: Vec<BTreeMap<PlaneId, Vec<PlaneId>>>,
+    /// Facet subdivision edge segments per cell: plane -> [(q, ends)].
+    subdiv: Vec<BTreeMap<PlaneId, Vec<(PlaneId, [(PlaneId, i8); 2])>>>,
 }
 
 impl<'a> Clipper<'a> {
@@ -192,11 +192,17 @@ impl<'a> Clipper<'a> {
                     if let Some(qs) = self.subdiv[c as usize].get(&p) {
                         let kj = poly[(i + 1) % n].0;
                         let mut ins: Vec<(PlaneId, VKey)> = Vec::new();
-                        for &q in qs {
+                        for &(q, ends) in qs {
                             let si = self.vsign(&ki, t, q);
                             let sj = self.vsign(&kj, t, q);
-                            if si * sj < 0 {
-                                ins.push((q, VKey::Tl(t, self.cx.planes.line(p, q))));
+                            if si * sj >= 0 {
+                                continue;
+                            }
+                            let l = self.cx.planes.line(p, q);
+                            let tri = self.tri(t);
+                            let within = ends.iter().all(|&(r, sg)| sg * self.cx.planes.side_tri_line(tri, l.0, l.1, r) < 0);
+                            if within && !ins.iter().any(|x| x.0 == q) {
+                                ins.push((q, VKey::Tl(t, l)));
                             }
                         }
                         // exact order along ki -> kj: A before B iff B lies on

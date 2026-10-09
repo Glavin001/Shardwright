@@ -23,6 +23,9 @@ use rayon::prelude::*;
 
 /// Fraction of `h` within which lattice vertices snap to the surface.
 const SNAP_ALPHA: f64 = 0.3;
+/// Tets whose centroid is outside but within this fraction of `h` from the
+/// surface are kept (their outside vertices get snapped).
+const KEEP_BETA: f64 = 0.15;
 /// Minimum kept tet volume relative to `h³`.
 const MIN_VOL_REL: f64 = 0.01;
 
@@ -153,7 +156,12 @@ fn bcc_mesh(solid: &TriMesh, query: &MeshQuery, h: f64) -> TetMesh {
                 return false;
             }
             let c = (cur[t[0] as usize] + cur[t[1] as usize] + cur[t[2] as usize] + cur[t[3] as usize]) * 0.25;
-            query.contains(c)
+            if query.contains(c) {
+                return true;
+            }
+            // tets whose centroid lies on (or just outside) the surface are kept too;
+            // their outside vertices are snapped onto the surface below
+            query.closest_point(c).map(|q| q.1.sqrt() <= KEEP_BETA * h).unwrap_or(false)
         })
         .collect();
     let mut kept: Vec<[u32; 4]> = tets.iter().zip(&keep).filter(|(_, k)| **k).map(|(t, _)| *t).collect();
