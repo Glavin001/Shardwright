@@ -1,0 +1,68 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.85"
+repository = "https://github.com/glavin001/shardwright"
+
+[workspace.dependencies]
+frac-core = { path = "crates/frac-core" }
+frac-geom = { path = "crates/frac-geom" }
+frac-io = { path = "crates/frac-io" }
+frac-material = { path = "crates/frac-material" }
+frac-ingest = { path = "crates/frac-ingest" }
+frac-cells = { path = "crates/frac-cells" }
+frac-fem = { path = "crates/frac-fem" }
+frac-modes = { path = "crates/frac-modes" }
+frac-hierarchy = { path = "crates/frac-hierarchy" }
+frac-bonds = { path = "crates/frac-bonds" }
+frac-collision = { path = "crates/frac-collision" }
+frac-render = { path = "crates/frac-render" }
+frac-patterns = { path = "crates/frac-patterns" }
+frac-validate = { path = "crates/frac-validate" }
+frac-pipeline = { path = "crates/frac-pipeline" }
+
+glam = { version = "0.30", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+toml = "0.8"
+thiserror = "2"
+anyhow = "1"
+rayon = "1.10"
+rand = "0.8"
+rand_chacha = "0.3"
+libm = "0.2"
+smallvec = { version = "1.13", features = ["serde", "union", "const_generics"] }
+indexmap = "2"
+robust = "1.1"
+spade = "2.12"
+blake3 = "1.5"
+clap = { version = "4.5", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+faer = "0.22"
+clarabel = "0.10"
+meshopt = "0.4"
+gltf = { version = "1.4", features = ["extras", "names", "KHR_materials_emissive_strength"] }
+gltf-json = { version = "1.4", features = ["extras", "names"] }
+flatbuffers = "=24.3.25"
+tobj = "4"
+proptest = "1.5"
+bytemuck = { version = "1", features = ["derive"] }
+
+[profile.release]
+debug = 1
+codegen-units = 16
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.test]
+opt-level = 2
