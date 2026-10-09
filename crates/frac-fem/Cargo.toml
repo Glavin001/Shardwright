@@ -1,7 +1,15 @@
 [package]
 name = "frac-fem"
+description = "Analysis tetrahedral meshing and linear-elastic P1 FEM building blocks"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
+frac-geom.workspace = true
+glam.workspace = true
+faer.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+libm.workspace = true
+rayon.workspace = true

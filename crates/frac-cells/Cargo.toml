@@ -1,7 +1,23 @@
 [package]
 name = "frac-cells"
+description = "Seeding, Delaunay/Voronoi and box cell complexes, exact clipping of solids into cells with shared interfaces, material recipes"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
+frac-geom.workspace = true
+frac-core.workspace = true
+glam.workspace = true
+serde.workspace = true
+smallvec.workspace = true
+rayon.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+libm.workspace = true
+spade.workspace = true
+earcutr = "0.4"
+tracing.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
