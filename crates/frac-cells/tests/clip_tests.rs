@@ -186,3 +186,62 @@ fn bricks_box_complex() {
     let out = Clipper::new(&wall, &cx).run().unwrap();
     check(&out, cx.cells.len(), vol);
 }
+
+mod props {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig { cases: std::env::var("FRAC_CASES").ok().and_then(|v| v.parse().ok()).unwrap_or(24), .. ProptestConfig::default() })]
+        #[test]
+        fn random_seeds_sphere(seed in 0u64..10_000, n in 5usize..120, sub in 1u32..3) {
+            let m = icosphere(DVec3::new(0.3, -0.2, 0.1), 0.7, sub);
+            let vol = m.signed_volume();
+            let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+            let seeds = seeds_in(&mut rng, DVec3::splat(-0.6), DVec3::splat(0.9), n);
+            let cx = Complex::voronoi(&seeds, [-0.5; 3], [1.1; 3]).unwrap();
+            let out = Clipper::new(&m, &cx).run().unwrap();
+            check(&out, cx.cells.len(), vol);
+        }
+
+        #[test]
+        fn quantized_seeds_box(seed in 0u64..10_000, n in 5usize..80) {
+            // seeds on a coarse lattice => many exact degeneracies with the box faces
+            let m = box_mesh(DVec3::ZERO, DVec3::ONE);
+            let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
+            let mut seeds: Vec<[f64; 3]> = (0..n).map(|_| [rng.gen_range(0..8) as f64 / 8.0 + 0.0625, rng.gen_range(0..8) as f64 / 8.0 + 0.0625, rng.gen_range(0..8) as f64 / 8.0]).collect();
+            seeds.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            seeds.dedup();
+            let cx = Complex::voronoi(&seeds, [0.0; 3], [1.0; 3]).unwrap();
+            let out = Clipper::new(&m, &cx).run().unwrap();
+            check(&out, cx.cells.len(), 1.0);
+        }
+    }
+}
+
+#[test]
+#[ignore]
+fn perf_10k_cells() {
+    let m = icosphere(DVec3::ZERO, 1.0, 5);
+    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(9);
+    let seeds = seeds_in(&mut rng, DVec3::splat(-1.0), DVec3::splat(1.0), 10_000);
+    let t0 = std::time::Instant::now();
+    let cx = Complex::voronoi(&seeds, [-1.0; 3], [1.0; 3]).unwrap();
+    let t1 = t0.elapsed();
+    let out = Clipper::new(&m, &cx).run().unwrap();
+    let t2 = t0.elapsed();
+    eprintln!("complex {:?} clip {:?} verts {} ext {} patches {}", t1, t2 - t1, out.verts.len(), out.ext.len(), out.patches.len());
+    check(&out, cx.cells.len(), m.signed_volume());
+}
+
+#[test]
+fn regression_quantized_3028() {
+    let m = box_mesh(DVec3::ZERO, DVec3::ONE);
+    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(3028);
+    let mut seeds: Vec<[f64; 3]> = (0..59).map(|_| [rng.gen_range(0..8) as f64 / 8.0 + 0.0625, rng.gen_range(0..8) as f64 / 8.0 + 0.0625, rng.gen_range(0..8) as f64 / 8.0]).collect();
+    seeds.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    seeds.dedup();
+    let cx = Complex::voronoi(&seeds, [0.0; 3], [1.0; 3]).unwrap();
+    let out = Clipper::new(&m, &cx).run().unwrap();
+    check(&out, cx.cells.len(), 1.0);
+}

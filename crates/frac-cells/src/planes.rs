@@ -243,6 +243,60 @@ impl PlaneSystem {
         sos_resolve(&terms) * den
     }
 
+    /// Exact comparison of `f_r` at `TL(t1, p, q)` and `TL(t2, p, q)`
+    /// (both on the same line). Ties (impossible for distinct pierce points
+    /// of an embedded surface) return `Equal`.
+    pub fn cmp_along_line(&self, t1: [&P3; 3], t2: [&P3; 3], p: PlaneId, q: PlaneId, r: PlaneId) -> std::cmp::Ordering {
+        fn nd<F: Field>(ps: &PlaneSystem, t: [&P3; 3], p: PlaneId, q: PlaneId, r: PlaneId) -> (F, F) {
+            let rp = [ps.eval::<F>(p, t[0]), ps.eval::<F>(p, t[1]), ps.eval::<F>(p, t[2])];
+            let rq = [ps.eval::<F>(q, t[0]), ps.eval::<F>(q, t[1]), ps.eval::<F>(q, t[2])];
+            let rr = [ps.eval::<F>(r, t[0]), ps.eval::<F>(r, t[1]), ps.eval::<F>(r, t[2])];
+            let one = F::one();
+            let n = det3(&[rp.clone(), rq.clone(), rr]);
+            let d = det3(&[[one.clone(), one.clone(), one], rp, rq]);
+            (n, d)
+        }
+        let s = exact_sign!(|F| {
+            let (n1, d1) = nd::<F>(self, t1, p, q, r);
+            let (n2, d2) = nd::<F>(self, t2, p, q, r);
+            n1.mul(&d2).sub(&n2.mul(&d1))
+        });
+        let sd = exact_sign!(|F| {
+            let (_, d1) = nd::<F>(self, t1, p, q, r);
+            let (_, d2) = nd::<F>(self, t2, p, q, r);
+            d1.mul(&d2)
+        });
+        let mut s = s;
+        if s == 0 {
+            // Symbolic tie-break: first-order terms of the perturbed values.
+            // f_r(T_i) = (N_i + δ_p C_p,i + δ_q C_q,i + δ_r D_i) / D_i, and δ_r
+            // cancels in the difference.
+            let cof = |t: [&P3; 3]| -> (Expansion, Expansion, Expansion) {
+                let rp: [Expansion; 3] = [self.eval(p, t[0]), self.eval(p, t[1]), self.eval(p, t[2])];
+                let rq: [Expansion; 3] = [self.eval(q, t[0]), self.eval(q, t[1]), self.eval(q, t[2])];
+                let rr: [Expansion; 3] = [self.eval(r, t[0]), self.eval(r, t[1]), self.eval(r, t[2])];
+                let one = [Expansion::from_f64(1.0), Expansion::from_f64(1.0), Expansion::from_f64(1.0)];
+                let cp = det3(&[one.clone(), rq.clone(), rr.clone()]);
+                let cq = det3(&[rp.clone(), one.clone(), rr]);
+                let d = det3(&[one, rp, rq]);
+                (cp, cq, d)
+            };
+            let (cp1, cq1, d1) = cof(t1);
+            let (cp2, cq2, d2) = cof(t2);
+            let vp = cp1.mul(&d2).sub(&cp2.mul(&d1));
+            let vq = cq1.mul(&d2).sub(&cq2.mul(&d1));
+            let terms = [(self.pert(p), vp), (self.pert(q), vq)];
+            // sos_resolve falls back to +1 when everything vanishes; detect that.
+            let all_zero = terms.iter().all(|(_, v)| v.sign() == 0);
+            s = if all_zero { 0 } else { sos_resolve(&terms) };
+        }
+        match s * sd {
+            x if x < 0 => std::cmp::Ordering::Less,
+            x if x > 0 => std::cmp::Ordering::Greater,
+            _ => std::cmp::Ordering::Equal,
+        }
+    }
+
     /// Does line `(p ∩ q)` pierce the interior of triangle `abc`?
     pub fn pierces(&self, t: [&P3; 3], p: PlaneId, q: PlaneId) -> bool {
         let s0 = self.d2_sign(t[1], t[2], p, q);

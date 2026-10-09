@@ -191,23 +191,28 @@ impl<'a> Clipper<'a> {
                 if let Tag::Plane(p) = tagi {
                     if let Some(qs) = self.subdiv[c as usize].get(&p) {
                         let kj = poly[(i + 1) % n].0;
-                        let mut ins: Vec<VKey> = Vec::new();
+                        let mut ins: Vec<(PlaneId, VKey)> = Vec::new();
                         for &q in qs {
                             let si = self.vsign(&ki, t, q);
                             let sj = self.vsign(&kj, t, q);
                             if si * sj < 0 {
-                                ins.push(VKey::Tl(t, self.cx.planes.line(p, q)));
+                                ins.push((q, VKey::Tl(t, self.cx.planes.line(p, q))));
                             }
                         }
+                        // exact order along ki -> kj: A before B iff B lies on
+                        // kj's side of A's plane
                         if ins.len() > 1 {
-                            let p0 = self.key_point(&ki);
-                            ins.sort_by(|x, y| {
-                                let dx = dist2(self.key_point(x), p0);
-                                let dy = dist2(self.key_point(y), p0);
-                                dx.partial_cmp(&dy).unwrap().then(x.cmp(y))
-                            });
+                            let mut sorted: Vec<(PlaneId, VKey)> = Vec::with_capacity(ins.len());
+                            for it in ins {
+                                let pos = sorted
+                                    .iter()
+                                    .position(|&(qa, _)| self.vsign(&it.1, t, qa) != self.vsign(&kj, t, qa))
+                                    .unwrap_or(sorted.len());
+                                sorted.insert(pos, it);
+                            }
+                            ins = sorted;
                         }
-                        for k in ins {
+                        for (_, k) in ins {
                             out.push((k, tagi));
                         }
                     }
@@ -277,7 +282,7 @@ impl<'a> Clipper<'a> {
         let pad = 1e-7 * self.bbox.diagonal();
         bb = bb.expanded(pad);
         let ps = &self.cx.planes;
-        let mut out: Vec<(f64, VKey)> = Vec::new();
+        let mut out: Vec<u32> = Vec::new();
         self.bvh.query(&bb, |t| {
             let tri = self.tri(t);
             if !ps.pierces(tri, ce.line.0, ce.line.1) {
@@ -288,14 +293,16 @@ impl<'a> Clipper<'a> {
                     return;
                 }
             }
-            let k = VKey::Tl(t, ce.line);
-            let x = self.key_point(&k);
-            let d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-            let s = (x[0] - a[0]) * d[0] + (x[1] - a[1]) * d[1] + (x[2] - a[2]) * d[2];
-            out.push((s, k));
+            out.push(t);
         });
-        out.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap().then(x.1.cmp(&y.1)));
-        out.into_iter().map(|x| x.1).collect()
+        // exact order along the edge: by -sign0 * f_{end0} (distance from v[0])
+        let (r, s0) = ce.end[0];
+        out.sort_by(|&t1, &t2| {
+            let o = ps.cmp_along_line(self.tri(t1), self.tri(t2), ce.line.0, ce.line.1, r);
+            let o = if s0 > 0 { o.reverse() } else { o };
+            o.then(t1.cmp(&t2))
+        });
+        out.into_iter().map(|t| VKey::Tl(t, ce.line)).collect()
     }
 
     /// Run the full clipping. `active[c]` selects which complex cells are
@@ -591,7 +598,21 @@ impl<'a> Clipper<'a> {
             let mut guard = 0;
             while cur != start {
                 lp.push(cur);
-                let cand = next.get(&cur).ok_or_else(|| format!("clip: open interface loop on face {f}"))?;
+                let cand = match next.get(&cur) {
+                    Some(c) => c,
+                    None => {
+                        if std::env::var("FRAC_DEBUG").is_ok() {
+                            eprintln!("open loop face {f} plane {} cells {:?} at {:?}", p, fc.cells, cur);
+                            for (a, b) in &segs {
+                                eprintln!("  seg {:?} {:?} -> {:?} {:?}", a, self.key_point(a), b, self.key_point(b));
+                            }
+                            for (k, &v) in fc.loop_verts.iter().enumerate() {
+                                eprintln!("  cv {} {:?} state {} edge {} cr {:?}", v, cx.verts[v as usize], state[v as usize], fc.loop_edges[k], crossings[fc.loop_edges[k] as usize]);
+                            }
+                        }
+                        return Err(format!("clip: open interface loop on face {f}"));
+                    }
+                };
                 let nx = cand.iter().copied().find(|&i| !used[i]).ok_or_else(|| format!("clip: dangling interface loop on face {f}"))?;
                 used[nx] = true;
                 cur = segs[nx].1;
