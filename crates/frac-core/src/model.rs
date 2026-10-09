@@ -229,6 +229,8 @@ pub struct Interface {
     pub area: f64,
     /// Component-local patch ids (empty for cross-component/anchor interfaces).
     pub patches: Vec<u32>,
+    /// Rebar crossing points and bar diameters (for render stubs).
+    pub rebar_points: Vec<(DVec3, f64)>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -338,6 +340,8 @@ pub struct Asset {
     /// All levels, sorted by (level, a, b).
     pub bonds: Vec<Bond>,
     pub hulls: Vec<Hull>,
+    /// `Bond::child_bonds` ranges index into this list.
+    pub bond_children: Vec<BondId>,
     pub loops: Vec<Vec<DVec3>>,
     pub spawn: Vec<SpawnPoint>,
     /// Per-level structural (L1) cut-interface diagnostics.
