@@ -1,7 +1,12 @@
 [package]
 name = "frac-collision"
+description = "Collision hulls: per-cell exact hulls, collision-aware decomposition and merging, non-overlap enforcement"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
+frac-core.workspace = true
+frac-geom.workspace = true
+glam.workspace = true
+rayon.workspace = true

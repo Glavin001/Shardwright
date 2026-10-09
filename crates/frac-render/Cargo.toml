@@ -1,7 +1,15 @@
 [package]
 name = "frac-render"
+description = "Render meshes: exterior clipping with attribute transfer, shared displaced interiors, chipping, asset-space UVs, LODs, rebar stubs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
+frac-core.workspace = true
+frac-geom.workspace = true
+glam.workspace = true
+rayon.workspace = true
+libm.workspace = true
+spade.workspace = true
+meshopt.workspace = true

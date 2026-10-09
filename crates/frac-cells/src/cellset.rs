@@ -319,6 +319,27 @@ impl CellSet {
         self.patches.retain(|p| p.cells[0] != p.cells[1]);
     }
 
+    /// Merge each group of cells into one cell (e.g. forbidden zones).
+    pub fn merge_groups(&mut self, groups: &[Vec<u32>], params: &CellSetParams) {
+        let mut target: BTreeMap<u32, u32> = BTreeMap::new();
+        for g in groups {
+            if g.len() < 2 {
+                continue;
+            }
+            let into = *g.iter().min().unwrap();
+            for &c in g {
+                if c != into {
+                    target.insert(c, into);
+                }
+            }
+        }
+        if target.is_empty() {
+            return;
+        }
+        self.apply_merges(&target, params);
+        self.compact();
+    }
+
     /// Drop empty cells and renumber.
     fn compact(&mut self) {
         let mut map = vec![u32::MAX; self.cells.len()];
