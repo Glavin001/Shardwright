@@ -1,1 +1,330 @@
+//! Weak-region analysis (spec Stage 4): a clean-room reimplementation of
+//! "Breaking Good: Fracture Modes for Realtime Destruction" (Sellán et al.,
+//! ACM TOG 2022) on a cell-exploded tetrahedral mesh, with material-aware
+//! interface weights.
+//!
+//! # Discretization (§4.1)
+//! One displacement node per (mesh vertex, analysis cell) pair: DOFs are
+//! shared inside a cell and duplicated across *fault faces* (faces between
+//! tets of different cells). `Q` is the P1 linear-elastic stiffness of this
+//! exploded mesh with per-tet materials, `M̃` its lumped mass. Faces are
+//! grouped by analysis-cell pair; `B_g` evaluates the displacement jump
+//! `u_a − u_b` at the three edge midpoints of every face of group `g`
+//! (weights `area/3`, exact for the quadratic `‖D‖²`), scaled so that
+//! `‖B_g u‖² = ∫_g ‖D(u,x)‖² dA` exactly.
+//!
+//! # Energy and constraints (§4.2)
+//! `E(u) = ½ uᵀQu + ω Σ_g w_g ‖B_g u‖`. Forbidden groups (`w_g = ∞`) impose
+//! `B_g u = 0`; since jumps are linear on each face this is *equivalent* to
+//! equal DOF copies at every vertex of the group's faces, so those copies are
+//! merged exactly (forbidden jumps are then identically zero). Groups with
+//! `w_g = 0` are unpenalized. Anchored vertices: all copies are fixed (Dirichlet,
+//! eliminated). Unanchored: `u ⟂_M̃` the six rigid modes of the exploded mesh.
+//!
+//! # Normalization
+//! With `m_tot` the total mass, `λ₁` the first non-rigid eigenvalue of the
+//! continuous `(K, M)` pair (same anchors) and `L = V^{1/3}` (V = mesh volume):
+//! `M̂ = M/m_tot` (total mass 1), `Q̂ = Q/(λ₁ m_tot)` (first continuous
+//! eigenvalue 1), `B̂_g = B_g / L` (areas measured in units of `L²`). So `ω`
+//! is dimensionless: for an M̂-unit displacement the elastic term is `O(1)`
+//! and the sparsity term is `ω Σ w_g √(A_g/L²)·rms_jump`. Reported jumps are
+//! `‖B̂_g U_i‖ / √(A_g/L²)` = RMS jump over the interface for a mode with
+//! `U_iᵀM̂U_i = 1`, i.e. comparable across groups, modes and meshes.
+//! Both solvers minimize `½uᵀ(Q̂+δM̂)u + …` with `δ = 1e-8` (see
+//! [`problem::DELTA`]).
+//!
+//! # Solve (§4.3, adapted ICCM)
+//! For mode i: `c` = i-th continuous eigenvector (rigid modes skipped)
+//! mapped to exploded DOFs. Repeat: solve the convex subproblem with
+//! `[U_1 … U_{i−1}, c]ᵀM̂u = [0 … 0, 1]ᵀ` (plus rigid-mode rows when
+//! unanchored), `c ← u/‖u‖_M̂`, stop when `‖u − c_old‖_M̂ ≤ ε` (relative,
+//! since `‖c_old‖_M̂ = 1`) or after `max_iters`. `U_i = u/‖u‖_M̂`.
+//! Before each solve, `c` is M̂-orthogonalized against the previous modes
+//! and rigid modes, which leaves the feasible set unchanged but keeps the
+//! constraint rows well conditioned.
+//!
+//! Solvers: [`Solver::Clarabel`] (interior-point conic reference) and
+//! [`Solver::Admm`] (group-lasso ADMM with a single sparse Cholesky factor
+//! shared across modes and ICCM iterations); [`Solver::Auto`] picks Clarabel
+//! below 3000 free DOFs.
 
+mod admm;
+mod clarabel_solver;
+mod level1;
+pub mod problem;
+
+pub use level1::{segment_level1, Level1};
+
+use problem::{mdot, Problem};
+use std::time::Instant;
+
+/// Free-DOF threshold below which [`Solver::Auto`] uses Clarabel.
+pub const AUTO_CLARABEL_MAX_DOFS: usize = 3000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Solver {
+    Auto,
+    Clarabel,
+    Admm,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ModesParams {
+    /// Number of fracture modes.
+    pub k: usize,
+    /// Sparsity weight (normalized units).
+    pub omega: f64,
+    /// ICCM tolerance on `‖u − c‖_M̂` (M̂-unit `c`).
+    pub eps: f64,
+    pub max_iters: usize,
+    pub solver: Solver,
+    /// Seed for the eigensolver's starting block.
+    pub seed: u64,
+}
+
+impl Default for ModesParams {
+    fn default() -> Self {
+        ModesParams { k: 10, omega: 1e-3, eps: 1e-4, max_iters: 50, solver: Solver::Auto, seed: 0x5eed_f2ac }
+    }
+}
+
+pub struct ModesInput<'a> {
+    pub mesh: &'a frac_fem::TetMesh,
+    pub tet_material: &'a [frac_fem::ElasticMaterial],
+    /// Analysis cell label per tet, labels `0..n_cells`.
+    pub tet_cell: &'a [u32],
+    /// `w_g` for cells `(a < b)`; `f64::INFINITY` = forbidden; must be ≥ 0.
+    pub group_weight: &'a (dyn Fn(u32, u32) -> f64 + Sync),
+    pub anchored_vertices: &'a [u32],
+    pub params: ModesParams,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModesOutput {
+    /// Sorted `(a < b)` cell pairs that share at least one fault face.
+    pub groups: Vec<(u32, u32)>,
+    /// Physical interface area per group.
+    pub group_area: Vec<f64>,
+    /// `jumps[mode][group] = ‖B̂_g U_i‖ / √(A_g/L²)` (RMS jump, normalized units).
+    pub jumps: Vec<Vec<f64>>,
+    /// Normalized energy `E(U_i)` of each (M̂-unit) mode.
+    pub energies: Vec<f64>,
+    /// Continuous-mesh eigenvalues (physical, `ω²` in rad²/s²) used for init.
+    pub eigenvalues: Vec<f64>,
+    /// ICCM iterations per mode.
+    pub iterations: Vec<usize>,
+    pub converged: Vec<bool>,
+    /// Number of free exploded DOFs (after merging forbidden interfaces and
+    /// removing anchored copies).
+    pub n_dofs: usize,
+    pub solver_used: String,
+    /// Wall-clock timings (not deterministic; excluded from comparisons).
+    pub timings_ms: Vec<(String, f64)>,
+}
+
+impl ModesOutput {
+    /// `max_i jumps[i][g]` per group.
+    pub fn max_jump(&self) -> Vec<f64> {
+        let mut m = vec![0.0f64; self.groups.len()];
+        for j in &self.jumps {
+            for (g, &v) in j.iter().enumerate() {
+                m[g] = m[g].max(v);
+            }
+        }
+        m
+    }
+}
+
+/// Relative tolerance range of the inexact (ADMM) inner solves. The tight
+/// (confirmation) tolerance is `0.01 ε` clamped to `[1e-8, 1e-4]`.
+const ADMM_TOL_MAX: f64 = 1e-3;
+#[cfg(test)]
+const ADMM_TOL_MIN: f64 = 1e-6;
+
+pub(crate) struct SubResult {
+    pub u: Vec<f64>,
+    pub iterations: usize,
+    pub ok: bool,
+}
+
+enum Backend {
+    Clarabel,
+    Admm(Box<admm::Admm>),
+}
+
+/// Computes `k` fracture modes (spec §4.3) and their per-interface jumps.
+pub fn compute_modes(input: &ModesInput) -> Result<ModesOutput, String> {
+    let mut timings = Vec::new();
+    let t_all = Instant::now();
+    let pb = problem::build(input, &mut timings)?;
+    let p = input.params;
+    let use_clarabel = match p.solver {
+        Solver::Clarabel => true,
+        Solver::Admm => false,
+        Solver::Auto => pb.n < AUTO_CLARABEL_MAX_DOFS,
+    };
+    let t_f = Instant::now();
+    let mut backend = if use_clarabel || pb.active.is_empty() {
+        Backend::Clarabel
+    } else {
+        Backend::Admm(Box::new(admm::Admm::new(&pb)?))
+    };
+    if let Backend::Admm(_) = backend {
+        timings.push(("admm_factor".into(), t_f.elapsed().as_secs_f64() * 1e3));
+    }
+    let t_iccm = Instant::now();
+    let res = iccm(&pb, &p, &mut backend)?;
+    timings.push(("iccm".into(), t_iccm.elapsed().as_secs_f64() * 1e3));
+    let solver_used = match &backend {
+        Backend::Clarabel => "clarabel".to_string(),
+        Backend::Admm(a) => format!("admm(refactorizations={}, rho={:.3e})", a.refactorizations, a.rho),
+    };
+    let l2 = pb.length_scale * pb.length_scale;
+    let mut jumps = Vec::new();
+    let mut energies = Vec::new();
+    for u in &res.modes {
+        let gn = pb.group_norms(u);
+        jumps.push(
+            gn.iter()
+                .zip(&pb.group_area)
+                .map(|(&n, &a)| if a > 0.0 { n / (a / l2).sqrt() } else { 0.0 })
+                .collect(),
+        );
+        energies.push(pb.objective(u));
+    }
+    timings.push(("total".into(), t_all.elapsed().as_secs_f64() * 1e3));
+    Ok(ModesOutput {
+        groups: pb.groups.clone(),
+        group_area: pb.group_area.clone(),
+        jumps,
+        energies,
+        eigenvalues: pb.eigenvalues.clone(),
+        iterations: res.iterations,
+        converged: res.converged,
+        n_dofs: pb.n,
+        solver_used,
+        timings_ms: timings,
+    })
+}
+
+struct IccmResult {
+    modes: Vec<Vec<f64>>,
+    iterations: Vec<usize>,
+    converged: Vec<bool>,
+}
+
+fn orthogonalize(v: &mut [f64], basis: &[Vec<f64>], m: &[f64]) {
+    for _ in 0..2 {
+        for q in basis {
+            let c = mdot(q, v, m);
+            for i in 0..v.len() {
+                v[i] -= c * q[i];
+            }
+        }
+    }
+}
+
+fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend) -> Result<IccmResult, String> {
+    let n = pb.n;
+    let m = &pb.m;
+    // M̂-orthonormal basis of the rigid space (rows are M̂R; recover R)
+    let rigid_basis: Vec<Vec<f64>> = pb.rigid_rows.iter().map(|r| (0..n).map(|i| r[i] / m[i]).collect()).collect();
+    let mut modes: Vec<Vec<f64>> = Vec::new();
+    let mut mode_rows: Vec<Vec<f64>> = Vec::new();
+    let mut iterations = Vec::new();
+    let mut converged = Vec::new();
+    let kk = p.k.min(pb.init.len());
+    for i in 0..kk {
+        let mut basis = rigid_basis.clone();
+        basis.extend(modes.iter().cloned());
+        let mut c = pb.init[i].clone();
+        orthogonalize(&mut c, &basis, m);
+        let mut nc = mdot(&c, &c, m).sqrt();
+        if !(nc > 1e-8) {
+            // initial vector lies in the span of previous modes: use the
+            // first remaining eigenvector that does not
+            for j in kk..pb.init.len() {
+                c = pb.init[j].clone();
+                orthogonalize(&mut c, &basis, m);
+                nc = mdot(&c, &c, m).sqrt();
+                if nc > 1e-8 {
+                    break;
+                }
+            }
+            if !(nc > 1e-8) {
+                return Err(format!("mode {i}: no admissible initial vector"));
+            }
+        }
+        c.iter_mut().for_each(|x| *x /= nc);
+        if let Backend::Admm(a) = backend {
+            a.warm_from(pb, &c);
+        }
+        let mut persistent: Vec<&[f64]> = pb.rigid_rows.iter().map(|r| r.as_slice()).collect();
+        persistent.extend(mode_rows.iter().map(|r| r.as_slice()));
+        let mut rhs = vec![0.0; persistent.len() + 1];
+        *rhs.last_mut().unwrap() = 1.0;
+        let mut u = c.clone();
+        let mut its = 0;
+        let mut conv = false;
+        let tol_min = (0.01 * p.eps).clamp(1e-8, 1e-4);
+        let mut tol = ADMM_TOL_MAX.max(tol_min);
+        let mut last_diff = f64::INFINITY;
+        let mut confirm = false;
+        for it in 0..p.max_iters.max(1) {
+            its = it + 1;
+            let cur: Vec<f64> = (0..n).map(|q| m[q] * c[q]).collect();
+            let sub = match backend {
+                Backend::Clarabel => {
+                    let mut rows = persistent.clone();
+                    rows.push(&cur);
+                    clarabel_solver::solve(pb, &rows, &rhs)?
+                }
+                Backend::Admm(a) => {
+                    // inexact ICCM: the inner tolerance follows the outer progress;
+                    // convergence is only accepted after a tight solve
+                    tol = if confirm { tol_min } else { (0.1 * last_diff).clamp(tol_min, tol) };
+                    a.solve(pb, &persistent, &cur, &rhs, tol)?
+                }
+            };
+            let _ = (sub.iterations, sub.ok);
+            u = sub.u;
+            let mut d2 = 0.0;
+            for q in 0..n {
+                let d = u[q] - c[q];
+                d2 += d * d * m[q];
+            }
+            let nu = mdot(&u, &u, m).sqrt();
+            if !(nu > 0.0) || !nu.is_finite() {
+                return Err(format!("mode {i}: degenerate subproblem solution"));
+            }
+            c = u.iter().map(|x| x / nu).collect();
+            last_diff = d2.sqrt();
+            if admm::debug_enabled() {
+                eprintln!("[iccm] mode {i} it {it} diff {last_diff:.3e} obj {:.6e}", pb.objective(&u));
+            }
+            if last_diff <= p.eps {
+                if matches!(backend, Backend::Clarabel) || tol <= tol_min {
+                    conv = true;
+                    break;
+                }
+                confirm = true;
+            } else {
+                confirm = false;
+            }
+            // keep c exactly admissible (orthogonal to previous modes / rigid)
+            orthogonalize(&mut c, &basis, m);
+            let nc = mdot(&c, &c, m).sqrt();
+            c.iter_mut().for_each(|x| *x /= nc);
+        }
+        let nu = mdot(&u, &u, m).sqrt();
+        let ui: Vec<f64> = u.iter().map(|x| x / nu).collect();
+        mode_rows.push((0..n).map(|q| m[q] * ui[q]).collect());
+        modes.push(ui);
+        iterations.push(its);
+        converged.push(conv);
+    }
+    Ok(IccmResult { modes, iterations, converged })
+}
+
+#[cfg(test)]
+mod tests;

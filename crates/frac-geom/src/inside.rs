@@ -27,12 +27,23 @@ impl<'a> MeshQuery<'a> {
     /// the mesh. Returns `None` if the segment hits a degenerate feature
     /// (edge, vertex, or lies in a triangle plane), so the caller can retry.
     fn parity(&self, p: DVec3, q: DVec3) -> Option<bool> {
-        let seg_box = Aabb::from_points([&p, &q]);
         let pp = p3(p);
         let qq = p3(q);
         let mut odd = false;
         let mut degenerate = false;
-        self.bvh.query(&seg_box, |t| {
+        let d = q - p;
+        let inv = DVec3::new(1.0 / d.x, 1.0 / d.y, 1.0 / d.z);
+        // conservative slab test (padded) for the segment p + t d, t in [0,1]
+        let seg_hits = |b: &Aabb| -> bool {
+            let pad = (b.extent().max_element() + 1e-300) * 1e-9;
+            let (lo, hi) = (b.min - DVec3::splat(pad), b.max + DVec3::splat(pad));
+            let t1 = (lo - p) * inv;
+            let t2 = (hi - p) * inv;
+            let tmin = t1.min(t2).max_element();
+            let tmax = t1.max(t2).min_element();
+            tmax >= tmin.max(0.0) && tmin <= 1.0
+        };
+        self.bvh.traverse(seg_hits, |t| {
             if degenerate {
                 return;
             }

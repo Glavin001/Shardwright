@@ -3,3 +3,4 @@
 *.pyc
 /out
 /scratch
+node_modules/

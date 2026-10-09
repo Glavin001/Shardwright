@@ -1,7 +1,27 @@
 [package]
 name = "frac-pipeline"
+description = "Stage orchestration, caching, parallelism and reporting for the pre-fracture pipeline"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
+frac-core.workspace = true
+frac-geom.workspace = true
+frac-material.workspace = true
+frac-ingest.workspace = true
+frac-cells.workspace = true
+frac-fem.workspace = true
+frac-modes.workspace = true
+frac-hierarchy.workspace = true
+frac-bonds.workspace = true
+frac-collision.workspace = true
+frac-render.workspace = true
+frac-io.workspace = true
+frac-validate.workspace = true
+glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rayon.workspace = true
+tracing.workspace = true
+smallvec.workspace = true

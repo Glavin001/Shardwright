@@ -115,6 +115,11 @@ impl<'a> Surface<'a> {
     /// Collision-aware concavity of a hull: max distance from hull surface
     /// samples outside the solid to the solid's surface.
     fn concavity(&self, h: &ConvexPolytope) -> f64 {
+        self.concavity_capped(h, f64::INFINITY)
+    }
+
+    /// Like `concavity` but stops as soon as the value exceeds `cap`.
+    fn concavity_capped(&self, h: &ConvexPolytope, cap: f64) -> f64 {
         let mut worst: f64 = 0.0;
         for (_, f) in &h.faces {
             let n = f.len();
@@ -124,19 +129,30 @@ impl<'a> Surface<'a> {
                 let a = f[k];
                 let b = f[(k + 1) % n];
                 samples.push((a + b) * 0.5);
-                samples.push((a + c) * 0.5);
                 samples.push((a + b + c) / 3.0);
             }
             for s in samples {
                 if !self.q.contains(s) {
                     if let Some((_, d2, _)) = self.q.closest_point(s) {
                         worst = worst.max(d2.sqrt());
+                        if worst > cap {
+                            return worst;
+                        }
                     }
                 }
             }
         }
         worst
     }
+}
+
+fn polys_volume(polys: &[Vec<DVec3>]) -> f64 {
+    let mut vi = frac_geom::VolumeIntegrals::default();
+    let r = polys.first().and_then(|p| p.first()).copied().unwrap_or(DVec3::ZERO);
+    for p in polys {
+        vi.add_polygon(r, p);
+    }
+    vi.volume
 }
 
 fn hull_of(points: &[DVec3]) -> Option<ConvexPolytope> {
@@ -147,7 +163,9 @@ fn hull_of(points: &[DVec3]) -> Option<ConvexPolytope> {
 fn split_cell(polys: &[Vec<DVec3>], surf: &Surface, thresh: f64, depth: u32) -> Vec<ConvexPolytope> {
     let pts: Vec<DVec3> = polys.iter().flatten().copied().collect();
     let Some(h) = hull_of(&pts) else { return Vec::new() };
-    if depth == 0 || surf.concavity(&h) <= thresh {
+    // convex cells (the common case) need no concavity evaluation
+    let hv = h.volume();
+    if depth == 0 || hv - polys_volume(polys) <= 1e-9 * hv || surf.concavity_capped(&h, thresh) <= thresh {
         return vec![h];
     }
     // candidate planes: principal axes and coordinate axes at 3 offsets
@@ -168,7 +186,7 @@ fn split_cell(polys: &[Vec<DVec3>], surf: &Surface, thresh: f64, depth: u32) -> 
             let (Some(hl), Some(hr)) = (hull_of(&l.iter().flatten().copied().collect::<Vec<_>>()), hull_of(&r.iter().flatten().copied().collect::<Vec<_>>())) else {
                 continue;
             };
-            let score = surf.concavity(&hl).max(surf.concavity(&hr));
+            let score = surf.concavity(&hl).max(surf.concavity_capped(&hr, f64::INFINITY));
             if best.as_ref().map(|b| score < b.0).unwrap_or(true) {
                 let mut parts = split_cell(&l, surf, thresh, depth - 1);
                 parts.extend(split_cell(&r, surf, thresh, depth - 1));
@@ -224,21 +242,27 @@ struct Piece {
 
 /// Greedy merging of pieces down to the budget, with cached pair costs
 /// (only pairs touching the merged piece are re-evaluated).
-fn merge_pieces(pieces: Vec<Piece>, surf: &Surface, thresh: f64, budget: usize) -> Vec<Piece> {
+fn merge_pieces(pieces: Vec<Piece>, surf: &Surface, thresh: f64, budget: usize, cell_adj: &BTreeSet<(CellId, CellId)>) -> Vec<Piece> {
     let mut alive: BTreeMap<usize, Piece> = pieces.into_iter().enumerate().collect();
     let mut next_id = alive.len();
     let bbox = |p: &Piece| Aabb::from_points(p.pts.iter());
     let diag = alive.values().fold(Aabb::EMPTY, |a, p| a.union(&bbox(p))).diagonal().max(1e-12);
     // cost key: (concavity, excess) ; value: merged hull
+    let adjacent = |a: &Piece, b: &Piece| -> bool {
+        // same cell (split pieces) or cells sharing an interface
+        a.cells.iter().any(|ca| b.cells.iter().any(|cb| ca == cb || cell_adj.contains(&(*ca.min(cb), *ca.max(cb)))))
+    };
     let eval = |a: &Piece, b: &Piece| -> Option<(f64, f64, ConvexPolytope)> {
-        if !bbox(a).expanded(1e-6 * diag).overlaps(&bbox(b)) {
+        if !bbox(a).expanded(1e-6 * diag).overlaps(&bbox(b)) || !adjacent(a, b) {
             return None;
         }
         let mut pts = a.pts.clone();
         pts.extend_from_slice(&b.pts);
         let h = hull_of(&pts)?;
-        let conc = surf.concavity(&h);
-        let excess = h.volume() - a.hull.volume() - b.hull.volume();
+        let hv = h.volume();
+        let excess = hv - a.hull.volume() - b.hull.volume();
+        // 0 = acceptable merge, 1 = too concave (only used to meet the budget)
+        let conc = if excess <= 1e-9 * hv { 0.0 } else if surf.concavity_capped(&h, thresh) <= thresh { 0.0 } else { 1.0 };
         Some((conc, excess, h))
     };
     let mut cache: BTreeMap<(usize, usize), (f64, f64, ConvexPolytope)> = BTreeMap::new();
@@ -256,7 +280,7 @@ fn merge_pieces(pieces: Vec<Piece>, surf: &Surface, thresh: f64, budget: usize) 
             .min_by(|a, b| a.1 .0.partial_cmp(&b.1 .0).unwrap().then(a.1 .1.partial_cmp(&b.1 .1).unwrap()).then(a.0.cmp(b.0)))
             .map(|(k, v)| (*k, v.0));
         let Some(((i, j), conc)) = best else { break };
-        if conc > thresh && alive.len() <= budget {
+        if conc > 0.5 && alive.len() <= budget {
             break;
         }
         let (_, _, h) = cache.remove(&(i, j)).unwrap();
@@ -291,6 +315,7 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
     let mut pieces_of: Vec<Option<Vec<Piece>>> = vec![None; h.fragments.len()];
     // bottom-up: finest level first
     for level in (0..nl).rev() {
+        let tl = std::time::Instant::now();
         let r = h.level_ranges[level].clone();
         let results: Vec<(u32, Vec<Piece>)> = (r.start..r.end)
             .into_par_iter()
@@ -326,13 +351,31 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                     let pts: Vec<DVec3> = cells.iter().flat_map(|&c| cell_points(asset, c)).collect();
                     hull_of(&pts).map(|hl| vec![Piece { pts: hl.vertices(), hull: hl, cells: cells.clone() }]).unwrap_or_default()
                 } else {
-                    merge_pieces(pieces, &surf, thresh, budget)
+                    let set: BTreeSet<CellId> = cells.iter().copied().collect();
+                    let mut cell_adj = BTreeSet::new();
+                    for it in &asset.interfaces {
+                        if let CellOrWorld::Cell(cb) = it.cells.1 {
+                            if set.contains(&it.cells.0) && set.contains(&cb) {
+                                cell_adj.insert((it.cells.0.min(cb), it.cells.0.max(cb)));
+                            }
+                        }
+                    }
+                    let mut merged = merge_pieces(pieces, &surf, thresh, budget, &cell_adj);
+                    // disconnected leftovers above budget: force merges by proximity
+                    if merged.len() > budget {
+                        let all: BTreeSet<(CellId, CellId)> = cells.iter().flat_map(|&a| cells.iter().map(move |&b| (a.min(b), a.max(b)))).collect();
+                        merged = merge_pieces(merged, &surf, thresh, budget, &all);
+                    }
+                    merged
                 };
                 (fi, merged)
             })
             .collect();
         for (fi, ps) in results {
             pieces_of[fi as usize] = Some(ps);
+        }
+        if std::env::var("FRAC_PROFILE").is_ok() {
+            eprintln!("collision level {level}: {:?}", tl.elapsed());
         }
     }
     // non-overlap enforcement per level, then margin shrink

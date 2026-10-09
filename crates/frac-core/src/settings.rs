@@ -233,7 +233,7 @@ impl Default for RenderSettings {
             chipping: true,
             interior_uv: "triplanar_asset_space".into(),
             interior_resolution: 4.0,
-            max_interior_tris_per_patch: 2000,
+            max_interior_tris_per_patch: 128,
             triangle_budget: 0,
             lod_ratio: 0.5,
             meshopt_compression: true,

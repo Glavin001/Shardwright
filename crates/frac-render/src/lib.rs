@@ -119,7 +119,7 @@ fn cell_min_extent(c: &Cell) -> f64 {
 }
 
 /// Build the shared displaced surface of a patch.
-fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f64, settings: &settings::RenderSettings, seed: u64) -> PatchSurface {
+fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f64, settings: &settings::RenderSettings, seed: u64, dihedral: &[(f64, f64)]) -> PatchSurface {
     let n = p.normal;
     let (u, v) = plane_basis(n);
     let mut comp_vert: Vec<Option<u32>> = Vec::new();
@@ -141,7 +141,11 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
         let s = spec.unwrap();
         // Steiner spacing: resolve the noise but respect the triangle cap
         let cap = settings.max_interior_tris_per_patch.max(8) as f64;
-        let spacing = (s.min_wl * settings.interior_resolution).max((2.0 * area / cap).sqrt()).max(1e-9);
+        let spacing = (s.min_wl * settings.interior_resolution)
+            .max(s.max_wl / 6.0)
+            .max(area.sqrt() / 10.0)
+            .max((2.0 * area / cap).sqrt())
+            .max(1e-9);
         let p2 = |x: DVec3| [x.dot(u), x.dot(v)];
         let segs: Vec<([f64; 2], [f64; 2])> = p
             .loops
@@ -158,7 +162,8 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
             }
         }
         let plane_d = pos[0].dot(n);
-        let mut steiner: Vec<([f64; 2], f64)> = Vec::new(); // (point, boundary distance)
+        // (point, boundary distance, max safe |h| for +h, for -h)
+        let mut steiner: Vec<([f64; 2], f64, f64, f64)> = Vec::new();
         let ny = ((hi[1] - lo[1]) / (spacing * 0.866)).ceil() as i64;
         let nx = ((hi[0] - lo[0]) / spacing).ceil() as i64;
         if (nx * ny) as f64 <= cap * 2.0 {
@@ -168,9 +173,20 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
                     if !inside_segs(&segs, q) {
                         continue;
                     }
-                    let d = segs.iter().map(|(a, b)| seg_dist(q, *a, *b)).fold(f64::INFINITY, f64::min);
+                    let mut d = f64::INFINITY;
+                    // displacement must not cross the faces adjacent to the
+                    // boundary: |h| <= 0.5 d_e tan(dihedral_e) per side
+                    let (mut lim_pos, mut lim_neg) = (f64::INFINITY, f64::INFINITY);
+                    for (k, (a, b)) in segs.iter().enumerate() {
+                        let de = seg_dist(q, *a, *b);
+                        d = d.min(de);
+                        let (ta, tb) = dihedral.get(k).copied().unwrap_or((1.5, 1.5));
+                        let f = |t: f64| 0.4 * de * libm::sin(t.clamp(0.0, std::f64::consts::FRAC_PI_2));
+                        lim_pos = lim_pos.min(f(tb));
+                        lim_neg = lim_neg.min(f(ta));
+                    }
                     if d > 0.45 * spacing {
-                        steiner.push((q, d));
+                        steiner.push((q, d, lim_pos, lim_neg));
                     }
                 }
             }
@@ -210,7 +226,7 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
             if ok {
                 let taper_w = 2.0 * spacing;
                 let amp = s.amplitude.min(amp_cap);
-                for (q, d) in &steiner {
+                for (q, d, lim_pos, lim_neg) in &steiner {
                     let base = u * q[0] + v * q[1] + n * plane_d;
                     let mut np = base;
                     if let Some((g, st)) = s.grain {
@@ -220,6 +236,7 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
                     let t = (d / taper_w).clamp(0.0, 1.0);
                     let taper = t * t * (3.0 - 2.0 * t);
                     let h = amp * noise::fbm(np, s.min_wl, s.max_wl, s.hurst, seed) * taper;
+                    let h = if h > 0.0 { h.min(*lim_pos) } else { h.max(-*lim_neg) };
                     let x = base + n * h;
                     if let Ok(hd) = cdt.insert(Point2::new(q[0], q[1])) {
                         if hd.index() >= nb && !handle_to_local.contains_key(&hd.index()) {
@@ -296,6 +313,122 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
     }
     let normal = nrm.into_iter().map(|x| if x.dot(n) > 0.0 { x.normalize() } else { n }).collect();
     PatchSurface { comp_vert, pos, normal, tris: tris_local }
+}
+
+/// Patches whose displaced triangles take part in a self-intersection of
+/// some cell's render mesh (exact test, zero-area triangles ignored).
+fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface]) -> Vec<usize> {
+    let g = &comp.geometry;
+    let mut per_cell: BTreeMap<CellId, (Vec<usize>, Vec<(usize, bool)>)> = BTreeMap::new();
+    for (i, e) in g.ext_polys.iter().enumerate() {
+        per_cell.entry(e.cell).or_default().0.push(i);
+    }
+    for (pi, pt) in g.patches.iter().enumerate() {
+        per_cell.entry(pt.cells.0).or_default().1.push((pi, false));
+        per_cell.entry(pt.cells.1).or_default().1.push((pi, true));
+    }
+    let bad: Vec<Vec<usize>> = per_cell
+        .par_iter()
+        .map(|(_, (exts, pats))| {
+            let mut m = TriMesh::default();
+            let mut tag: Vec<Option<usize>> = Vec::new();
+            for &i in exts {
+                let e = &g.ext_polys[i];
+                let base = m.verts.len() as u32;
+                m.verts.extend(e.verts.iter().map(|&v| verts[v as usize]));
+                for k in 1..e.verts.len() as u32 - 1 {
+                    m.tris.push([base, base + k, base + k + 1]);
+                    tag.push(None);
+                }
+            }
+            for &(pi, flip) in pats {
+                let srf = &surfaces[pi];
+                let base = m.verts.len() as u32;
+                m.verts.extend(srf.pos.iter().copied());
+                for t in &srf.tris {
+                    m.tris.push(if flip { [base + t[0], base + t[2], base + t[1]] } else { [base + t[0], base + t[1], base + t[2]] });
+                    tag.push(Some(pi));
+                }
+            }
+            // weld by exact coordinates without dropping triangles (keep tags aligned)
+            let mut map: BTreeMap<[u64; 3], u32> = BTreeMap::new();
+            let mut nv = Vec::new();
+            let remap: Vec<u32> = m
+                .verts
+                .iter()
+                .map(|v| {
+                    *map.entry([v.x.to_bits(), v.y.to_bits(), v.z.to_bits()]).or_insert_with(|| {
+                        nv.push(*v);
+                        (nv.len() - 1) as u32
+                    })
+                })
+                .collect();
+            let tris: Vec<[u32; 3]> = m.tris.iter().map(|t| [remap[t[0] as usize], remap[t[1] as usize], remap[t[2] as usize]]).collect();
+            let wm = TriMesh { verts: nv, tris };
+            let mut out = Vec::new();
+            for (a, b) in wm.self_intersections(usize::MAX) {
+                if wm.is_degenerate(a as usize) || wm.is_degenerate(b as usize) {
+                    continue;
+                }
+                for t in [a, b] {
+                    if let Some(pi) = tag[t as usize] {
+                        out.push(pi);
+                    }
+                }
+            }
+            out
+        })
+        .collect();
+    let mut v: Vec<usize> = bad.into_iter().flatten().collect();
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
+/// Interior dihedral angles (cell A side, cell B side) at every boundary
+/// edge of every patch, in loop order.
+fn patch_dihedrals(comp: &Component) -> Vec<Vec<(f64, f64)>> {
+    let g = &comp.geometry;
+    // per cell: directed edge -> outward normal of the polygon using it
+    let mut edge_n: BTreeMap<(CellId, u32, u32), DVec3> = BTreeMap::new();
+    for e in &g.ext_polys {
+        let pts: Vec<DVec3> = e.verts.iter().map(|&v| g.verts[v as usize]).collect();
+        let n = frac_geom::polygon::newell(&pts).normalize_or_zero();
+        for k in 0..e.verts.len() {
+            edge_n.insert((e.cell, e.verts[k], e.verts[(k + 1) % e.verts.len()]), n);
+        }
+    }
+    for pt in &g.patches {
+        for l in &pt.loops {
+            for k in 0..l.len() {
+                let (a, b) = (l[k], l[(k + 1) % l.len()]);
+                edge_n.insert((pt.cells.0, a, b), pt.normal);
+                edge_n.insert((pt.cells.1, b, a), -pt.normal);
+            }
+        }
+    }
+    let dihedral = |n_self: DVec3, n_other: Option<&DVec3>| -> f64 {
+        match n_other {
+            Some(m) => std::f64::consts::PI - libm::acos(n_self.dot(*m).clamp(-1.0, 1.0)),
+            None => 1.5,
+        }
+    };
+    g.patches
+        .iter()
+        .map(|pt| {
+            let mut v = Vec::new();
+            for l in &pt.loops {
+                for k in 0..l.len() {
+                    let (a, b) = (l[k], l[(k + 1) % l.len()]);
+                    // neighbor polygon in A uses (b,a); in B uses (a,b)
+                    let ta = dihedral(pt.normal, edge_n.get(&(pt.cells.0, b, a)));
+                    let tb = dihedral(-pt.normal, edge_n.get(&(pt.cells.1, a, b)));
+                    v.push((ta, tb));
+                }
+            }
+            v
+        })
+        .collect()
 }
 
 /// Check that every directed boundary edge of the patch appears in the
@@ -478,18 +611,35 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
             let chip = if s.chipping { (p.chipping_for)(comp.id) } else { 0.0 };
             let verts = chip_vertices(comp, chip, p.seed);
             let spec = (p.noise_for)(comp.id);
-            let surfaces = comp
+            let dihedrals = patch_dihedrals(comp);
+            let seed = stable_hash(&[p.seed, comp.id.0 as u64, 0x401]);
+            let caps: Vec<f64> = comp
                 .geometry
                 .patches
                 .iter()
-                .enumerate()
-                .map(|(pi, pt)| {
-                    let cap = 0.2 * cell_min_extent(&asset.cells[pt.cells.0.idx()]).min(cell_min_extent(&asset.cells[pt.cells.1.idx()]));
-                    let seed = stable_hash(&[p.seed, comp.id.0 as u64, 0x401]);
-                    let _ = pi;
-                    patch_surface(&verts, pt, spec, cap, s, seed)
-                })
+                .map(|pt| 0.2 * cell_min_extent(&asset.cells[pt.cells.0.idx()]).min(cell_min_extent(&asset.cells[pt.cells.1.idx()])))
                 .collect();
+            let make = |pi: usize, scale: f64| -> PatchSurface {
+                let sp = spec.map(|mut x| {
+                    x.amplitude *= scale;
+                    x
+                });
+                patch_surface(&verts, &comp.geometry.patches[pi], sp, caps[pi], s, seed, &dihedrals[pi])
+            };
+            let mut scale = vec![1.0f64; comp.geometry.patches.len()];
+            let mut surfaces: Vec<PatchSurface> = (0..comp.geometry.patches.len()).map(|pi| make(pi, 1.0)).collect();
+            // Guarantee validity: exact self-intersection check per cell;
+            // halve the noise of offending patches, flat on the last round.
+            for round in 0..4 {
+                let bad = offending_patches(comp, &verts, &surfaces);
+                if bad.is_empty() {
+                    break;
+                }
+                for pi in bad {
+                    scale[pi] = if round >= 2 { 0.0 } else { scale[pi] * 0.5 };
+                    surfaces[pi] = make(pi, scale[pi]);
+                }
+            }
             CompRender { verts, surfaces }
         })
         .collect();

@@ -23,6 +23,7 @@ pub(crate) struct Problem {
     /// All groups (sorted (a<b)), physical areas, weights.
     pub groups: Vec<(u32, u32)>,
     pub group_area: Vec<f64>,
+    #[allow(dead_code)]
     pub group_weight: Vec<f64>,
     /// Jump operator for all groups (rows of group g in `rows_all[g]`),
     /// normalized by the length scale: `‖B̂_g u‖² = ∫_g ‖D‖² dA / L²`.

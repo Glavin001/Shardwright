@@ -338,6 +338,11 @@ impl SparseCholesky {
         self.n
     }
 
+    /// Number of stored values in the factor `L`.
+    pub fn factor_nnz(&self) -> usize {
+        self.values.len()
+    }
+
     /// Solves `A X = B` in place for a column-major block of right-hand sides.
     pub fn solve_mat(&self, rhs: MatMut<'_, f64>) {
         let mut mem = MemBuffer::new(self.symbolic.solve_in_place_scratch::<f64>(rhs.ncols(), Par::Seq));
