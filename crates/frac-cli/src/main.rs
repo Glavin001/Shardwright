@@ -121,6 +121,12 @@ enum Cmd {
         azimuth: f64,
         #[arg(long, default_value_t = 25.0)]
         elevation: f64,
+        /// Draw bonds (contact surfaces) instead of fragments: `kind` or `strength`.
+        #[arg(long)]
+        bonds: Option<String>,
+        /// Cutaway: hide geometry whose centroid z is above this value.
+        #[arg(long)]
+        clip_z: Option<f64>,
     },
     GenBench {
         #[arg(long, default_value = "benchmarks/assets")]
@@ -423,11 +429,17 @@ fn main() -> ExitCode {
             println!("wrote {} ({} bytes)", out.display(), bytes.len());
             Ok(true)
         }),
-        Cmd::Preview { input, out, level, all_levels, explode, width, height, azimuth, elevation } => (|| -> Result<bool, String> {
+        Cmd::Preview { input, out, level, all_levels, explode, width, height, azimuth, elevation, bonds, clip_z } => (|| -> Result<bool, String> {
             let text = std::fs::read_to_string(input).map_err(|e| format!("{}: {e}", input.display()))?;
             let asset: frac_core::Asset = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", input.display()))?;
-            let o = preview::PreviewOptions { level: *level, all_levels: *all_levels, width: *width, height: *height, explode: *explode, azimuth_deg: *azimuth, elevation_deg: *elevation };
-            println!("{}", preview::preview(&asset, out, &o)?);
+            let bonds = match bonds.as_deref() {
+                None => None,
+                Some("kind") => Some(preview::BondColour::Kind),
+                Some("strength") => Some(preview::BondColour::Strength),
+                Some(x) => return Err(format!("--bonds {x}: expected kind or strength")),
+            };
+            let o = preview::PreviewOptions { bonds, clip_z: *clip_z, level: *level, all_levels: *all_levels, width: *width, height: *height, explode: *explode, azimuth_deg: *azimuth, elevation_deg: *elevation };
+            println!("{}", preview::preview(&asset, &MaterialLibrary::builtin(), out, &o)?);
             Ok(true)
         })(),
         Cmd::GenBench { out, only } => bench::generate(out, only).map(|_| true),

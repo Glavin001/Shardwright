@@ -8,7 +8,19 @@ use glam::DVec3;
 use rayon::prelude::*;
 use std::path::Path;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BondColour {
+    /// Joint type (cold joint, bearing, mortar, adhesive, monolithic, anchor…).
+    Kind,
+    /// Tensile capacity (interface/material strength × Weibull scale), log heat map.
+    Strength,
+}
+
 pub struct PreviewOptions {
+    /// Draw the level's bonds (their contact surfaces) instead of fragments.
+    pub bonds: Option<BondColour>,
+    /// Cutaway: drop geometry whose centroid has z above this value.
+    pub clip_z: Option<f64>,
     pub level: Option<u8>,
     pub all_levels: bool,
     pub width: u32,
@@ -22,6 +34,8 @@ struct Tri {
     p: [DVec3; 3],
     frag: u32,
     shade: f32,
+    /// Fixed colour (bond views); fragment colour from `frag` otherwise.
+    rgb: Option<[f32; 3]>,
 }
 
 /// Distinct, saturated colour per fragment (golden-ratio hue walk with
@@ -44,18 +58,87 @@ fn colour(id: u32) -> [f32; 3] {
     [r as f32, g as f32, b as f32]
 }
 
-fn level_tris(asset: &Asset, level: u8, explode: f64, light: DVec3) -> Vec<Tri> {
-    let frs = asset.level_fragments(level);
+fn kind_colour(k: frac_core::InterfaceKind) -> [f32; 3] {
+    use frac_core::InterfaceKind as K;
+    match k {
+        K::ColdJoint => [0.20, 0.45, 0.85],
+        K::Bearing => [0.95, 0.55, 0.10],
+        K::MortarJoint => [0.65, 0.25, 0.20],
+        K::Adhesive => [0.20, 0.70, 0.35],
+        K::Weld | K::Bolted => [0.90, 0.80, 0.15],
+        K::GrainBoundary => [0.55, 0.30, 0.70],
+        K::Anchor => [0.05, 0.05, 0.05],
+        K::Monolithic => [0.70, 0.70, 0.72],
+        _ => [0.20, 0.65, 0.70],
+    }
+}
+
+/// Perceptual-ish heat map (dark blue → teal → yellow) for t ∈ [0, 1].
+fn heat(t: f64) -> [f32; 3] {
+    let t = t.clamp(0.0, 1.0);
+    let stops = [[0.15, 0.10, 0.45], [0.10, 0.45, 0.60], [0.25, 0.70, 0.40], [0.95, 0.85, 0.15]];
+    let x = t * 3.0;
+    let i = (x.floor() as usize).min(2);
+    let f = x - i as f64;
+    let (a, b) = (stops[i], stops[i + 1]);
+    [(a[0] + (b[0] - a[0]) * f) as f32, (a[1] + (b[1] - a[1]) * f) as f32, (a[2] + (b[2] - a[2]) * f) as f32]
+}
+
+/// Bond contact surfaces of a level, coloured by kind or tensile capacity.
+fn bond_tris(asset: &Asset, lib: &frac_material::MaterialLibrary, level: u8, mode: BondColour, clip_z: Option<f64>, light: DVec3) -> (Vec<Tri>, String) {
+    let cap = |b: &frac_core::Bond| -> f64 {
+        let comp = b.composition.first();
+        let mat_t = |f: frac_core::FragmentId| {
+            let m = asset.fragment(f).material_mix.first().map(|x| x.0).unwrap_or(frac_core::MaterialId(0));
+            lib.material(m).tensile_strength.unwrap_or(1e6)
+        };
+        let side = match b.b {
+            frac_core::FragmentOrWorld::Fragment(f) => mat_t(b.a).min(mat_t(f)),
+            frac_core::FragmentOrWorld::World => mat_t(b.a),
+        };
+        let ft = comp.and_then(|c| c.interface_material).and_then(|m| lib.interface_material(m)).and_then(|im| im.tensile_strength).unwrap_or(side);
+        ft * b.strength_scale as f64
+    };
+    let bonds: Vec<&frac_core::Bond> = asset.level_bonds(level).filter(|b| clip_z.is_none_or(|z| b.centroid.z <= z)).collect();
+    let caps: Vec<f64> = bonds.iter().map(|b| cap(b).max(1.0)).collect();
+    let (lo, hi) = caps.iter().fold((f64::INFINITY, 0.0f64), |(l, h), &c| (l.min(c), h.max(c)));
+    let mut tris = Vec::new();
+    for (k, b) in bonds.iter().enumerate() {
+        let kind = if b.anchor { frac_core::InterfaceKind::Anchor } else { b.composition.first().map(|c| c.kind).unwrap_or(frac_core::InterfaceKind::Monolithic) };
+        let rgb = match mode {
+            BondColour::Kind => kind_colour(kind),
+            BondColour::Strength if b.anchor => [0.05, 0.05, 0.05],
+            BondColour::Strength => heat(if hi > lo { (caps[k].ln() - lo.ln()) / (hi.ln() - lo.ln()) } else { 0.5 }),
+        };
+        let shade = (0.55 + 0.45 * b.normal.dot(light).abs()) as f32;
+        for &i in &b.interfaces {
+            for poly in &asset.interfaces[i.idx()].polygons {
+                let Some(outer) = poly.loops.first() else { continue };
+                for t in 1..outer.len().saturating_sub(1) {
+                    tris.push(Tri { p: [outer[0], outer[t], outer[t + 1]], frag: k as u32, shade, rgb: Some(rgb) });
+                }
+            }
+        }
+    }
+    let legend = match mode {
+        BondColour::Kind => "colour = joint kind: cold joint blue, bearing orange, mortar red-brown, adhesive green, weld/bolted yellow, grain boundary purple, monolithic grey, anchor black".to_string(),
+        BondColour::Strength => format!("colour = tensile capacity, log scale {:.2} MPa (dark blue) → {:.2} MPa (yellow); anchors black", lo / 1e6, hi / 1e6),
+    };
+    (tris, legend)
+}
+
+fn level_tris(asset: &Asset, level: u8, explode: f64, clip_z: Option<f64>, light: DVec3) -> Vec<Tri> {
+    let frs: Vec<&frac_core::Fragment> = asset.level_fragments(level).iter().filter(|f| clip_z.is_none_or(|z| f.mass.com.z <= z)).collect();
     let centre = {
         let (mut s, mut m) = (DVec3::ZERO, 0.0);
-        for f in frs {
+        for f in &frs {
             s += f.mass.com * f.mass.volume;
             m += f.mass.volume;
         }
         s / m.max(1e-300)
     };
     frs.par_iter()
-        .flat_map_iter(|f| {
+        .flat_map_iter(|&f| {
             let mesh = frac_collision::cells_boundary_mesh(asset, asset.fragment_cells(f));
             let off = (f.mass.com - centre) * explode;
             let id = f.id.0;
@@ -67,7 +150,7 @@ fn level_tris(asset: &Asset, level: u8, explode: f64, light: DVec3) -> Vec<Tri> 
                         return None;
                     }
                     let lam = n.normalize().dot(light).max(0.0);
-                    Some(Tri { p, frag: id, shade: (0.35 + 0.65 * lam) as f32 })
+                    Some(Tri { p, frag: id, shade: (0.35 + 0.65 * lam) as f32, rgb: None })
                 })
                 .collect::<Vec<_>>()
         })
@@ -98,6 +181,7 @@ fn render_panel(tris: &[Tri], w: u32, h: u32, view: DVec3, up: DVec3) -> Vec<[u8
     let mut depth = vec![f64::NEG_INFINITY; n];
     let mut frag = vec![u32::MAX; n];
     let mut shade = vec![0f32; n];
+    let mut rgbs = vec![[0f32; 3]; n];
     for t in tris {
         let a = to_px(proj(t.p[0]));
         let b = to_px(proj(t.p[1]));
@@ -126,6 +210,7 @@ fn render_panel(tris: &[Tri], w: u32, h: u32, view: DVec3, up: DVec3) -> Vec<[u8
                     depth[i] = z;
                     frag[i] = t.frag;
                     shade[i] = t.shade;
+                    rgbs[i] = t.rgb.unwrap_or_else(|| colour(t.frag));
                 }
             }
         }
@@ -140,7 +225,7 @@ fn render_panel(tris: &[Tri], w: u32, h: u32, view: DVec3, up: DVec3) -> Vec<[u8
                 rgb[i] = [0.97, 0.97, 0.98];
                 continue;
             }
-            let c = colour(f);
+            let c = rgbs[i];
             let mut edge = false;
             for (dx, dy) in [(1i32, 0i32), (-1, 0), (0, 1), (0, -1)] {
                 let (nx, ny) = (x as i32 + dx, y as i32 + dy);
@@ -174,7 +259,7 @@ fn render_panel(tris: &[Tri], w: u32, h: u32, view: DVec3, up: DVec3) -> Vec<[u8
     out
 }
 
-pub fn preview(asset: &Asset, out: &Path, o: &PreviewOptions) -> Result<String, String> {
+pub fn preview(asset: &Asset, lib: &frac_material::MaterialLibrary, out: &Path, o: &PreviewOptions) -> Result<String, String> {
     let (az, el) = (o.azimuth_deg.to_radians(), o.elevation_deg.to_radians());
     // camera looks along -view; `view` points from the scene towards the camera
     let view = DVec3::new(az.sin() * el.cos(), el.sin(), az.cos() * el.cos()).normalize();
@@ -182,7 +267,21 @@ pub fn preview(asset: &Asset, out: &Path, o: &PreviewOptions) -> Result<String, 
     let light = (view + DVec3::new(0.3, 0.6, 0.2)).normalize();
     let leaf = asset.hierarchy.levels.saturating_sub(1);
     let levels: Vec<u8> = if o.all_levels { (0..asset.hierarchy.levels).collect() } else { vec![o.level.unwrap_or(leaf).min(leaf)] };
-    let panels: Vec<Vec<[u8; 3]>> = levels.iter().map(|&l| render_panel(&level_tris(asset, l, o.explode, light), o.width, o.height, view, up)).collect();
+    let mut legend = String::new();
+    let panels: Vec<Vec<[u8; 3]>> = levels
+        .iter()
+        .map(|&l| {
+            let tris = match o.bonds {
+                Some(mode) => {
+                    let (t, lg) = bond_tris(asset, lib, l, mode, o.clip_z, light);
+                    legend = lg;
+                    t
+                }
+                None => level_tris(asset, l, o.explode, o.clip_z, light),
+            };
+            render_panel(&tris, o.width, o.height, view, up)
+        })
+        .collect();
     let total_w = o.width * panels.len() as u32;
     let mut img = vec![0u8; (total_w * o.height * 3) as usize];
     for (k, p) in panels.iter().enumerate() {
@@ -200,6 +299,9 @@ pub fn preview(asset: &Asset, out: &Path, o: &PreviewOptions) -> Result<String, 
     enc.set_depth(png::BitDepth::Eight);
     let mut wr = enc.write_header().map_err(|e| e.to_string())?;
     wr.write_image_data(&img).map_err(|e| e.to_string())?;
-    let counts: Vec<String> = levels.iter().map(|&l| format!("L{l}: {} fragments", asset.level_fragments(l).len())).collect();
-    Ok(format!("wrote {} ({}×{}; {})", out.display(), total_w, o.height, counts.join(", ")))
+    let counts: Vec<String> = levels
+        .iter()
+        .map(|&l| if o.bonds.is_some() { format!("L{l}: {} bonds", asset.level_bonds(l).count()) } else { format!("L{l}: {} fragments", asset.level_fragments(l).len()) })
+        .collect();
+    Ok(format!("wrote {} ({}×{}; {}){}", out.display(), total_w, o.height, counts.join(", "), if legend.is_empty() { String::new() } else { format!("\n{legend}") }))
 }
