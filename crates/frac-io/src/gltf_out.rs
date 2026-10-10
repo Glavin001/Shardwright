@@ -543,11 +543,48 @@ fn bytes_of<T: bytemuck::Pod>(v: &[T]) -> Vec<u8> {
 /// Write `scene` as a binary glTF 2.0 (GLB) file.
 pub fn write_glb(scene: &RenderScene, opts: &GltfOptions) -> Result<Vec<u8>, IoError> {
     check_scene(scene)?;
+    write_glb_core(scene, MeshList::Borrowed(&scene.meshes), opts)
+}
+
+/// [`write_glb`] that consumes the scene and frees every mesh as soon as its
+/// buffers are written, so the scene and the binary buffer are not both held
+/// in full (building-scale assets). Identical output.
+pub fn write_glb_owned(mut scene: RenderScene, opts: &GltfOptions) -> Result<Vec<u8>, IoError> {
+    check_scene(&scene)?;
+    let meshes = std::mem::take(&mut scene.meshes);
+    write_glb_core(&scene, MeshList::Owned(meshes), opts)
+}
+
+enum MeshList<'a> {
+    Borrowed(&'a [RenderMesh]),
+    Owned(Vec<RenderMesh>),
+}
+
+impl MeshList<'_> {
+    fn len(&self) -> usize {
+        match self {
+            MeshList::Borrowed(m) => m.len(),
+            MeshList::Owned(m) => m.len(),
+        }
+    }
+    fn get(&self, i: usize) -> &RenderMesh {
+        match self {
+            MeshList::Borrowed(m) => &m[i],
+            MeshList::Owned(m) => &m[i],
+        }
+    }
+    fn release(&mut self, i: usize) {
+        if let MeshList::Owned(m) = self {
+            m[i] = RenderMesh::default();
+        }
+    }
+}
+
+fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptions) -> Result<Vec<u8>, IoError> {
     // reserve the (uncompressed) binary size up front: doubling growth of a
     // multi-GB buffer would nearly double the peak memory
-    let estimate: usize = scene
-        .meshes
-        .iter()
+    let estimate: usize = (0..mesh_list.len())
+        .map(|i| mesh_list.get(i))
         .map(|m| {
             let nv = m.positions.len();
             nv * (24 + m.uvs.as_ref().map_or(0, |_| 8) + m.tangents.as_ref().map_or(0, |_| 16)) + m.primitives.iter().map(|p| 4 * p.indices.len() + 4).sum::<usize>() + 64
@@ -594,9 +631,10 @@ pub fn write_glb(scene: &RenderScene, opts: &GltfOptions) -> Result<Vec<u8>, IoE
         .collect();
 
     // Meshes.
-    let mut mesh_map: Vec<Option<usize>> = Vec::with_capacity(scene.meshes.len());
+    let mut mesh_map: Vec<Option<usize>> = Vec::with_capacity(mesh_list.len());
     let mut meshes: Vec<Value> = Vec::new();
-    for m in &scene.meshes {
+    for mi in 0..mesh_list.len() {
+        let m = mesh_list.get(mi);
         let nv = m.positions.len();
         let prims: Vec<&RenderPrimitive> = m
             .primitives
@@ -719,6 +757,7 @@ pub fn write_glb(scene: &RenderScene, opts: &GltfOptions) -> Result<Vec<u8>, IoE
         mj.insert("primitives".into(), Value::Array(prim_json));
         mesh_map.push(Some(meshes.len()));
         meshes.push(Value::Object(mj));
+        mesh_list.release(mi);
     }
 
     // Nodes.

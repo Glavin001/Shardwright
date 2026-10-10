@@ -90,6 +90,13 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
         let parts = parts.into_iter().map(|p| Part { name: p.name, mesh: p.mesh, material: p.material, meta: p.meta }).collect();
         write_asset(dir, "building_v0", parts, conns, Some(0.0))?;
     }
+    // larger multi-storey frame building (5 storeys, 3 x 2 bays)
+    {
+        let b = crate::buildings::FrameBuilding { bays_x: 3, bays_z: 2, floors: 5, ..Default::default() };
+        let (parts, conns) = b.build();
+        let parts = parts.into_iter().map(|p| Part { name: p.name, mesh: p.mesh, material: p.material, meta: p.meta }).collect();
+        write_asset(dir, "building_v1", parts, conns, Some(0.0))?;
+    }
     // 1. ceramic bowl (thin curved shell)
     {
         let r = 0.12;

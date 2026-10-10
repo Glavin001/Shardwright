@@ -7,7 +7,28 @@ use frac_render::RenderOut;
 use serde_json::json;
 use std::collections::BTreeMap;
 
-pub fn render_scene(asset: &mut Asset, render: &RenderOut, lib: &MaterialLibrary) -> RenderScene {
+/// Render references of every fragment (glTF node = fragment index; one mesh
+/// per non-empty LOD, numbered in fragment order) exactly as
+/// [`render_scene`] lays them out, so the physics payload can be written and
+/// validated before the scene is built.
+pub fn render_refs(asset: &mut Asset, render: &RenderOut) {
+    let mut next = 0u32;
+    for (fi, f) in asset.hierarchy.fragments.iter_mut().enumerate() {
+        let mut lods = Vec::new();
+        for fm in &render.fragments[fi] {
+            if !fm.ext_indices.is_empty() || !fm.int_indices.is_empty() {
+                lods.push(next);
+                next += 1;
+            }
+        }
+        f.render = RenderRefs { gltf_node: fi as i32, lod_meshes: lods };
+    }
+}
+
+/// The f32 glTF scene. With `consume`, each fragment's f64 render meshes are
+/// moved out of `render` and freed as they are converted, so the two
+/// representations of a building-scale asset are never alive at once.
+pub fn render_scene(asset: &Asset, render: &mut RenderOut, lib: &MaterialLibrary, consume: bool) -> RenderScene {
     let mut scene = RenderScene { name: asset.meta.name.clone(), ..Default::default() };
     // two render materials per library material: exterior, interior
     let mut mat_slot: BTreeMap<MaterialId, (u32, u32)> = BTreeMap::new();
@@ -41,13 +62,14 @@ pub fn render_scene(asset: &mut Asset, render: &RenderOut, lib: &MaterialLibrary
         let (ext_m, int_m) = mat_slot[&asset.components[f.component.idx()].material];
         let origin = f.mass.com;
         let mut lods = Vec::new();
-        for (li, fm) in render.fragments[fi].iter().enumerate() {
+        let fms = if consume { std::mem::take(&mut render.fragments[fi]) } else { render.fragments[fi].clone() };
+        for (li, fm) in fms.into_iter().enumerate() {
             let mut prims = Vec::new();
             if !fm.ext_indices.is_empty() {
-                prims.push(RenderPrimitive { material: ext_m, indices: fm.ext_indices.clone() });
+                prims.push(RenderPrimitive { material: ext_m, indices: fm.ext_indices });
             }
             if !fm.int_indices.is_empty() {
-                prims.push(RenderPrimitive { material: int_m, indices: fm.int_indices.clone() });
+                prims.push(RenderPrimitive { material: int_m, indices: fm.int_indices });
             }
             if prims.is_empty() {
                 continue;
@@ -57,12 +79,13 @@ pub fn render_scene(asset: &mut Asset, render: &RenderOut, lib: &MaterialLibrary
                 name: format!("frag_{}_lod{}", f.id.0, li),
                 positions: fm.positions.iter().map(|p| (*p - origin).as_vec3().to_array()).collect(),
                 normals: fm.normals.iter().map(|n| n.normalize_or_zero().to_array()).collect(),
-                uvs: Some(fm.uvs.clone()),
+                uvs: Some(fm.uvs),
                 tangents: None,
                 primitives: prims,
             });
             lods.push(mi);
         }
+        debug_assert_eq!(lods, f.render.lod_meshes);
         let parent_com = f.parent.map(|p| h.fragments[p.idx()].mass.com).unwrap_or(glam::DVec3::ZERO);
         let children: Vec<u32> = f.children.clone().collect();
         scene.nodes.push(RenderNode {
@@ -80,11 +103,6 @@ pub fn render_scene(asset: &mut Asset, render: &RenderOut, lib: &MaterialLibrary
                 "particle_candidate": f.particle_candidate,
             }),
         });
-    }
-    for fi in 0..nf {
-        let lods: Vec<u32> = scene.nodes[fi].mesh_lods.clone();
-        let f = &mut asset.hierarchy.fragments[fi];
-        f.render = RenderRefs { gltf_node: fi as i32, lod_meshes: lods };
     }
     // rebar stubs under the finest fragment of the interface's first cell
     let leaf = asset.hierarchy.levels.saturating_sub(1) as usize;

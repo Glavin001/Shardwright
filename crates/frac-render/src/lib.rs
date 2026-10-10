@@ -317,7 +317,7 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
 
 /// Patches whose displaced triangles take part in a self-intersection of
 /// some cell's render mesh (exact test, zero-area triangles ignored).
-fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface]) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
+fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface], only: Option<&std::collections::BTreeSet<CellId>>) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
     let g = &comp.geometry;
     let mut per_cell: BTreeMap<CellId, (Vec<usize>, Vec<(usize, bool)>)> = BTreeMap::new();
     for (i, e) in g.ext_polys.iter().enumerate() {
@@ -327,30 +327,19 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
         per_cell.entry(pt.cells.0).or_default().1.push((pi, false));
         per_cell.entry(pt.cells.1).or_default().1.push((pi, true));
     }
-    let parts: Vec<(Vec<usize>, Vec<(usize, bool)>)> = per_cell.into_values().collect();
+    let parts: Vec<(Vec<usize>, Vec<(usize, bool)>)> = per_cell.into_iter().filter(|(c, _)| only.map(|o| o.contains(c)).unwrap_or(true)).map(|(_, p)| p).collect();
     offending_in(g, verts, surfaces, &parts)
 }
 
 /// Offending patches / exterior vertices of multi-cell fragments: the
 /// fragment's render mesh holds displaced patches of different cells that
 /// no single-cell check sees together.
-fn offending_fragments(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface], sets: &[std::collections::BTreeSet<CellId>]) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
+fn offending_fragments(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface], sets: &[Vec<CellId>], cp: &CellPolys, only: Option<&std::collections::BTreeSet<CellId>>) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
     let g = &comp.geometry;
     let parts: Vec<(Vec<usize>, Vec<(usize, bool)>)> = sets
-        .iter()
-        .map(|set| {
-            let exts = g.ext_polys.iter().enumerate().filter(|(_, e)| set.contains(&e.cell)).map(|(i, _)| i).collect();
-            let pats = g
-                .patches
-                .iter()
-                .enumerate()
-                .filter_map(|(pi, pt)| {
-                    let (a, b) = (set.contains(&pt.cells.0), set.contains(&pt.cells.1));
-                    (a != b).then_some((pi, b))
-                })
-                .collect();
-            (exts, pats)
-        })
+        .par_iter()
+        .filter(|set| only.map(|o| set.iter().any(|c| o.contains(c))).unwrap_or(true))
+        .map(|set| cp.boundary_of(set, |c| set.binary_search(&c).is_ok(), g))
         .collect();
     offending_in(g, verts, surfaces, &parts)
 }
@@ -387,7 +376,7 @@ fn offending_in(g: &ComponentGeometry, verts: &[DVec3], surfaces: &[PatchSurface
                 }
             }
             // weld by exact coordinates without dropping triangles (keep tags aligned)
-            let mut map: BTreeMap<[u64; 3], u32> = BTreeMap::new();
+            let mut map: std::collections::HashMap<[u64; 3], u32> = std::collections::HashMap::with_capacity(m.verts.len());
             let mut nv = Vec::new();
             let remap: Vec<u32> = m
                 .verts
@@ -662,6 +651,9 @@ fn barycentric(p: DVec3, a: DVec3, b: DVec3, c: DVec3) -> DVec3 {
 /// Build render meshes for every fragment.
 pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
     let s = p.settings;
+    let log = std::env::var_os("FRAC_LOG").is_some();
+    let t0 = std::time::Instant::now();
+    let cp = asset.cell_polys();
     // per component: chipped vertices and patch surfaces
     struct CompRender {
         verts: Vec<DVec3>,
@@ -671,6 +663,8 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
         .components
         .par_iter()
         .map(|comp| {
+            let tc = std::time::Instant::now();
+            let mut marks: Vec<(&str, f64)> = Vec::new();
             let chip = if s.chipping { (p.chipping_for)(comp.id) } else { 0.0 };
             let mut verts = chip_vertices(comp, chip, p.seed);
             // the whole exterior surface must stay embedded after chipping
@@ -705,6 +699,7 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                     }
                 }
             }
+            marks.push(("chip", tc.elapsed().as_secs_f64()));
             let spec = (p.noise_for)(comp.id);
             let dihedrals = patch_dihedrals(comp);
             let seed = stable_hash(&[p.seed, comp.id.0 as u64, 0x401]);
@@ -730,12 +725,36 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                 }
             }
             let mut scale = vec![1.0f64; comp.geometry.patches.len()];
-            let mut surfaces: Vec<PatchSurface> = (0..comp.geometry.patches.len()).map(|pi| make(&verts, pi, 1.0)).collect();
+            let mut surfaces: Vec<PatchSurface> = (0..comp.geometry.patches.len()).into_par_iter().map(|pi| make(&verts, pi, 1.0)).collect();
+            marks.push(("surfaces", tc.elapsed().as_secs_f64()));
             // Guarantee validity: exact self-intersection check per cell;
             // halve the noise of offending patches (flat on late rounds) and
             // undo chipping on offending exterior vertices.
+            // Only meshes that changed in a round are re-checked in the next
+            // one (an unchanged valid mesh stays valid).
+            let mut vext: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
+            for (i, e) in comp.geometry.ext_polys.iter().enumerate() {
+                for &v in &e.verts {
+                    vext.entry(v).or_default().push(i);
+                }
+            }
+            let dirty_of = |rebuilt: &std::collections::BTreeSet<usize>, moved: &[u32]| -> std::collections::BTreeSet<CellId> {
+                let mut d = std::collections::BTreeSet::new();
+                for &pi in rebuilt {
+                    let pt = &comp.geometry.patches[pi];
+                    d.insert(pt.cells.0);
+                    d.insert(pt.cells.1);
+                }
+                for v in moved {
+                    for &e in vext.get(v).into_iter().flatten() {
+                        d.insert(comp.geometry.ext_polys[e].cell);
+                    }
+                }
+                d
+            };
+            let mut dirty: Option<std::collections::BTreeSet<CellId>> = None;
             for round in 0..6 {
-                let (bad, mut bad_verts, patch_verts) = offending_patches(comp, &verts, &surfaces);
+                let (bad, mut bad_verts, patch_verts) = offending_patches(comp, &verts, &surfaces, dirty.as_ref());
                 if bad.is_empty() && bad_verts.is_empty() {
                     break;
                 }
@@ -746,26 +765,35 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                 for &pi in &bad {
                     scale[pi] = if round >= 2 { 0.0 } else { scale[pi] * 0.5 };
                 }
+                let mut moved = Vec::new();
                 for v in bad_verts {
                     if verts[v as usize] != comp.geometry.verts[v as usize] {
                         verts[v as usize] = comp.geometry.verts[v as usize];
                         rebuild.extend(vpatches.get(&v).into_iter().flatten().copied());
+                        moved.push(v);
                     }
                 }
-                for pi in rebuild {
+                for &pi in &rebuild {
                     surfaces[pi] = make(&verts, pi, scale[pi]);
                 }
+                dirty = Some(dirty_of(&rebuild, &moved));
             }
+            marks.push(("cell rounds", tc.elapsed().as_secs_f64()));
             // the same guarantee for every multi-cell fragment (coarser levels)
-            let sets: Vec<std::collections::BTreeSet<CellId>> = asset
+            let sets: Vec<Vec<CellId>> = asset
                 .hierarchy
                 .fragments
                 .iter()
                 .filter(|f| f.component == comp.id && f.cells.len() > 1)
-                .map(|f| asset.fragment_cells(f).iter().copied().collect())
+                .map(|f| {
+                    let mut v = asset.fragment_cells(f).to_vec();
+                    v.sort_unstable();
+                    v
+                })
                 .collect();
+            let mut dirty: Option<std::collections::BTreeSet<CellId>> = None;
             for round in 0..6 {
-                let (bad, mut bad_verts, patch_verts) = offending_fragments(comp, &verts, &surfaces, &sets);
+                let (bad, mut bad_verts, patch_verts) = offending_fragments(comp, &verts, &surfaces, &sets, &cp, dirty.as_ref());
                 if bad.is_empty() && bad_verts.is_empty() {
                     break;
                 }
@@ -776,19 +804,29 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                 for &pi in &bad {
                     scale[pi] = if round >= 1 { 0.0 } else { scale[pi] * 0.5 };
                 }
+                let mut moved = Vec::new();
                 for v in bad_verts {
                     if verts[v as usize] != comp.geometry.verts[v as usize] {
                         verts[v as usize] = comp.geometry.verts[v as usize];
                         rebuild.extend(vpatches.get(&v).into_iter().flatten().copied());
+                        moved.push(v);
                     }
                 }
-                for pi in rebuild {
+                for &pi in &rebuild {
                     surfaces[pi] = make(&verts, pi, scale[pi]);
                 }
+                dirty = Some(dirty_of(&rebuild, &moved));
+            }
+            marks.push(("fragment rounds", tc.elapsed().as_secs_f64()));
+            if log && tc.elapsed().as_secs_f64() > 2.0 {
+                eprintln!("  render component '{}' ({} patches): {:?}", comp.name, comp.geometry.patches.len(), marks);
             }
             CompRender { verts, surfaces }
         })
         .collect();
+    if log {
+        eprintln!("  render surfaces + validity rounds: {:.1} s", t0.elapsed().as_secs_f64());
+    }
     let h = &asset.hierarchy;
     let leaf_level = h.levels.saturating_sub(1);
     let frag_meshes: Vec<Vec<FragMesh>> = h
@@ -797,16 +835,16 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
         .map(|f| {
             let comp = &asset.components[f.component.idx()];
             let cr = &comps[f.component.idx()];
-            let cells: std::collections::BTreeSet<CellId> = asset.fragment_cells(f).iter().copied().collect();
+            let mut cells: Vec<CellId> = asset.fragment_cells(f).to_vec();
+            cells.sort_unstable();
+            let (exts, pats) = cp.boundary_of(&cells, |c| cells.binary_search(&c).is_ok(), &comp.geometry);
             let attrs = ExteriorAttrs::new(comp);
             let uv_scale = (p.uv_scale_for)(comp.id);
             let origin = f.mass.com;
             let mut m = FragMesh::default();
             let mut ext_map: BTreeMap<(u32, u32), u32> = BTreeMap::new();
-            for e in &comp.geometry.ext_polys {
-                if !cells.contains(&e.cell) {
-                    continue;
-                }
+            for &ei in &exts {
+                let e = &comp.geometry.ext_polys[ei];
                 let pts: Vec<DVec3> = e.verts.iter().map(|&v| cr.verts[v as usize]).collect();
                 let fnrm = frac_geom::polygon::newell(&pts).normalize_or_zero();
                 let ids: Vec<u32> = e
@@ -830,12 +868,8 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                     }
                 }
             }
-            for (pi, pt) in comp.geometry.patches.iter().enumerate() {
-                let (a, b) = (cells.contains(&pt.cells.0), cells.contains(&pt.cells.1));
-                if a == b {
-                    continue;
-                }
-                let flip = b;
+            for &(pi, flip) in &pats {
+                let pt = &comp.geometry.patches[pi];
                 let srf = &cr.surfaces[pi];
                 let base = m.positions.len() as u32;
                 for (k, &x) in srf.pos.iter().enumerate() {
@@ -866,6 +900,9 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
             lods
         })
         .collect();
+    if log {
+        eprintln!("  render fragment meshes + LODs: {:.1} s", t0.elapsed().as_secs_f64());
+    }
     // render volume deviation (leaf fragments)
     let mut volume_deviation = Vec::new();
     for f in asset.level_fragments(leaf_level) {

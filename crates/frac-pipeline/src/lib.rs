@@ -316,7 +316,46 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
         asset.hierarchy.fragments[i].hulls = r;
     }
     tick("collision", &mut t, &mut timings);
+    // debugging aid: the asset before render, for replaying stages 9-12
+    // (examples/render_bench.rs) without re-running cells and collision
+    if let Some(p) = std::env::var_os("FRAC_DUMP_ASSET") {
+        if let Err(e) = frac_io::write_asset_json(&asset, std::path::Path::new(&p)) {
+            warnings.push(format!("FRAC_DUMP_ASSET: {e}"));
+        }
+    }
     // ---- Stage 9: render
+    let render = render_asset(&asset, settings, lib);
+    tick("render", &mut t, &mut timings);
+    // ---- export payloads
+    // Peak memory matters on building-scale assets: the f64 render meshes
+    // are converted into the f32 glTF scene (and freed) only after
+    // validation, and the glTF buffer is written after that.
+    export::render_refs(&mut asset, &render);
+    let physics = frac_io::write_physics(&asset);
+    tick("export", &mut t, &mut timings);
+    // ---- Stage 12: validation
+    let scorecard = frac_validate::validate(&asset, &render, lib, &settings.validation, &physics);
+    tick("validate", &mut t, &mut timings);
+    let mut report = Report::new(&asset, &render, timings, warnings, scorecard);
+    let tg = Instant::now();
+    let mut render = render;
+    let scene = export::render_scene(&asset, &mut render, lib, !keep_render);
+    let render = if keep_render { Some(render) } else { None };
+    let gltf = frac_io::write_glb_owned(scene, &frac_io::GltfOptions { meshopt_compression: settings.render.meshopt_compression })
+        .map_err(|e| FracError::new(Stage::Export, "glb", e.to_string()))?;
+    if let Some(e) = report.timings.iter_mut().find(|x| x.stage == "export") {
+        e.ms += tg.elapsed().as_secs_f64() * 1e3;
+    }
+    if log {
+        eprintln!("[{}] glb: {:.1} s, rss {:.0} MB", input.name, tg.elapsed().as_secs_f64(), rss_mb());
+    }
+    report.total_ms = t0.elapsed().as_secs_f64() * 1e3;
+    report.payload_bytes = (gltf.len(), physics.len());
+    Ok(PipelineOutput { asset, gltf, physics, report, render })
+}
+
+/// Render meshes of a baked asset with the bake settings (stage 9).
+pub fn render_asset(asset: &Asset, settings: &Settings, lib: &MaterialLibrary) -> frac_render::RenderOut {
     let noise_for = |c: ComponentId| -> Option<frac_render::NoiseSpec> {
         let comp = &asset.components[c.idx()];
         let mat = lib.material(comp.material);
@@ -335,32 +374,7 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
     let chip_for = |c: ComponentId| -> f64 { lib.material(asset.components[c.idx()].material).chipping_ratio.unwrap_or(0.0) };
     let uv_for = |c: ComponentId| -> f64 { lib.material(asset.components[c.idx()].material).interior_uv_scale.unwrap_or(1.0) };
     let rp = frac_render::RenderParams { settings: &settings.render, seed: settings.seed, noise_for: &noise_for, chipping_for: &chip_for, uv_scale_for: &uv_for };
-    let render = frac_render::build_render(&asset, &rp);
-    tick("render", &mut t, &mut timings);
-    // ---- export payloads
-    // Peak memory matters on building-scale assets: the f32 render scene, the
-    // glTF buffers and the f64 render meshes are never all alive at once.
-    let scene = export::render_scene(&mut asset, &render, lib);
-    let physics = frac_io::write_physics(&asset);
-    tick("export", &mut t, &mut timings);
-    // ---- Stage 12: validation
-    let scorecard = frac_validate::validate(&asset, &render, lib, &settings.validation, &physics);
-    tick("validate", &mut t, &mut timings);
-    let mut report = Report::new(&asset, &render, timings, warnings, scorecard);
-    let render = if keep_render { Some(render) } else { None };
-    let tg = Instant::now();
-    let gltf = frac_io::write_glb(&scene, &frac_io::GltfOptions { meshopt_compression: settings.render.meshopt_compression })
-        .map_err(|e| FracError::new(Stage::Export, "glb", e.to_string()))?;
-    drop(scene);
-    if let Some(e) = report.timings.iter_mut().find(|x| x.stage == "export") {
-        e.ms += tg.elapsed().as_secs_f64() * 1e3;
-    }
-    if log {
-        eprintln!("[{}] glb: {:.1} s, rss {:.0} MB", input.name, tg.elapsed().as_secs_f64(), rss_mb());
-    }
-    report.total_ms = t0.elapsed().as_secs_f64() * 1e3;
-    report.payload_bytes = (gltf.len(), physics.len());
-    Ok(PipelineOutput { asset, gltf, physics, report, render })
+    frac_render::build_render(asset, &rp)
 }
 
 /// Resident set size of this process in MB (Linux; 0 elsewhere), for the

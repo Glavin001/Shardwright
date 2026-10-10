@@ -115,66 +115,107 @@ impl TriMesh {
     }
 
     pub fn topology(&self) -> TopologyReport {
+        // Allocation-light (hot in validation): sorted directed-edge list
+        // instead of a map of per-edge vectors, CSR vertex->triangle lists.
         let mut rep = TopologyReport::default();
-        let em = self.edge_map();
-        for (&(a, b), ts) in em.iter() {
-            let rev = em.get(&(b, a)).map(|v| v.len()).unwrap_or(0);
-            if ts.len() > 1 {
+        let mut edges: Vec<(u32, u32)> = Vec::with_capacity(3 * self.tris.len());
+        for tri in &self.tris {
+            for k in 0..3 {
+                edges.push((tri[k], tri[(k + 1) % 3]));
+            }
+        }
+        edges.sort_unstable();
+        let count = |e: (u32, u32)| -> usize {
+            let lo = edges.partition_point(|x| *x < e);
+            let hi = edges.partition_point(|x| *x <= e);
+            hi - lo
+        };
+        let mut i = 0;
+        while i < edges.len() {
+            let (a, b) = edges[i];
+            let mut j = i;
+            while j < edges.len() && edges[j] == (a, b) {
+                j += 1;
+            }
+            let c = j - i;
+            let rev = count((b, a));
+            if c > 1 {
                 rep.inconsistent_edges += 1;
             }
             if a < b || rev == 0 {
-                let total = ts.len() + rev;
                 if rev == 0 {
                     rep.boundary_edges += 1;
-                } else if total > 2 {
+                } else if c + rev > 2 {
                     rep.nonmanifold_edges += 1;
                 }
             }
+            i = j;
         }
         rep.degenerate_tris = (0..self.tris.len()).filter(|&t| self.is_degenerate(t)).count();
         // vertex manifoldness: the triangles around each vertex form one fan
-        let mut vt: Vec<Vec<u32>> = vec![Vec::new(); self.verts.len()];
-        for (t, tri) in self.tris.iter().enumerate() {
+        let nv = self.verts.len();
+        let mut start = vec![0u32; nv + 1];
+        for tri in &self.tris {
             for &v in tri {
-                vt[v as usize].push(t as u32);
+                start[v as usize + 1] += 1;
             }
         }
-        for (v, ts) in vt.iter().enumerate() {
+        for v in 0..nv {
+            start[v + 1] += start[v];
+        }
+        let mut fill = start.clone();
+        let mut vt = vec![0u32; start[nv] as usize];
+        for (t, tri) in self.tris.iter().enumerate() {
+            for &v in tri {
+                vt[fill[v as usize] as usize] = t as u32;
+                fill[v as usize] += 1;
+            }
+        }
+        fn find(p: &mut [usize], x: usize) -> usize {
+            let mut r = x;
+            while p[r] != r {
+                r = p[r];
+            }
+            let mut y = x;
+            while p[y] != r {
+                let n = p[y];
+                p[y] = r;
+                y = n;
+            }
+            r
+        }
+        let mut parent: Vec<usize> = Vec::new();
+        let mut others: Vec<(u32, usize)> = Vec::new();
+        for v in 0..nv {
+            let ts = &vt[start[v] as usize..start[v + 1] as usize];
             if ts.is_empty() {
                 rep.unreferenced_vertices += 1;
                 continue;
             }
             // union-find over triangles sharing an edge incident to v
-            let mut parent: Vec<usize> = (0..ts.len()).collect();
-            fn find(p: &mut [usize], x: usize) -> usize {
-                let mut r = x;
-                while p[r] != r {
-                    r = p[r];
-                }
-                let mut y = x;
-                while p[y] != r {
-                    let n = p[y];
-                    p[y] = r;
-                    y = n;
-                }
-                r
-            }
-            let mut by_other: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
+            parent.clear();
+            parent.extend(0..ts.len());
+            others.clear();
             for (i, &t) in ts.iter().enumerate() {
                 for &w in &self.tris[t as usize] {
                     if w as usize != v {
-                        by_other.entry(w).or_default().push(i);
+                        others.push((w, i));
                     }
                 }
             }
-            for (_, is) in by_other {
-                for k in 1..is.len() {
-                    let a = find(&mut parent, is[0]);
-                    let b = find(&mut parent, is[k]);
+            others.sort_unstable();
+            let mut k = 0;
+            while k < others.len() {
+                let mut l = k + 1;
+                while l < others.len() && others[l].0 == others[k].0 {
+                    let a = find(&mut parent, others[k].1);
+                    let b = find(&mut parent, others[l].1);
                     if a != b {
                         parent[a] = b;
                     }
+                    l += 1;
                 }
+                k = l;
             }
             let roots = (0..ts.len()).filter(|&i| find(&mut parent, i) == i).count();
             if roots > 1 {
@@ -428,12 +469,40 @@ fn coplanar_segment_triangle(p: &P3, q: &P3, a: &P3, b: &P3, c: &P3) -> bool {
 pub fn tris_intersect(m: &TriMesh, i: usize, j: usize) -> bool {
     let ti = m.tris[i];
     let tj = m.tris[j];
-    let shared: Vec<u32> = ti.iter().copied().filter(|v| tj.contains(v)).collect();
+    // shared vertices without allocating (hot: called per candidate pair)
+    let mut shared = [0u32; 3];
+    let mut ns = 0usize;
+    for &v in &ti {
+        if tj.contains(&v) {
+            shared[ns] = v;
+            ns += 1;
+        }
+    }
+    let others = |t: [u32; 3], s: u32| -> [u32; 2] {
+        let mut o = [0u32; 2];
+        let mut k = 0;
+        for &v in &t {
+            if v != s && k < 2 {
+                o[k] = v;
+                k += 1;
+            }
+        }
+        o
+    };
     let pt = |v: u32| p3(m.verts[v as usize]);
-    match shared.len() {
+    match ns {
         0 => {
             let a = [pt(ti[0]), pt(ti[1]), pt(ti[2])];
             let b = [pt(tj[0]), pt(tj[1]), pt(tj[2])];
+            // exact plane-side rejection: one triangle strictly on one side
+            // of the other's plane cannot meet it
+            let strictly_one_side = |p: &[P3; 3], q: &[P3; 3]| {
+                let o = [orient3d(&p[0], &p[1], &p[2], &q[0]), orient3d(&p[0], &p[1], &p[2], &q[1]), orient3d(&p[0], &p[1], &p[2], &q[2])];
+                o[0] != 0 && o[0] == o[1] && o[1] == o[2]
+            };
+            if strictly_one_side(&b, &a) || strictly_one_side(&a, &b) {
+                return false;
+            }
             for k in 0..3 {
                 if segment_triangle(&a[k], &a[(k + 1) % 3], &b[0], &b[1], &b[2]) {
                     return true;
@@ -446,9 +515,18 @@ pub fn tris_intersect(m: &TriMesh, i: usize, j: usize) -> bool {
         }
         1 => {
             let s = shared[0];
-            let oi: Vec<u32> = ti.iter().copied().filter(|&v| v != s).collect();
-            let oj: Vec<u32> = tj.iter().copied().filter(|&v| v != s).collect();
+            let (oi, oj) = (others(ti, s), others(tj, s));
             let (ps, pi0, pi1, pj0, pj1) = (pt(s), pt(oi[0]), pt(oi[1]), pt(oj[0]), pt(oj[1]));
+            // exact rejection: the rest of one triangle strictly on one side
+            // of the other's plane leaves only the shared vertex in common
+            let (o0, o1) = (orient3d(&ps, &pi0, &pi1, &pj0), orient3d(&ps, &pi0, &pi1, &pj1));
+            if o0 != 0 && o0 == o1 {
+                return false;
+            }
+            let (q0, q1) = (orient3d(&ps, &pj0, &pj1, &pi0), orient3d(&ps, &pj0, &pj1, &pi1));
+            if q0 != 0 && q0 == q1 {
+                return false;
+            }
             // Opposite edges against the other triangle
             if segment_triangle(&pi0, &pi1, &ps, &pj0, &pj1) || segment_triangle(&pj0, &pj1, &ps, &pi0, &pi1) {
                 return true;
