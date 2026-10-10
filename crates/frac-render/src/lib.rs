@@ -335,10 +335,10 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
             let mut ext_of: Vec<Option<usize>> = Vec::new();
             for &i in exts {
                 let e = &g.ext_polys[i];
-                let base = m.verts.len() as u32;
-                m.verts.extend(e.verts.iter().map(|&v| verts[v as usize]));
-                for k in 1..e.verts.len() as u32 - 1 {
-                    m.tris.push([base, base + k, base + k + 1]);
+                for t in &e.tris {
+                    let base = m.verts.len() as u32;
+                    m.verts.extend(t.iter().map(|&v| verts[v as usize]));
+                    m.tris.push([base, base + 1, base + 2]);
                     tag.push(None);
                     ext_of.push(Some(i));
                 }
@@ -639,8 +639,8 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                     let mut tris = Vec::new();
                     let mut owner = Vec::new();
                     for (i, e) in comp.geometry.ext_polys.iter().enumerate() {
-                        for k in 1..e.verts.len() - 1 {
-                            tris.push([e.verts[0], e.verts[k], e.verts[k + 1]]);
+                        for t in &e.tris {
+                            tris.push(*t);
                             owner.push(i);
                         }
                     }
@@ -750,8 +750,11 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                         })
                     })
                     .collect();
-                for k in 1..ids.len() - 1 {
-                    m.ext_indices.extend_from_slice(&[ids[0], ids[k], ids[k + 1]]);
+                for t in &e.tris {
+                    for &v in t {
+                        let k = e.verts.iter().position(|&x| x == v).unwrap();
+                        m.ext_indices.push(ids[k]);
+                    }
                 }
             }
             for (pi, pt) in comp.geometry.patches.iter().enumerate() {

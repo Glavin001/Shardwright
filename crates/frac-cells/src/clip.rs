@@ -42,6 +42,24 @@ pub struct ExtPolyOut {
     pub verts: Vec<u32>,
     pub cell: u32,
     pub src_tri: u32,
+    /// Triangulation without zero-area triangles (see [`triangulate_poly`]).
+    pub tris: Vec<[u32; 3]>,
+}
+
+/// Triangulate a planar polygon given by vertex ids, keeping collinear
+/// (T-junction) vertices and avoiding zero-area triangles when possible.
+pub fn triangulate_poly(verts: &[DVec3], poly: &[u32]) -> Vec<[u32; 3]> {
+    if poly.len() == 3 {
+        return vec![[poly[0], poly[1], poly[2]]];
+    }
+    let pts: Vec<DVec3> = poly.iter().map(|&v| verts[v as usize]).collect();
+    let n = frac_geom::polygon::newell(&pts);
+    if n.length_squared() == 0.0 {
+        return (1..poly.len() - 1).map(|k| [poly[0], poly[k], poly[k + 1]]).collect();
+    }
+    let (u, v) = frac_geom::polygon::plane_basis(n.normalize());
+    let p2: Vec<[f64; 2]> = pts.iter().map(|p| [p.dot(u), p.dot(v)]).collect();
+    tri2d::triangulate(&p2, &[(0..poly.len()).collect()]).into_iter().map(|t| [poly[t[0]], poly[t[1]], poly[t[2]]]).collect()
 }
 
 /// One connected planar interface patch (outer loop + holes).
@@ -428,16 +446,63 @@ impl<'a> Clipper<'a> {
         all.par_sort_unstable();
         all.dedup();
         let coords: Vec<P3> = all.par_iter().map(|k| self.key_point(k)).collect();
-        // weld bit-identical coordinates
-        let mut by_bits: BTreeMap<[u64; 3], u32> = BTreeMap::new();
+        // Weld coincident points. Symbolically distinct vertices can coincide
+        // geometrically in exactly degenerate inputs (e.g. a mesh edge through
+        // a complex line); their rounded coordinates then differ by ~1 ulp.
+        // Points closer than 1e-11 of the model scale are merged
+        // (deterministic union-find, smallest key index wins).
+        let eps = 1e-11 * self.bbox.diagonal().max(1e-300);
+        let cell = |p: &P3| [(p[0] / eps).floor() as i64, (p[1] / eps).floor() as i64, (p[2] / eps).floor() as i64];
+        let mut grid: BTreeMap<[i64; 3], Vec<u32>> = BTreeMap::new();
+        for (i, p) in coords.iter().enumerate() {
+            grid.entry(cell(p)).or_default().push(i as u32);
+        }
+        let mut parent: Vec<u32> = (0..all.len() as u32).collect();
+        fn find(p: &mut [u32], x: u32) -> u32 {
+            let mut r = x;
+            while p[r as usize] != r {
+                r = p[r as usize];
+            }
+            let mut y = x;
+            while p[y as usize] != r {
+                let n = p[y as usize];
+                p[y as usize] = r;
+                y = n;
+            }
+            r
+        }
+        for (i, p) in coords.iter().enumerate() {
+            let c = cell(p);
+            for dx in -1..=1 {
+                for dy in -1..=1 {
+                    for dz in -1..=1 {
+                        if let Some(v) = grid.get(&[c[0] + dx, c[1] + dy, c[2] + dz]) {
+                            for &j in v {
+                                if (j as usize) <= i {
+                                    continue;
+                                }
+                                let q = coords[j as usize];
+                                if dist2(*p, q) <= eps * eps {
+                                    let (ra, rb) = (find(&mut parent, i as u32), find(&mut parent, j));
+                                    if ra != rb {
+                                        parent[ra.max(rb) as usize] = ra.min(rb);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         let mut remap = vec![0u32; all.len()];
         let mut verts: Vec<DVec3> = Vec::new();
         let mut keys: Vec<VKey> = Vec::new();
-        for (i, p) in coords.iter().enumerate() {
-            let kb = [p[0].to_bits(), p[1].to_bits(), p[2].to_bits()];
-            let id = *by_bits.entry(kb).or_insert_with(|| {
-                verts.push(DVec3::from_array(*p));
-                keys.push(all[i]);
+        let mut root_id: BTreeMap<u32, u32> = BTreeMap::new();
+        for i in 0..all.len() {
+            let r = find(&mut parent, i as u32);
+            let id = *root_id.entry(r).or_insert_with(|| {
+                verts.push(DVec3::from_array(coords[r as usize]));
+                keys.push(all[r as usize]);
                 (verts.len() - 1) as u32
             });
             remap[i] = id;
@@ -455,7 +520,8 @@ impl<'a> Clipper<'a> {
         for (c, t, k) in &ext_raw {
             let v = clean(k);
             if v.len() >= 3 {
-                ext.push(ExtPolyOut { verts: v, cell: *c, src_tri: *t });
+                let tris = triangulate_poly(&verts, &v);
+                ext.push(ExtPolyOut { verts: v, cell: *c, src_tri: *t, tris });
             }
         }
         // ---- 5. patches: group loops into outer+holes, triangulate

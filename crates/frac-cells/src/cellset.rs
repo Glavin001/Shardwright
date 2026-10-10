@@ -172,12 +172,19 @@ impl CellSet {
                         best = Some(pi);
                     }
                 }
+                // degenerate (≈ zero-volume) shells that are not inside any
+                // positive shell join the largest shell of this cell, or
+                // stand alone (and are merged as slivers later)
+                let best = best.or_else(|| (0..pos.len()).max_by(|&a, &b| pos[a].1.volume.partial_cmp(&pos[b].1.volume).unwrap()));
                 match best {
                     Some(b) => {
                         pos[b].0.extend(g);
                         pos[b].1.add(&vi);
                     }
-                    None => warnings.push(format!("cell {cc}: orphan negative shell (volume {})", vi.volume)),
+                    None => {
+                        warnings.push(format!("cell {cc}: isolated degenerate shell (volume {:e})", vi.volume));
+                        pos.push((g, vi));
+                    }
                 }
             }
             for (g, vi) in pos {

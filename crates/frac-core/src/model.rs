@@ -145,6 +145,9 @@ pub struct ExtPoly {
     pub verts: Vec<u32>,
     pub cell: CellId,
     pub src_tri: u32,
+    /// Non-degenerate triangulation (CDT; T-junction vertices on polygon
+    /// edges are kept without zero-area triangles).
+    pub tris: Vec<[u32; 3]>,
 }
 
 /// A connected planar interface patch shared by two cells of a component.

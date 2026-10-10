@@ -84,7 +84,7 @@ pub fn assemble(asset: &mut Asset, built: Vec<BuiltComponent>, lib: &MaterialLib
         // geometry with global cell ids and interfaces per cell pair
         let mut geom = ComponentGeometry { verts: b.cells.verts.clone(), ext_polys: Vec::new(), patches: Vec::new() };
         for e in &b.cells.ext {
-            geom.ext_polys.push(ExtPoly { verts: e.verts.clone(), cell: CellId(base + e.cell), src_tri: e.src_tri });
+            geom.ext_polys.push(ExtPoly { verts: e.verts.clone(), cell: CellId(base + e.cell), src_tri: e.src_tri, tris: e.tris.clone() });
         }
         let mut by_pair: BTreeMap<(u32, u32), Vec<usize>> = BTreeMap::new();
         for (pi, p) in b.cells.patches.iter().enumerate() {

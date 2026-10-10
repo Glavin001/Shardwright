@@ -18,6 +18,16 @@ use frac_geom::inside::MeshQuery;
 use frac_geom::{Aabb, DVec3, TriMesh};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::{AtomicU64, Ordering as AO};
+
+static T_HULL: AtomicU64 = AtomicU64::new(0);
+static T_CONC: AtomicU64 = AtomicU64::new(0);
+static T_MESH: AtomicU64 = AtomicU64::new(0);
+static N_HULL: AtomicU64 = AtomicU64::new(0);
+static N_CONC: AtomicU64 = AtomicU64::new(0);
+fn tadd(c: &AtomicU64, t: std::time::Instant) {
+    c.fetch_add(t.elapsed().as_nanos() as u64, AO::Relaxed);
+}
 
 #[derive(Clone, Debug)]
 pub struct CollisionParams {
@@ -45,9 +55,7 @@ pub fn cells_boundary_mesh(asset: &Asset, cells: &[CellId]) -> TriMesh {
         let mut tris = Vec::new();
         for e in &g.ext_polys {
             if set.contains(&e.cell) {
-                for k in 1..e.verts.len() - 1 {
-                    tris.push([e.verts[0], e.verts[k], e.verts[k + 1]]);
-                }
+                tris.extend(e.tris.iter().copied());
             }
         }
         for p in &g.patches {
@@ -109,6 +117,8 @@ fn cell_polys(asset: &Asset, cell: CellId) -> Vec<Vec<DVec3>> {
 /// Fragment-surface oracle for concavity measurement.
 struct Surface<'a> {
     q: MeshQuery<'a>,
+    /// Sampling resolution (the concavity threshold).
+    res: f64,
 }
 
 impl<'a> Surface<'a> {
@@ -120,21 +130,38 @@ impl<'a> Surface<'a> {
 
     /// Like `concavity` but stops as soon as the value exceeds `cap`.
     fn concavity_capped(&self, h: &ConvexPolytope, cap: f64) -> f64 {
+        let t0 = std::time::Instant::now();
+        N_CONC.fetch_add(1, AO::Relaxed);
+        let r = self.concavity_inner(h, cap);
+        tadd(&T_CONC, t0);
+        r
+    }
+
+    fn concavity_inner(&self, h: &ConvexPolytope, cap: f64) -> f64 {
         let mut worst: f64 = 0.0;
         for (_, f) in &h.faces {
             let n = f.len();
             let c = f.iter().fold(DVec3::ZERO, |a, &p| a + p) / n as f64;
             let mut samples = vec![c];
-            for k in 0..n {
-                let a = f[k];
-                let b = f[(k + 1) % n];
-                samples.push((a + b) * 0.5);
-                samples.push((a + b + c) / 3.0);
+            // edge midpoints / sub-centroids only on faces large enough to
+            // hide concavity beyond the threshold resolution
+            let big = f.iter().any(|q| (*q - c).length() > 2.0 * self.res);
+            if big {
+                for k in 0..n {
+                    let a = f[k];
+                    let b = f[(k + 1) % n];
+                    samples.push((a + b) * 0.5);
+                    samples.push((a + b + c) / 3.0);
+                }
             }
             for s in samples {
-                if !self.q.contains(s) {
-                    if let Some((_, d2, _)) = self.q.closest_point(s) {
-                        worst = worst.max(d2.sqrt());
+                // only points farther than the current worst can matter;
+                // the (costlier) inside test runs just for those
+                let Some((_, d2, _)) = self.q.closest_point(s) else { continue };
+                let d = d2.sqrt();
+                if d > worst && !self.q.contains(s) {
+                    {
+                        worst = d;
                         if worst > cap {
                             return worst;
                         }
@@ -156,7 +183,11 @@ fn polys_volume(polys: &[Vec<DVec3>]) -> f64 {
 }
 
 fn hull_of(points: &[DVec3]) -> Option<ConvexPolytope> {
-    ConvexPolytope::from_points(points).filter(|p| !p.is_empty())
+    let t0 = std::time::Instant::now();
+    N_HULL.fetch_add(1, AO::Relaxed);
+    let r = ConvexPolytope::from_points(points).filter(|p| !p.is_empty());
+    tadd(&T_HULL, t0);
+    r
 }
 
 /// Recursively split a non-convex point cloud (cell polygons) by planes.
@@ -173,28 +204,42 @@ fn split_cell(polys: &[Vec<DVec3>], surf: &Surface, thresh: f64, depth: u32) -> 
     let c = pts.iter().fold(DVec3::ZERO, |a, &p| a + p) / pts.len() as f64;
     let cov = pts.iter().fold(glam::DMat3::ZERO, |a, &p| a + frac_geom::polygon::outer(p - c, p - c));
     let (_, ax) = frac_geom::integrals::sym_eigen3(&cov);
-    let dirs = [ax.col(2), ax.col(1), ax.col(0), DVec3::X, DVec3::Y, DVec3::Z];
-    let mut best: Option<(f64, Vec<ConvexPolytope>)> = None;
+    let dirs = [ax.col(2), ax.col(1), ax.col(0)];
+    let mut cands: Vec<(DVec3, f64)> = Vec::new();
     for d in dirs {
         let (lo, hi) = pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.dot(d)), hi.max(p.dot(d))));
         if hi - lo < 1e-9 * bb.diagonal() {
             continue;
         }
-        for t in [0.3, 0.5, 0.7] {
-            let off = lo + (hi - lo) * t;
-            let (l, r) = split_polys(polys, d, off);
-            let (Some(hl), Some(hr)) = (hull_of(&l.iter().flatten().copied().collect::<Vec<_>>()), hull_of(&r.iter().flatten().copied().collect::<Vec<_>>())) else {
-                continue;
-            };
-            let score = surf.concavity(&hl).max(surf.concavity_capped(&hr, f64::INFINITY));
-            if best.as_ref().map(|b| score < b.0).unwrap_or(true) {
-                let mut parts = split_cell(&l, surf, thresh, depth - 1);
-                parts.extend(split_cell(&r, surf, thresh, depth - 1));
-                best = Some((score, parts));
-            }
+        for t in [0.35, 0.5, 0.65] {
+            cands.push((d, lo + (hi - lo) * t));
         }
     }
-    best.map(|b| b.1).unwrap_or_else(|| vec![h])
+    // score candidates in parallel; deterministic pick (lowest score, then index)
+    let scored: Vec<Option<(f64, Vec<Vec<DVec3>>, Vec<Vec<DVec3>>)>> = cands
+        .par_iter()
+        .map(|&(d, off)| {
+            let (l, r) = split_polys(polys, d, off);
+            let hl = hull_of(&l.iter().flatten().copied().collect::<Vec<_>>())?;
+            let hr = hull_of(&r.iter().flatten().copied().collect::<Vec<_>>())?;
+            let score = surf.concavity(&hl).max(surf.concavity(&hr));
+            Some((score, l, r))
+        })
+        .collect();
+    let mut best: Option<(f64, Vec<Vec<DVec3>>, Vec<Vec<DVec3>>)> = None;
+    for c in scored.into_iter().flatten() {
+        if best.as_ref().map(|b| c.0 < b.0).unwrap_or(true) {
+            best = Some(c);
+        }
+    }
+    match best {
+        Some((_, l, r)) => {
+            let mut parts = split_cell(&l, surf, thresh, depth - 1);
+            parts.extend(split_cell(&r, surf, thresh, depth - 1));
+            if parts.is_empty() { vec![h] } else { parts }
+        }
+        None => vec![h],
+    }
 }
 
 /// Split polygons by plane `d·x = off` (keeps both sides; cut points shared).
@@ -322,10 +367,12 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
             .map(|fi| {
                 let f = &h.fragments[fi as usize];
                 let cells = asset.fragment_cells(f).to_vec();
+                let tm = std::time::Instant::now();
                 let mesh = cells_boundary_mesh(asset, &cells);
+                tadd(&T_MESH, tm);
                 let diam = f.mass.volume.cbrt().max(Aabb::from_points(mesh.verts.iter()).diagonal() * 0.5);
                 let thresh = p.concavity * diam;
-                let surf = Surface { q: MeshQuery::new(&mesh) };
+                let surf = Surface { q: MeshQuery::new(&mesh), res: thresh };
                 let pieces: Vec<Piece> = if level == nl - 1 || f.children.is_empty() {
                     // leaf level: per-cell pieces (split if non-convex)
                     let mut v = Vec::new();
@@ -375,7 +422,15 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
             pieces_of[fi as usize] = Some(ps);
         }
         if std::env::var("FRAC_PROFILE").is_ok() {
-            eprintln!("collision level {level}: {:?}", tl.elapsed());
+            eprintln!(
+                "collision level {level}: {:?} (cumulative cpu: hull {:.1}s x{}, concavity {:.1}s x{}, mesh {:.1}s)",
+                tl.elapsed(),
+                T_HULL.load(AO::Relaxed) as f64 * 1e-9,
+                N_HULL.load(AO::Relaxed),
+                T_CONC.load(AO::Relaxed) as f64 * 1e-9,
+                N_CONC.load(AO::Relaxed),
+                T_MESH.load(AO::Relaxed) as f64 * 1e-9
+            );
         }
     }
     // non-overlap enforcement per level, then margin shrink

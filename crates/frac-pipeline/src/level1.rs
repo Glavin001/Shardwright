@@ -73,9 +73,7 @@ impl CellLocator {
         let mut tris: Vec<Vec<[u32; 3]>> = vec![Vec::new(); n];
         for e in &g.ext_polys {
             let c = (e.cell.0 - comp.cells.start) as usize;
-            for k in 1..e.verts.len() - 1 {
-                tris[c].push([e.verts[0], e.verts[k], e.verts[k + 1]]);
-            }
+            tris[c].extend(e.tris.iter().copied());
         }
         for p in &g.patches {
             let a = (p.cells.0 .0 - comp.cells.start) as usize;

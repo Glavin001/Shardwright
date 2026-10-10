@@ -12,6 +12,18 @@ use std::collections::BTreeMap;
 /// Returns a closed outward-oriented triangle mesh over a subset of the input
 /// points, or `None` when the points are coplanar/degenerate.
 pub fn convex_hull(points: &[DVec3]) -> Option<TriMesh> {
+    hull_impl(points, false)
+}
+
+/// Floating-point Quickhull with a relative visibility tolerance (points
+/// within `1e-12·scale²·|n|` of a face plane count as on it). Much faster on
+/// inputs with many coplanar points; intended for collision shapes, where
+/// exactness is not required.
+pub fn convex_hull_fast(points: &[DVec3]) -> Option<TriMesh> {
+    hull_impl(points, true)
+}
+
+fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
     let n = points.len();
     if n < 4 {
         return None;
@@ -73,43 +85,132 @@ pub fn convex_hull(points: &[DVec3]) -> Option<TriMesh> {
         }
     }
     let (a, b, c, d) = if orient3d(&p(i0), &p(i1), &p(i2), &p(i3)) > 0 { (i0, i2, i1, i3) } else { (i0, i1, i2, i3) };
-    // faces oriented outward: for tet with orient(a,b,c,d) < 0 (d below abc), abc is outward.
-    let mut faces: Vec<Option<[usize; 3]>> = vec![Some([a, b, c]), Some([a, d, b]), Some([b, d, c]), Some([c, d, a])];
-    let visible = |f: &[usize; 3], q: usize| orient3d(&p(f[0]), &p(f[1]), &p(f[2]), &p(q)) > 0;
+    // Quickhull with conflict (outside) sets; visibility by exact orient3d.
+    struct Face {
+        v: [usize; 3],
+        outside: Vec<usize>,
+        alive: bool,
+    }
+    let mut faces: Vec<Face> = [[a, b, c], [a, d, b], [b, d, c], [c, d, a]]
+        .iter()
+        .map(|&v| Face { v, outside: Vec::new(), alive: true })
+        .collect();
+    let mut edge_face: std::collections::HashMap<(usize, usize), usize> = std::collections::HashMap::new();
+    for (fi, f) in faces.iter().enumerate() {
+        for k in 0..3 {
+            edge_face.insert((f.v[k], f.v[(k + 1) % 3]), fi);
+        }
+    }
+    let scale = crate::aabb::Aabb::from_points(points.iter()).diagonal().max(1e-300);
+    let tol = 1e-11 * scale;
+    let sees = |f: &[usize; 3], q: usize| {
+        if fast {
+            let (x, y, z) = (points[f[0]], points[f[1]], points[f[2]]);
+            let nrm = (y - x).cross(z - x);
+            let l = nrm.length();
+            l > 0.0 && nrm.dot(points[q] - x) > tol * l
+        } else {
+            orient3d(&p(f[0]), &p(f[1]), &p(f[2]), &p(q)) > 0
+        }
+    };
+    let dist = |f: &[usize; 3], q: usize| -> f64 {
+        let (x, y, z) = (points[f[0]], points[f[1]], points[f[2]]);
+        (y - x).cross(z - x).dot(points[q] - x)
+    };
     let used = [a, b, c, d];
     for q in 0..n {
         if used.contains(&q) {
             continue;
         }
-        let vis: Vec<usize> = faces
-            .iter()
-            .enumerate()
-            .filter_map(|(i, f)| f.as_ref().filter(|f| visible(f, q)).map(|_| i))
-            .collect();
-        if vis.is_empty() {
-            continue;
-        }
-        // horizon: directed edges of visible faces whose reverse is not in a visible face
-        let mut edges: BTreeMap<(usize, usize), usize> = BTreeMap::new();
-        for &fi in &vis {
-            let f = faces[fi].unwrap();
-            for k in 0..3 {
-                *edges.entry((f[k], f[(k + 1) % 3])).or_default() += 1;
+        for f in faces.iter_mut() {
+            if sees(&f.v, q) {
+                f.outside.push(q);
+                break;
             }
         }
-        let horizon: Vec<(usize, usize)> =
-            edges.keys().copied().filter(|&(u, v)| !edges.contains_key(&(v, u))).collect();
-        for &fi in &vis {
-            faces[fi] = None;
+    }
+    let mut queue: std::collections::VecDeque<usize> = (0..4).collect();
+    while let Some(fi) = queue.pop_front() {
+        if !faces[fi].alive || faces[fi].outside.is_empty() {
+            continue;
         }
-        for (u, v) in horizon {
-            faces.push(Some([u, v, q]));
+        // farthest outside point (ties: smallest index)
+        let fv = faces[fi].v;
+        let apex = *faces[fi]
+            .outside
+            .iter()
+            .max_by(|&&x, &&y| dist(&fv, x).partial_cmp(&dist(&fv, y)).unwrap().then(y.cmp(&x)))
+            .unwrap();
+        // visible region (connected) by BFS over edge neighbors
+        let mut visible = vec![fi];
+        let mut in_vis = std::collections::HashSet::new();
+        in_vis.insert(fi);
+        let mut k = 0;
+        while k < visible.len() {
+            let f = visible[k];
+            k += 1;
+            let v = faces[f].v;
+            for e in 0..3 {
+                if let Some(&g) = edge_face.get(&(v[(e + 1) % 3], v[e])) {
+                    if faces[g].alive && !in_vis.contains(&g) && sees(&faces[g].v, apex) {
+                        in_vis.insert(g);
+                        visible.push(g);
+                    }
+                }
+            }
         }
-        // periodic compaction
-        if faces.len() > 4 * n + 64 {
-            faces.retain(|f| f.is_some());
+        // horizon edges, in the orientation of the visible faces
+        let mut horizon: Vec<(usize, usize)> = Vec::new();
+        for &f in &visible {
+            let v = faces[f].v;
+            for e in 0..3 {
+                let (u, w) = (v[e], v[(e + 1) % 3]);
+                let nb = edge_face.get(&(w, u)).copied();
+                if nb.map(|g| !in_vis.contains(&g)).unwrap_or(true) {
+                    horizon.push((u, w));
+                }
+            }
+        }
+        horizon.sort_unstable();
+        let mut orphans: Vec<usize> = Vec::new();
+        for &f in &visible {
+            faces[f].alive = false;
+            let v = faces[f].v;
+            for e in 0..3 {
+                if edge_face.get(&(v[e], v[(e + 1) % 3])) == Some(&f) {
+                    edge_face.remove(&(v[e], v[(e + 1) % 3]));
+                }
+            }
+            orphans.extend(std::mem::take(&mut faces[f].outside));
+        }
+        orphans.sort_unstable();
+        orphans.dedup();
+        let first_new = faces.len();
+        for (u, w) in horizon {
+            let fi2 = faces.len();
+            faces.push(Face { v: [u, w, apex], outside: Vec::new(), alive: true });
+            for (x, y) in [(u, w), (w, apex), (apex, u)] {
+                edge_face.insert((x, y), fi2);
+            }
+        }
+        for q in orphans {
+            if q == apex {
+                continue;
+            }
+            for f2 in first_new..faces.len() {
+                if sees(&faces[f2].v, q) {
+                    faces[f2].outside.push(q);
+                    break;
+                }
+            }
+        }
+        for f2 in first_new..faces.len() {
+            if !faces[f2].outside.is_empty() {
+                queue.push_back(f2);
+            }
         }
     }
+    let faces: Vec<Option<[usize; 3]>> = faces.into_iter().map(|f| if f.alive { Some(f.v) } else { None }).collect();
     let tris_idx: Vec<[usize; 3]> = faces.into_iter().flatten().collect();
     let mut map: BTreeMap<usize, u32> = BTreeMap::new();
     for t in &tris_idx {
@@ -232,7 +333,7 @@ impl ConvexPolytope {
     }
 
     pub fn from_points(points: &[DVec3]) -> Option<Self> {
-        convex_hull(points).map(|m| Self::from_hull_mesh(&m))
+        convex_hull_fast(points).map(|m| Self::from_hull_mesh(&m))
     }
 
     pub fn vertices(&self) -> Vec<DVec3> {
@@ -400,5 +501,18 @@ mod tests {
         assert!((s.volume() - 0.8f64.powi(3)).abs() < 1e-10);
         let other = ConvexPolytope::from_box(DVec3::splat(0.5), DVec3::splat(1.5));
         assert!((poly.intersection_volume(&other) - 0.125).abs() < 1e-12);
+    }
+}
+
+#[cfg(test)]
+mod bench {
+    use super::*;
+    #[test]
+    #[ignore]
+    fn hull_speed() {
+        let m = crate::mesh::icosphere(DVec3::ZERO, 1.0, 4);
+        let t = std::time::Instant::now();
+        let h = convex_hull(&m.verts).unwrap();
+        eprintln!("{} pts -> {} tris in {:?}", m.verts.len(), h.tris.len(), t.elapsed());
     }
 }
