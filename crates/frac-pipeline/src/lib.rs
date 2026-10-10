@@ -555,6 +555,8 @@ pub fn collision_params(settings: &Settings) -> frac_collision::CollisionParams 
             resolution: settings.collision.resolution,
         },
         max_hull_vertices: settings.collision.max_hull_vertices as usize,
+        max_overshoot: (settings.collision.max_overshoot > 0.0)
+            .then_some(settings.collision.max_overshoot),
         seed: settings.seed,
         ..Default::default()
     }

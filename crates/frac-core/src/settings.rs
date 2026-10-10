@@ -240,6 +240,10 @@ pub struct CollisionSettings {
     /// Maximum vertices per convex hull (physics-engine limit); larger hulls
     /// are reduced (inner approximation by a volume-greedy vertex subset).
     pub max_hull_vertices: u32,
+    /// Cap on a fragment's (Σ hull volume / volume − 1) honoured by the
+    /// hull merge within the budget (spec §13.6 overshoot ≤ 0.10); ≤ 0
+    /// disables it.
+    pub max_overshoot: f64,
 }
 
 impl Default for CollisionSettings {
@@ -255,6 +259,7 @@ impl Default for CollisionSettings {
             mcts_depth: 1,
             mcts_nodes: 20,
             resolution: 2000,
+            max_overshoot: 0.08,
             max_hull_vertices: 64,
         }
     }

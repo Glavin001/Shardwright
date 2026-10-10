@@ -1738,6 +1738,10 @@ pub struct MergeCtx<'a> {
     /// bound that stops at the round's cap is a lower bound, and later
     /// refinements start from it.
     pub batch: usize,
+    /// Cap on the summed hull volume (spec §13.6 overshoot): once the piece
+    /// count is within budget, merges that would raise the total above it
+    /// are not taken. `None`: no cap (stand-alone decomposition).
+    pub max_volume: Option<f64>,
 }
 
 /// A convex piece of foreign geometry (with its volume scale: true volume /
@@ -2416,6 +2420,13 @@ pub fn greedy_merge(
     let mut cheap_phase = true;
     let mut alive: BTreeMap<usize, Piece> = pieces.into_iter().enumerate().collect();
     let mut next_id = alive.len();
+    // hull volumes (volume cap)
+    let mut pvol: BTreeMap<usize, f64> = if ctx.max_volume.is_some() {
+        alive.iter().map(|(&i, pc)| (i, pc.poly.volume())).collect()
+    } else {
+        BTreeMap::new()
+    };
+    let mut total_vol: f64 = pvol.values().sum();
     let mut cache: BTreeMap<(usize, usize), Entry> = BTreeMap::new();
     let mut heap: BinaryHeap<Reverse<Key>> = BinaryHeap::new();
     let mut all_pairs = false;
@@ -2571,6 +2582,17 @@ pub fn greedy_merge(
         }
         heap.pop();
         let ch = cache.remove(&(i, j)).unwrap().ch.unwrap();
+        if let Some(cap) = ctx.max_volume {
+            let dv = ch.volume - pvol[&i] - pvol[&j];
+            if alive.len() <= budget && total_vol + dv > cap {
+                // within budget already: keep the two pieces apart
+                continue;
+            }
+            total_vol += dv;
+            pvol.remove(&i);
+            pvol.remove(&j);
+            pvol.insert(next_id, ch.volume);
+        }
         let a = alive.remove(&i).unwrap();
         let b = alive.remove(&j).unwrap();
         // drop the cache entries of the merged pieces (their heap keys
@@ -2672,6 +2694,7 @@ pub fn decompose_detailed(mesh: &TriMesh, p: &CoacdParams) -> Vec<(ConvexPolytop
         upstream_density,
         seed: p.seed,
         batch: 8,
+        max_volume: None,
     };
     // upstream: only hulls closer than 0.01 (normalized vertex distance)
     let adjacent = |a: &Piece, b: &Piece| -> bool {

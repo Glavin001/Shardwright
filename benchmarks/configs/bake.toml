@@ -21,7 +21,11 @@ tet_edge_ratio = 0.33
 [collision]
 method = "coacd"
 concavity = 0.02
-max_hulls_per_fragment = 8
+# hull budget: compound convex shapes of <= 64-vertex hulls; 128 hulls per
+# fragment meet the spec §13.6 hull-fit / overshoot targets on the jagged
+# multi-cell fragments of the coarse levels (8, the library default, leaves
+# Level-1 fit ~0.08 and overshoot ~0.43 on the RC column)
+max_hulls_per_fragment = 128
 margin = 0.0005
 min_rigid_size = 0.01
 

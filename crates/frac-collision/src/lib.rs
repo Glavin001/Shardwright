@@ -96,6 +96,11 @@ pub struct CollisionParams {
     pub intrusion_k: f64,
     /// Maximum vertices per output hull (0: unlimited).
     pub max_hull_vertices: usize,
+    /// Cap on a fragment's summed hull volume over its volume, minus one
+    /// (spec §13.6 overshoot target 0.10): within the hull budget, merges
+    /// that would exceed it are not taken. Distance-based concavity alone
+    /// lets thin or hollow fragments (shells, pipes) over-fill.
+    pub max_overshoot: Option<f64>,
 }
 
 impl Default for CollisionParams {
@@ -112,6 +117,7 @@ impl Default for CollisionParams {
             carry_cap: 16,
             intrusion_k: 0.6,
             max_hull_vertices: 64,
+            max_overshoot: Some(0.08),
         }
     }
 }
@@ -687,6 +693,7 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                     upstream_density: None,
                     seed: p.seed,
                     batch: 1,
+                    max_volume: p.max_overshoot.map(|o| f.mass.volume * (1.0 + o)),
                 };
                 // Pieces keep their own costs from the finer level (atoms: from
                 // the cut search): a fragment's surface is a subset of its
@@ -816,6 +823,17 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
         .into_iter()
         .map(|o| o.map(|o| o.hulls).unwrap_or_default())
         .collect();
+    // hulls of one fragment that overlap each other count twice in the
+    // summed hull volume (spec §13.6 overshoot): separate them where that
+    // sum is above the cap
+    if let Some(o) = p.max_overshoot {
+        hull_recs.par_iter_mut().enumerate().for_each(|(fi, recs)| {
+            let f = &h.fragments[fi];
+            if want_level(f.level as usize) {
+                separate_within(recs, &atoms, f.mass.volume * (1.0 + o));
+            }
+        });
+    }
     for level in 0..nl {
         if want_level(level) {
             separate_level(asset, level as u8, &mut hull_recs, &atoms);
@@ -1206,6 +1224,28 @@ fn separating_plane(
             (n, n.dot(ov.volume_integrals().com()))
         }
     })
+}
+
+/// Separate overlapping hulls of one fragment (pairs in index order, each
+/// cut by the least-loss plane) when their summed volume exceeds `cap`.
+/// Clipping only shrinks hulls, so pairs already separated stay so.
+fn separate_within(recs: &mut [HullRec], atoms: &[Atom], cap: f64) {
+    if recs.len() < 2 || recs.iter().map(|r| r.poly.volume()).sum::<f64>() <= cap {
+        return;
+    }
+    let mut data: Vec<HullData> = recs.iter().map(|r| hull_data(&r.poly)).collect();
+    for x in 0..recs.len() {
+        for y in x + 1..recs.len() {
+            let Some((n, t)) = separating_plane(atoms, &recs[x], &data[x], &recs[y], &data[y], &[])
+            else {
+                continue;
+            };
+            recs[x].poly = recs[x].poly.clip(&HalfSpace { n, d: t });
+            recs[y].poly = recs[y].poly.clip(&HalfSpace { n: -n, d: -t });
+            data[x] = hull_data(&recs[x].poly);
+            data[y] = hull_data(&recs[y].poly);
+        }
+    }
 }
 
 /// Separate overlapping hulls of neighbouring fragments at one level.

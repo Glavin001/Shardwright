@@ -33,7 +33,20 @@ provide.
    refined with exact clipping). Independent pairs are resolved
    concurrently in an order-preserving way, so the result equals the
    sequential one. Hulls are then shrunk by `margin`.
-4. Particle candidates keep a single hull.
+4. **Summed-volume cap** (`collision.max_overshoot`, default 0.08; spec
+   §13.6 targets Σ hull volume / V − 1 ≤ 0.10). Once a fragment is within
+   its hull budget, the merge skips any merge that would raise its summed
+   hull volume above V × (1 + cap). A fragment that is still above the cap
+   after merging has its own overlapping hulls separated pairwise by the
+   same least-loss plane search (step 3). Hulls of one fragment that overlap
+   each other count twice in the Σ metric, even when their union fits the
+   fragment closely. Before the separation, the coarse levels of thin or curved
+   solids over-filled:
+   L0 overshoot went from 0.341 to −0.048 on stone_arch, from 0.225 to
+   0.012 on concrete_pipe and from 0.226 to −0.043 on messy_scan, with the
+   L0 fit at 0.013 / 0.009 / 0.019, for about 1 s more collision time on
+   messy_scan.
+5. Particle candidates keep a single hull.
 
 ### Fast path (no decomposition for convex shapes)
 
