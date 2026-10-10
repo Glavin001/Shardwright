@@ -399,6 +399,13 @@ pub fn run_with(
     if settings.bonds.size_effect {
         frac_bonds::apply_size_effect(&mut asset, &weibull);
     }
+    if !settings.bonds.boundary_factors.is_empty() || settings.bonds.anchor_factor != 1.0 {
+        frac_bonds::apply_boundary_bias(
+            &mut asset,
+            &settings.bonds.boundary_factors,
+            settings.bonds.anchor_factor,
+        );
+    }
     for (i, a) in bo.interior_area.into_iter().enumerate() {
         asset.hierarchy.fragments[i].interior_area = a;
     }

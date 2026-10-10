@@ -585,3 +585,32 @@ pub fn apply_size_effect(
     }
     factors
 }
+
+/// Artistic bias on top of the size effect: multiplies the strength of every
+/// bond on a coarser boundary by `factors[k]`, where `k` is the boundary's
+/// level (the level of the top of the bond's `parent_bond` chain; 0 = joints
+/// between parts, 1 = structural cuts), and of anchor bonds by `anchor`.
+/// Bonds inside a coarser fragment are unchanged.
+pub fn apply_boundary_bias(asset: &mut Asset, factors: &[f64], anchor: f64) {
+    let scale: Vec<f64> = asset
+        .bonds
+        .iter()
+        .map(|b| {
+            if b.anchor {
+                return anchor;
+            }
+            let mut top = b;
+            while let Some(p) = top.parent_bond {
+                top = &asset.bonds[p.idx()];
+            }
+            if top.level < b.level {
+                factors.get(top.level as usize).copied().unwrap_or(1.0)
+            } else {
+                1.0
+            }
+        })
+        .collect();
+    for (b, f) in asset.bonds.iter_mut().zip(scale) {
+        b.strength_scale = (b.strength_scale as f64 * f.max(0.0)) as f32;
+    }
+}

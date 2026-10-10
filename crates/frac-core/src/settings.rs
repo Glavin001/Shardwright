@@ -219,6 +219,14 @@ pub struct BondSettings {
     /// A_ref)^(-1/m)` times its own (capped at 1). Breaks then favour the
     /// coarse cuts (L0 joints, then L1 boundaries) over chunk interiors.
     pub size_effect: bool,
+    /// Extra strength multiplier for bonds on coarser boundaries, by the
+    /// boundary's level: index 0 = L0 joints (between parts), 1 = L1
+    /// boundaries (structural cuts), and so on. Applied on top of the size
+    /// effect; missing entries are 1. Values below 1 bias breaks towards
+    /// that level's boundaries.
+    pub boundary_factors: Vec<f64>,
+    /// Extra strength multiplier for anchor bonds (to the ground).
+    pub anchor_factor: f64,
 }
 
 impl Default for BondSettings {
@@ -228,6 +236,8 @@ impl Default for BondSettings {
             spawn_density: 400.0,
             max_spawn_per_bond: 64,
             size_effect: false,
+            boundary_factors: Vec::new(),
+            anchor_factor: 1.0,
         }
     }
 }

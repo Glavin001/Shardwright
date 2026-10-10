@@ -29,6 +29,10 @@ tet_edge_ratio = 0.33
 # joints take the strength of the whole boundary surface they lie on, so
 # they are weaker per area than bonds inside an L1 fragment
 size_effect = true
+# Extra bias on top of the size effect, per boundary level:
+# [L0 joints, L1 boundaries]; 1 = none, below 1 = break there sooner.
+boundary_factors = [1.0, 1.0]
+anchor_factor = 1.0
 
 [collision]
 method = "coacd"
