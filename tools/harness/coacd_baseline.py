@@ -71,7 +71,6 @@ def load_obj(path):
             m.invert()
         return np.asarray(m.vertices, float), np.asarray(m.faces, int), False
     import manifold3d as m3
-    from scipy.spatial import cKDTree
     L = float((m.bounds[1] - m.bounds[0]).max())
     pts, _ = trimesh.sample.sample_surface(m, 200000, seed=1)
     tree = cKDTree(np.vstack([pts, m.vertices]))
@@ -94,7 +93,7 @@ def key_of(V, T, extra):
 def run_ours(cli, V, T, threshold, cache, mode="faithful"):
     """mode "faithful": upstream Hb estimator and 1.0.x merge cost (the 1:1
     port); "exact": exact Hb and the collision-aware merge cost."""
-    k = key_of(V, T, f"ours/{threshold}/{mode}")
+    k = key_of(V, T, f"ours/{threshold}/{mode}" + ("/knn-merge" if mode == "faithful" else ""))
     flags = ["--hb", "upstream", "--merge-cost", "upstream"] if mode == "faithful" else ["--hb", "exact", "--merge-cost", "collision"]
     path = os.path.join(cache, k + ".ours.json")
     if not os.path.exists(path):
@@ -123,7 +122,6 @@ def run_upstream(V, T, threshold, cache):
 
 def evaluate(V, T, hulls, rng):
     import trimesh
-    from scipy.spatial import cKDTree
     L = float((V.max(0) - V.min(0)).max())
     s = 2.0 / max(L, 1e-300)
     mesh = to_manifold(V, T)
@@ -139,22 +137,24 @@ def evaluate(V, T, hulls, rng):
     tm = trimesh.Trimesh(V, T, process=False)
     um = union.to_mesh()
     ut = trimesh.Trimesh(np.asarray(um.vert_properties)[:, :3], np.asarray(um.tri_verts), process=False)
-    seed = int(rng.integers(1 << 31))
-    fs, _ = trimesh.sample.sample_surface(tm, 40000, seed=seed)
-    us, _ = trimesh.sample.sample_surface(ut, 40000, seed=seed + 1)
+    # deterministic per mesh; distances to dense surface samples (200k,
+    # bias ≈ half the sample spacing)
+    from scipy.spatial import cKDTree
+    seed = int(hashlib.sha1(np.ascontiguousarray(V, np.float64).tobytes()).hexdigest()[:8], 16)
+    dense = lambda m: cKDTree(np.vstack([trimesh.sample.sample_surface(m, 200000, seed=seed + 7)[0], m.vertices]))
     # collision-aware symmetric deviation: surface of (∪hulls − mesh) to the
     # mesh surface and surface of (mesh − ∪hulls) to the hull surface
     # (crevices between touching hulls inside the mesh are not surface)
     hb = 0.0
-    for region, ref in ((union - mesh, np.vstack([fs, V])), (mesh - union, np.vstack([us, ut.vertices]))):
+    for region, ref in ((union - mesh, dense(tm)), (mesh - union, dense(ut))):
         if region.volume() <= 1e-12 * vm:
             continue
         rm = region.to_mesh()
         rt = trimesh.Trimesh(np.asarray(rm.vert_properties)[:, :3], np.asarray(rm.tri_verts), process=False)
         if rt.area <= 0:
             continue
-        rs, _ = trimesh.sample.sample_surface(rt, 20000, seed=seed + 2)
-        hb = max(hb, float(cKDTree(ref).query(rs)[0].max()))
+        rs, _ = trimesh.sample.sample_surface(rt, 20000, seed=seed)
+        hb = max(hb, float(ref.query(rs)[0].max()))
     hb *= s
     return {"hulls": len(hulls), "h": float(max(rv, hb)), "rv": float(rv), "hb": float(hb), "vol_ratio": float(sum(h.volume() for h in hs) / vm)}
 
