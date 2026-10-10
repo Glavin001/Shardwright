@@ -1,0 +1,8 @@
+# Byte-identical outputs across operating systems and CPU architectures
+# (spec §10): C/C++ dependencies (meshoptimizer's LOD simplifier) must not
+# fuse multiply-adds. Clang on arm64 (macOS) contracts a*b+c into FMA by
+# default; x86-64 GCC builds do not, so LOD meshes would differ by an ulp.
+# Rust itself never contracts floating-point operations.
+[env]
+CFLAGS = "-ffp-contract=off"
+CXXFLAGS = "-ffp-contract=off"

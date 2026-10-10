@@ -194,53 +194,57 @@ def main():
         strength = 1.0 + (ratio - 1.0) * (dirs @ grain) ** 2
     ext = verts.max(0) - verts.min(0)
     D = float(np.linalg.norm(ext))
-    h = L / 40.0
-    key = hashlib.sha1(json.dumps([solid, h]).encode()).hexdigest()[:16]
-    mpath = os.path.join(args.cache, f"mesh_{key}.npz")
-    if os.path.exists(mpath):
-        z = np.load(mpath)
-        coords, tets = z["coords"], z["tets"]
-    else:
-        coords, tets = mesh_solid(verts, tris, h)
-        np.savez(mpath, coords=coords, tets=tets)
-    tol = 1e-6 * L
-    fixed = np.abs(coords[:, axis] - lo) <= tol
-    bfaces = boundary_faces(tets)
-    fc = coords[bfaces[:, :3]].mean(axis=1)
-    fn = np.cross(coords[bfaces[:, 1]] - coords[bfaces[:, 0]], coords[bfaces[:, 2]] - coords[bfaces[:, 0]])
-    fa = 0.5 * np.linalg.norm(fn, axis=1)
-    fn /= np.maximum(2 * fa[:, None], 1e-300)
-    # orient outward: tets' 4th vertex is inside
-    # (boundary faces from gmsh are consistently oriented outward for the
-    # right-handed tets Kratos uses; fix any inward ones via the solid center)
-    c0 = coords.mean(axis=0)
-    flip = ((fc - c0) * fn).sum(1) < 0
-    # load cases
-    tdirs = [i for i in range(3) if i != axis]
-    cases = []
-    for t in tdirs:
-        d = np.zeros(3)
-        d[t] = 1.0
-        cases.append({"name": f"bending_{'xyz'[t]}", "kind": "face", "direction": d})
-    d = np.zeros(3)
-    d[axis] = 1.0
-    cases.append({"name": "torsion", "kind": "torque", "direction": d})
-    rng = np.random.default_rng(7)
-    side = ~((np.abs(fc[:, axis] - lo) <= tol) | (np.abs(fc[:, axis] - hi) <= tol))
-    mid = side & (fc[:, axis] > lo + 0.2 * L) & (fc[:, axis] < hi - 0.2 * L)
-    cand = np.nonzero(mid)[0]
-    if len(cand):
-        for k, fi in enumerate(rng.choice(cand, size=min(args.impacts, len(cand)), replace=False, p=fa[cand] / fa[cand].sum())):
-            nrm = fn[fi] * (-1.0 if flip[fi] else 1.0)
-            cases.append({"name": f"impact_{k}", "kind": "impact", "center": fc[fi], "direction": -nrm})
-    r_imp = 0.1 * ext.min()
-    on_hi = np.abs(coords[:, axis] - hi) <= tol
-    elem_h = h
-    cent_all = coords[tets[:, :4]].mean(axis=1)
-    cracks = {}
-    mag = 1e6
+    # a matching golden set serves the frozen crack surfaces: no FEM mesh
+    # or solve is needed (CI's golden job has numpy/scipy only, no gmsh)
     gdir = args.golden or golden.default_dir(asset["meta"]["name"])
     frozen = None if args.no_golden else golden.load_cracks(gdir, solid)
+    cases = []
+    if frozen is None:
+        h = L / 40.0
+        key = hashlib.sha1(json.dumps([solid, h]).encode()).hexdigest()[:16]
+        mpath = os.path.join(args.cache, f"mesh_{key}.npz")
+        if os.path.exists(mpath):
+            z = np.load(mpath)
+            coords, tets = z["coords"], z["tets"]
+        else:
+            coords, tets = mesh_solid(verts, tris, h)
+            np.savez(mpath, coords=coords, tets=tets)
+        tol = 1e-6 * L
+        fixed = np.abs(coords[:, axis] - lo) <= tol
+        bfaces = boundary_faces(tets)
+        fc = coords[bfaces[:, :3]].mean(axis=1)
+        fn = np.cross(coords[bfaces[:, 1]] - coords[bfaces[:, 0]], coords[bfaces[:, 2]] - coords[bfaces[:, 0]])
+        fa = 0.5 * np.linalg.norm(fn, axis=1)
+        fn /= np.maximum(2 * fa[:, None], 1e-300)
+        # orient outward: tets' 4th vertex is inside
+        # (boundary faces from gmsh are consistently oriented outward for the
+        # right-handed tets Kratos uses; fix any inward ones via the solid center)
+        c0 = coords.mean(axis=0)
+        flip = ((fc - c0) * fn).sum(1) < 0
+        # load cases
+        tdirs = [i for i in range(3) if i != axis]
+        cases = []
+        for t in tdirs:
+            d = np.zeros(3)
+            d[t] = 1.0
+            cases.append({"name": f"bending_{'xyz'[t]}", "kind": "face", "direction": d})
+        d = np.zeros(3)
+        d[axis] = 1.0
+        cases.append({"name": "torsion", "kind": "torque", "direction": d})
+        rng = np.random.default_rng(7)
+        side = ~((np.abs(fc[:, axis] - lo) <= tol) | (np.abs(fc[:, axis] - hi) <= tol))
+        mid = side & (fc[:, axis] > lo + 0.2 * L) & (fc[:, axis] < hi - 0.2 * L)
+        cand = np.nonzero(mid)[0]
+        if len(cand):
+            for k, fi in enumerate(rng.choice(cand, size=min(args.impacts, len(cand)), replace=False, p=fa[cand] / fa[cand].sum())):
+                nrm = fn[fi] * (-1.0 if flip[fi] else 1.0)
+                cases.append({"name": f"impact_{k}", "kind": "impact", "center": fc[fi], "direction": -nrm})
+        r_imp = 0.1 * ext.min()
+        on_hi = np.abs(coords[:, axis] - hi) <= tol
+        elem_h = h
+        cent_all = coords[tets[:, :4]].mean(axis=1)
+    cracks = {}
+    mag = 1e6
     source = "computed"
     if frozen is not None:
         cracks, cases, source = frozen, [], f"golden ({gdir})"
