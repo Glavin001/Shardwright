@@ -248,8 +248,12 @@ pub fn network_export_with(asset: &Asset, lib: &MaterialLibrary, model: Stiffnes
 
 /// Run the Python oracle harness (Kratos FEM) if available.
 pub fn run_harness(asset_json: &std::path::Path, network_json: &std::path::Path, cache: &std::path::Path) -> String {
+    // PREFRACTURE_PYTHON, else $FRACENV/bin/python (tools/setup.sh), else
+    // /opt/fracenv/bin/python, else python3
     let py = std::env::var("PREFRACTURE_PYTHON").unwrap_or_else(|_| {
-        if std::path::Path::new("/opt/fracenv/bin/python").exists() { "/opt/fracenv/bin/python".into() } else { "python3".into() }
+        let env = std::env::var("FRACENV").unwrap_or_else(|_| "/opt/fracenv".into());
+        let p = format!("{env}/bin/python");
+        if std::path::Path::new(&p).exists() { p } else { "python3".into() }
     });
     let script = std::env::var("PREFRACTURE_HARNESS").unwrap_or_else(|_| harness_script().to_string_lossy().into_owned());
     let out = std::process::Command::new(&py)

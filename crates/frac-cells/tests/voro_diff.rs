@@ -1,7 +1,7 @@
 //! Differential test against Voro++ (spec §13.2): cell volumes and vertex
 //! sets must match within 1e-9 relative. Runs when the oracle binary is
-//! available (`VORO_ORACLE` env var or /opt/oracles/voro_oracle; build it
-//! from tools/oracles/voro_oracle.cc).
+//! available (`VORO_ORACLE`, else `$ORACLES/voro_oracle`, else
+//! /opt/oracles/voro_oracle; `tools/setup.sh` builds it).
 
 use frac_cells::clip::Clipper;
 use frac_cells::complex::Complex;
@@ -12,7 +12,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 fn oracle() -> Option<String> {
-    let p = std::env::var("VORO_ORACLE").unwrap_or_else(|_| "/opt/oracles/voro_oracle".into());
+    let p = std::env::var("VORO_ORACLE").unwrap_or_else(|_| format!("{}/voro_oracle", std::env::var("ORACLES").unwrap_or_else(|_| "/opt/oracles".into())));
     if std::path::Path::new(&p).exists() { Some(p) } else { None }
 }
 

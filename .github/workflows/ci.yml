@@ -12,6 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup (Rust build + glTF validator)
+        run: tools/setup.sh --no-oracles
       - name: Build (warnings are errors)
         run: RUSTFLAGS="-D warnings" cargo build --release --workspace
       - name: Tests
@@ -29,3 +34,22 @@ jobs:
       - uses: actions/download-artifact@v4
       - name: Byte-identical outputs across operating systems
         run: diff determinism-ubuntu-latest/determinism-ubuntu-latest.sha256 determinism-macos-latest/determinism-macos-latest.sha256
+  oracles:
+    # full oracle environment (Kratos FEM, CoACD, flatc, Voro++) and the
+    # Voro++ differential test; bond fidelity runs on rc_column
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup (everything)
+        run: FRACENV=$HOME/fracenv ORACLES=$HOME/oracles tools/setup.sh
+      - name: Voro++ differential test
+        run: ORACLES=$HOME/oracles cargo test --release -p frac-cells --test voro_diff
+      - name: Bond fidelity (rc_column)
+        run: |
+          ./target/release/prefracture bake --input benchmarks/assets/rc_column.glb --config benchmarks/configs/fast.toml --out out/
+          FRACENV=$HOME/fracenv ./target/release/prefracture validate --input out/rc_column.asset.json --oracle-cache oracle-cache | tee validate.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bond-fidelity
+          path: validate.md

@@ -19,6 +19,22 @@ scene plus authoring metadata and produces:
 * a **report** (`.report.md` / `.report.json`): hard gates (§13.1), scorecard
   metrics and stage timings.
 
+## Setup
+
+```sh
+tools/setup.sh              # idempotent: system libs, Rust build, Node glTF validator,
+                            # Python oracle env (Kratos, gmsh, scikit-fem, CoACD, ...),
+                            # flatc v24.3.25, Voro++ oracle
+tools/setup.sh --check      # report what is installed
+tools/setup.sh --no-oracles # Rust build + glTF validator only
+```
+
+Install locations default to `/opt/fracenv` (Python) and `/opt/oracles`
+(flatc, Voro++). Override them with `FRACENV` and `ORACLES`; the CLI and the
+tests read the same variables. For Claude Code cloud sessions, set the
+environment's *Setup script* to `tools/setup.sh` so every new session starts
+fully provisioned.
+
 ## Quick start
 
 ```sh
@@ -57,8 +73,9 @@ decomposition against upstream CoACD, and crack placement.
 
 ## Oracle environment
 
-The harness expects Python with Kratos Multiphysics 10.4
-(StructuralMechanics, LinearSolvers), gmsh, scikit-fem, scipy, coacd,
-manifold3d and trimesh. It looks for `/opt/fracenv/bin/python`; override with
-`PREFRACTURE_PYTHON`. The glTF gate uses Node with the Khronos validator in
-`tools/gltf_validate`.
+The pinned packages are listed in `tools/harness/requirements.txt`
+(Kratos Multiphysics 10.4 with StructuralMechanics and LinearSolvers, gmsh,
+scikit-fem, scipy, coacd, manifold3d and trimesh). The harness Python
+resolves in this order: `PREFRACTURE_PYTHON`, then `$FRACENV/bin/python`,
+then `/opt/fracenv/bin/python`. The glTF gate uses Node with the Khronos
+validator in `tools/gltf_validate`.

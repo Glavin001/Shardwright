@@ -36,12 +36,16 @@ fn scratch_dir(tag: &str) -> std::io::Result<PathBuf> {
     Ok(dir)
 }
 
-/// Locate `flatc`: `$FLATC`, then `/opt/oracles/flatbuffers/build/flatc`,
-/// then `flatc` on `PATH`.
+/// Locate `flatc`: `$FLATC`, then `$ORACLES/flatbuffers/build/flatc`
+/// (tools/setup.sh), `/opt/oracles/flatbuffers/build/flatc`, then `flatc` on
+/// `PATH`.
 pub fn find_flatc() -> Option<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(p) = std::env::var_os("FLATC") {
         candidates.push(PathBuf::from(p));
+    }
+    if let Some(o) = std::env::var_os("ORACLES") {
+        candidates.push(PathBuf::from(o).join("flatbuffers/build/flatc"));
     }
     candidates.push(PathBuf::from("/opt/oracles/flatbuffers/build/flatc"));
     candidates.push(PathBuf::from("flatc"));
