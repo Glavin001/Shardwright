@@ -10,11 +10,12 @@ use frac_render::RenderOut;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 
-pub const NAMES: [&str; 11] = [
+pub const NAMES: [&str; 12] = [
     "fragment_validity",
     "volume_conservation",
     "no_overlap_solids",
     "no_overlap_hulls",
+    "collision_shapes",
     "no_gaps_render",
     "bond_coverage",
     "bond_hierarchy",
@@ -277,6 +278,39 @@ pub fn run_gates(asset: &Asset, render: &RenderOut, vs: &ValidationSettings, phy
     out.push(gate("slivers", nbad == 0, nbad as f64, 0.0, format!("min cell volume {min_v:.3e} m³, min thickness ratio {min_t:.3}")));
 
     out.push(GateResult { name: "determinism".into(), status: GateStatus::NotEvaluated, value: 0.0, threshold: 0.0, detail: "run `prefracture bake --check-determinism` or CI cross-OS job".into() });
+
+    // ---- collision shapes: every hull convex and within the vertex limit;
+    // every fragment that is not a particle candidate has hulls
+    let limit = vs.max_hull_vertices.max(4) as usize;
+    let checks: Vec<(usize, usize, bool)> = asset
+        .hulls
+        .par_iter()
+        .map(|hh| {
+            // convex: every vertex on or behind every stored face plane
+            // (Newell normal through the face centroid), relative 1e-9
+            let scale = frac_geom::Aabb::from_points(hh.vertices.iter()).diagonal().max(1e-300);
+            let tol = 1e-9 * scale;
+            let convex = !hh.faces.is_empty()
+                && hh.faces.iter().all(|f| {
+                    let pts: Vec<DVec3> = f.iter().map(|&i| hh.vertices[i as usize]).collect();
+                    let n = frac_geom::polygon::newell(&pts).normalize_or_zero();
+                    let c = pts.iter().fold(DVec3::ZERO, |a, p| a + *p) / pts.len().max(1) as f64;
+                    n != DVec3::ZERO && hh.vertices.iter().all(|v| (*v - c).dot(n) <= tol)
+                });
+            (hh.vertices.len(), hh.fragment.idx(), convex)
+        })
+        .collect();
+    let over = checks.iter().filter(|c| c.0 > limit).count();
+    let nonconvex = checks.iter().filter(|c| !c.2).count();
+    let max_v = checks.iter().map(|c| c.0).max().unwrap_or(0);
+    let missing = h.fragments.iter().filter(|f| f.hulls.is_empty() && !f.particle_candidate).count();
+    out.push(gate(
+        "collision_shapes",
+        over == 0 && nonconvex == 0 && missing == 0,
+        (over + nonconvex + missing) as f64,
+        0.0,
+        format!("{} hulls: {over} over {limit} vertices (max {max_v}), {nonconvex} non-convex; {missing} fragments without hulls", checks.len()),
+    ));
 
     // ---- schema
     let phys_ok = frac_io::read_physics(physics).is_ok();

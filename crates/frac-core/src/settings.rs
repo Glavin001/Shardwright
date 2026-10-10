@@ -249,6 +249,9 @@ pub struct ValidationSettings {
     pub metrics: Vec<String>,
     /// Rays per axis for independent mass-property integration.
     pub mass_rays: u32,
+    /// Hard limit on vertices per collision hull (physics-engine friendly
+    /// compound convex shapes); enforced by the `collision_shapes` gate.
+    pub max_hull_vertices: u32,
 }
 
 impl Default for ValidationSettings {
@@ -257,6 +260,7 @@ impl Default for ValidationSettings {
             gates: "all".into(),
             metrics: vec!["bond_fidelity".into(), "distributions".into(), "collision".into(), "render".into()],
             mass_rays: 160,
+            max_hull_vertices: 64,
         }
     }
 }
