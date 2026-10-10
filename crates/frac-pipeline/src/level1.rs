@@ -188,6 +188,18 @@ pub fn level1(
     Level1Result { labels, method: "agglomeration".into(), jumps: Vec::new(), warnings }
 }
 
+/// `modes.discretization` setting → frac-modes discretization (`None`: the
+/// linear-elastic P1 model chosen by problem size).
+pub fn mode_discretization(name: &str) -> Result<Option<frac_modes::Discretization>, String> {
+    match name {
+        "translational" => Ok(Some(frac_modes::Discretization::CellPolynomial(0))),
+        "p1" => Ok(None),
+        "full" => Ok(Some(frac_modes::Discretization::Full)),
+        "cell-p1" => Ok(Some(frac_modes::Discretization::CellPolynomial(1))),
+        other => Err(format!("unknown modes.discretization '{other}' (translational, p1, full, cell-p1)")),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_modes(
     asset: &Asset,
@@ -200,6 +212,7 @@ fn run_modes(
     target: usize,
 ) -> Result<Level1Result, String> {
     let s = cfg.settings;
+    let t_start = std::time::Instant::now();
     // analysis resolution: tet edge <= ratio * median analysis cell diameter
     let mut diam: Vec<f64> = asset.analysis_cells[comp.analysis_cells.start as usize..comp.analysis_cells.end as usize]
         .iter()
@@ -253,6 +266,9 @@ fn run_modes(
             seed: stable_hash(&[cfg.seed, cfg.component as u64, 4]),
             large_dofs: s.large_problem_dofs,
             eps_large: s.large_iccm_tolerance,
+            discretization: mode_discretization(&s.discretization)?,
+            area_weighted: s.area_weighting,
+            multi_start: s.multi_start,
         },
     };
     let volumes: Vec<f64> = asset.analysis_cells[comp.analysis_cells.start as usize..comp.analysis_cells.end as usize].iter().map(|a| a.mass.volume).collect();
@@ -277,11 +293,33 @@ fn run_modes(
             eprintln!("FRAC_MODES_DUMP: cannot write {}: {e}", path.display());
         }
     }
+    let t_modes = std::time::Instant::now();
     let out = frac_modes::compute_modes(&input)?;
-    let max_jump = out.max_jump();
-    // size-balanced segmentation over the exact adjacency (groups missing
-    // from the tet staircase get zero jump and are never cut first)
-    let (l1, groups, mj) = frac_modes::segment_from_jumps(info.n_analysis, &out.groups, &max_jump, adj, &volumes, target as u32, min_volume);
+    if std::env::var_os("FRAC_LOG").is_some() {
+        let stages: Vec<String> = out.timings_ms.iter().map(|(k, v)| format!("{k} {:.2}", v / 1e3)).collect();
+        eprintln!(
+            "    [modes] component {} '{}': {} analysis cells, {} tets, {} unknowns, {}: setup {:.2} s, modes {:.2} s ({})",
+            cfg.component,
+            comp.name,
+            info.n_analysis,
+            mesh.tets.len(),
+            out.n_dofs,
+            out.solver_used,
+            (t_modes - t_start).as_secs_f64(),
+            t_modes.elapsed().as_secs_f64(),
+            stages.join(", ")
+        );
+    }
+    // size-balanced segmentation over the exact adjacency. Translational
+    // modes give the jump of every adjacent pair from the per-cell
+    // displacements; for P1, groups missing from the tet staircase get zero
+    // jump and are never cut first
+    let adj_pairs: Vec<(u32, u32)> = adj.iter().map(|&(a, b, _, _)| (a, b)).collect();
+    let (seg_groups, max_jump) = match out.pair_max_jump(&adj_pairs) {
+        Some(mj) => (adj_pairs, mj),
+        None => (out.groups.clone(), out.max_jump()),
+    };
+    let (l1, groups, mj) = frac_modes::segment_from_jumps(info.n_analysis, &seg_groups, &max_jump, adj, &volumes, target as u32, min_volume);
     let mut warnings = Vec::new();
     if !l1.hit_target {
         warnings.push(format!("component '{}': modes segmentation reached {} fragments (target {target})", comp.name, l1.n_fragments));

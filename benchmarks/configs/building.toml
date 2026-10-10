@@ -1,0 +1,40 @@
+# Building-scale config: every quality feature of bake.toml (fracture
+# modes, material-aware weights, interface noise, chipping, 3 LODs,
+# CoACD hulls) with cells sized for multi-storey buildings: ~29 cm
+# analysis cells and ~18 cm fine cells (bake.toml's 17 cm / 8.5 cm cells
+# give ~450k fine cells on a 5-storey frame).
+seed = 1337
+variants = 1
+levels = 4
+
+[cells]
+target_analysis_cells_per_m3 = 40
+fine_per_analysis = 4
+min_cell_volume = 1.0e-7
+min_thickness_ratio = 0.05
+
+[modes]
+enabled = true
+k = 10
+omega = 1.0e-3
+material_aware = true
+target_level1_fragments = 12
+max_iccm_iters = 50
+tet_edge_ratio = 0.33
+
+[collision]
+method = "coacd"
+concavity = 0.02
+max_hulls_per_fragment = 8
+margin = 0.0005
+min_rigid_size = 0.01
+
+[render]
+lods = 3
+noise = true
+chipping = true
+interior_uv = "triplanar_asset_space"
+# interior noise resolution scaled to building cells (~6 cm vertex spacing
+# on 18 cm cells); bake.toml's 128 gives >1000 LOD0 triangles per cell and
+# multi-GB glTF payloads at building scale
+max_interior_tris_per_patch = 32

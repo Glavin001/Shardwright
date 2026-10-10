@@ -1,7 +1,7 @@
 //! Hard gates (spec §13.1).
 
 use crate::{GateResult, GateStatus};
-use frac_collision::{cells_boundary_mesh, hull_polytope};
+use frac_collision::{cells_boundary_mesh_with, hull_polytope};
 use frac_core::settings::ValidationSettings;
 use frac_core::*;
 use frac_geom::inside::MeshQuery;
@@ -63,14 +63,19 @@ fn gate(name: &str, ok: bool, value: f64, threshold: f64, detail: String) -> Gat
 /// Zero-area triangles (from symbolic perturbation of exact degeneracies)
 /// are tolerated topologically and reported.
 pub fn mesh_validity(m: &TriMesh) -> (bool, String) {
+    mesh_validity_where(m, |_, _| true)
+}
+
+/// [`mesh_validity`] with the self-intersection test restricted to the
+/// triangle pairs `keep` accepts (topology is always checked in full).
+pub fn mesh_validity_where(m: &TriMesh, keep: impl Fn(u32, u32) -> bool) -> (bool, String) {
     let t = m.topology();
     let topo_ok = t.boundary_edges == 0 && t.nonmanifold_edges == 0 && t.inconsistent_edges == 0 && t.nonmanifold_vertices == 0;
     if !topo_ok {
         return (false, format!("{t:?}"));
     }
     // self-intersections ignoring zero-area triangles
-    let si = m.self_intersections(4);
-    let si: Vec<_> = si.into_iter().filter(|&(a, b)| !m.is_degenerate(a as usize) && !m.is_degenerate(b as usize)).collect();
+    let si = m.self_intersections_where(4, |a, b| keep(a, b) && !m.is_degenerate(a as usize) && !m.is_degenerate(b as usize));
     if !si.is_empty() {
         return (false, format!("{} self-intersecting pairs (e.g. {:?})", si.len(), si[0]));
     }
@@ -82,22 +87,34 @@ pub fn run_gates(asset: &Asset, render: &RenderOut, vs: &ValidationSettings, phy
     let mut out = Vec::new();
     let h = &asset.hierarchy;
     let nl = h.levels as usize;
+    let cp = asset.cell_polys();
     // ---- fragment validity (clean at every level, render at leaf level + LOD0 of all)
     let clean: Vec<(u32, bool, String)> = h
         .fragments
         .par_iter()
         .map(|f| {
-            let m = cells_boundary_mesh(asset, asset.fragment_cells(f));
+            let m = cells_boundary_mesh_with(asset, &cp, asset.fragment_cells(f));
             let (ok, d) = mesh_validity(&m);
             (f.id.0, ok, d)
         })
         .collect();
+    log_step("fragment_validity (clean meshes)");
+    // A coarse fragment's LOD0 render mesh (when built directly from the
+    // shared cell surfaces, i.e. it carries per-triangle owner cells) holds
+    // exactly the triangles of its cells' own meshes. Those are validated
+    // in full at the leaf level (one cell per leaf fragment), so only pairs
+    // of triangles of different cells can still intersect.
+    let leaf_lvl = (nl - 1) as u8;
+    let leaf_single = asset.level_fragments(leaf_lvl).iter().all(|f| f.cells.len() == 1);
     let rend: Vec<(u32, bool, String)> = h
         .fragments
         .par_iter()
         .map(|f| {
-            let m = render.fragments[f.id.idx()][0].as_trimesh();
-            let (ok, d) = mesh_validity(&m);
+            let fm = &render.fragments[f.id.idx()][0];
+            let (ok, d) = match fm.as_trimesh_with_owners() {
+                (m, Some(owner)) if leaf_single && f.level != leaf_lvl => mesh_validity_where(&m, |a, b| owner[a as usize] != owner[b as usize]),
+                (m, _) => mesh_validity(&m),
+            };
             (f.id.0, ok, d)
         })
         .collect();
@@ -133,21 +150,29 @@ pub fn run_gates(asset: &Asset, render: &RenderOut, vs: &ValidationSettings, phy
     out.push(gate("no_overlap_solids", chain_ok && cov_ok, est, 1e-9, format!("{chain_detail}; {cov_detail}")));
 
     // ---- no overlap (hulls) between neighboring fragments
-    let mut worst_h: f64 = 0.0;
-    let mut pairs = 0usize;
     let polys: Vec<frac_geom::hull::ConvexPolytope> = asset.hulls.par_iter().map(hull_polytope).collect();
-    for b in &asset.bonds {
-        let FragmentOrWorld::Fragment(fb) = b.b else { continue };
-        let ra = h.fragments[b.a.idx()].hulls.clone();
-        let rb = h.fragments[fb.idx()].hulls.clone();
-        for x in ra.clone() {
-            for y in rb.clone() {
-                pairs += 1;
-                let v = polys[x as usize].intersection_volume(&polys[y as usize]);
-                worst_h = worst_h.max(v);
+    let boxes: Vec<frac_geom::Aabb> = polys.par_iter().map(|p| frac_geom::Aabb::from_points(p.faces.iter().flat_map(|f| f.1.iter()))).collect();
+    // hulls with disjoint bounding boxes cannot overlap
+    let (worst_h, pairs) = asset
+        .bonds
+        .par_iter()
+        .map(|b| {
+            let FragmentOrWorld::Fragment(fb) = b.b else { return (0.0f64, 0usize) };
+            let ra = h.fragments[b.a.idx()].hulls.clone();
+            let rb = h.fragments[fb.idx()].hulls.clone();
+            let mut worst: f64 = 0.0;
+            let mut n = 0usize;
+            for x in ra {
+                for y in rb.clone() {
+                    n += 1;
+                    if boxes[x as usize].overlaps(&boxes[y as usize]) {
+                        worst = worst.max(polys[x as usize].intersection_volume(&polys[y as usize]));
+                    }
+                }
             }
-        }
-    }
+            (worst, n)
+        })
+        .reduce(|| (0.0, 0), |a, b| (a.0.max(b.0), a.1 + b.1));
     let has_hulls = !asset.hulls.is_empty();
     out.push(if has_hulls {
         gate("no_overlap_hulls", worst_h <= 1e-9, worst_h, 1e-9, format!("{pairs} neighboring hull pairs checked (m³)"))
@@ -200,15 +225,35 @@ pub fn run_gates(asset: &Asset, render: &RenderOut, vs: &ValidationSettings, phy
         interior.extend(i);
     }
     all.par_sort_unstable();
-    let count = |h: u128| -> usize {
-        let lo = all.partition_point(|&x| x < h);
-        let hi = all.partition_point(|&x| x <= h);
-        hi - lo
+    // number of query keys whose multiplicity in `all` is not exactly one,
+    // by a merge join of two sorted arrays (cache friendly: tens of
+    // millions of keys on building-scale assets)
+    let not_once = |mut q: Vec<u128>| -> usize {
+        q.par_sort_unstable();
+        let (mut i, mut bad) = (0usize, 0usize);
+        let mut k = 0usize;
+        while k < q.len() {
+            let key = q[k];
+            let mut n = 0usize;
+            while k + n < q.len() && q[k + n] == key {
+                n += 1;
+            }
+            while i < all.len() && all[i] < key {
+                i += 1;
+            }
+            let mut c = 0usize;
+            while i + c < all.len() && all[i + c] == key {
+                c += 1;
+            }
+            if c != 1 {
+                bad += n;
+            }
+            k += n;
+        }
+        bad
     };
-    let (unmatched, dup) = interior
-        .par_iter()
-        .map(|&(h, rev)| ((count(rev) != 1) as usize, (count(h) != 1) as usize))
-        .reduce(|| (0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
+    let unmatched = not_once(interior.iter().map(|x| x.1).collect());
+    let dup = not_once(interior.iter().map(|x| x.0).collect());
     out.push(gate("no_gaps_render", unmatched == 0 && dup == 0, (unmatched + dup) as f64, 0.0, format!("{} interior triangles at leaf level, {unmatched} unmatched, {dup} duplicated", interior.len())));
 
     // ---- bond coverage: each interface in exactly one bond per level, or internal
@@ -253,7 +298,7 @@ pub fn run_gates(asset: &Asset, render: &RenderOut, vs: &ValidationSettings, phy
         .fragments
         .par_iter()
         .map(|f| {
-            let m = cells_boundary_mesh(asset, asset.fragment_cells(f));
+            let m = cells_boundary_mesh_with(asset, &cp, asset.fragment_cells(f));
             let density = f.mass.mass / f.mass.volume.max(1e-300);
             let q = tet_quadrature(&m);
             mass_rel_error(&f.mass, &q, density)
@@ -266,7 +311,7 @@ pub fn run_gates(asset: &Asset, render: &RenderOut, vs: &ValidationSettings, phy
     let ray_err: f64 = sample
         .par_iter()
         .map(|f| {
-            let m = cells_boundary_mesh(asset, asset.fragment_cells(f));
+            let m = cells_boundary_mesh_with(asset, &cp, asset.fragment_cells(f));
             let v = ray_volume(&m, rays);
             (v / f.mass.volume - 1.0).abs()
         })
@@ -360,6 +405,7 @@ fn chain_identity(asset: &Asset) -> (bool, String) {
 /// Sampled coverage: random points; inside the solid => exactly one leaf
 /// cell contains it, outside => none.
 fn sampled_coverage(asset: &Asset, n: usize) -> (bool, String, f64) {
+    let cp = asset.cell_polys();
     let mut bad = 0usize;
     let mut total = 0usize;
     let mut total_vol = 0.0;
@@ -371,7 +417,7 @@ fn sampled_coverage(asset: &Asset, n: usize) -> (bool, String, f64) {
         if ncell == 0 {
             continue;
         }
-        let meshes: Vec<TriMesh> = (c.cells.start..c.cells.end).map(|ci| cells_boundary_mesh(asset, &[CellId(ci)])).collect();
+        let meshes: Vec<TriMesh> = (c.cells.start..c.cells.end).map(|ci| cells_boundary_mesh_with(asset, &cp, &[CellId(ci)])).collect();
         let boxes: Vec<frac_geom::Aabb> = meshes.iter().map(|m| m.aabb()).collect();
         let bvh = frac_geom::bvh::Bvh::build(&boxes);
         let per = (n / asset.components.len().max(1)).max(64);

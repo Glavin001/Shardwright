@@ -3,7 +3,7 @@
 //! simulations, Houdini/CoACD baselines) are computed by the harness in
 //! `tools/harness` from the JSON dump.
 
-use frac_collision::{cells_boundary_mesh, hull_polytope};
+use frac_collision::{cells_boundary_mesh_with, hull_polytope};
 use frac_core::*;
 use frac_geom::hull::ConvexPolytope;
 use frac_geom::inside::MeshQuery;
@@ -51,22 +51,41 @@ pub fn weibull_fit(x: &[f64]) -> Option<(f64, f64)> {
 }
 
 pub fn compute(asset: &Asset, render: &RenderOut, _lib: &MaterialLibrary) -> Value {
+    let cp = asset.cell_polys();
     let h = &asset.hierarchy;
     let mut levels = Vec::new();
     for l in 0..h.levels {
         let fr = asset.level_fragments(l);
         let vols: Vec<f64> = fr.iter().map(|f| f.mass.volume).collect();
         let logv: Vec<f64> = vols.iter().filter(|v| **v > 0.0).map(|v| v.ln()).collect();
-        // shape: inertia-eigenvalue aspect ratio and convexity (V / V_hull)
-        let shape: Vec<(f64, f64)> = fr
-            .par_iter()
+        // shape: inertia-eigenvalue aspect ratio (every fragment) and
+        // convexity V / V_hull (deterministic sample of at most
+        // CONVEXITY_SAMPLES fragments per level: a convex hull per fragment
+        // dominates the metrics time on building-scale assets, and the
+        // quantiles of a few thousand samples are within ~1%)
+        const CONVEXITY_SAMPLES: usize = 4096;
+        let aspect: Vec<f64> = fr
+            .iter()
             .map(|f| {
                 let (ev, _) = f.mass.principal();
-                let aspect = if ev.z > 0.0 { (ev.x / ev.z).sqrt() } else { 0.0 };
-                let m = cells_boundary_mesh(asset, asset.fragment_cells(f));
+                if ev.z > 0.0 {
+                    (ev.x / ev.z).sqrt()
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        let convexity: Vec<f64> = fr
+            .par_iter()
+            .step_by(fr.len().div_ceil(CONVEXITY_SAMPLES).max(1))
+            .map(|f| {
+                let m = cells_boundary_mesh_with(asset, &cp, asset.fragment_cells(f));
                 let hv = ConvexPolytope::from_points(&m.verts).map(|p| p.volume()).unwrap_or(0.0);
-                let convexity = if hv > 0.0 { f.mass.volume / hv } else { 1.0 };
-                (aspect, convexity)
+                if hv > 0.0 {
+                    f.mass.volume / hv
+                } else {
+                    1.0
+                }
             })
             .collect();
         // hulls
@@ -86,8 +105,9 @@ pub fn compute(asset: &Asset, render: &RenderOut, _lib: &MaterialLibrary) -> Val
             "volume": quantiles(vols.clone()),
             "log_volume": quantiles(logv),
             "weibull_volume": weibull_fit(&vols).map(|(k, lam)| json!({"shape": k, "scale": lam})),
-            "aspect_ratio": quantiles(shape.iter().map(|s| s.0).collect()),
-            "convexity": quantiles(shape.iter().map(|s| s.1).collect()),
+            "aspect_ratio": quantiles(aspect),
+            "convexity_samples": convexity.len(),
+            "convexity": quantiles(convexity),
             "hull_overshoot": quantiles(hull_stats.iter().map(|s| s.0).collect()),
             "hull_count": quantiles(hull_stats.iter().map(|s| s.1 as f64).collect()),
             "triangles_lod0": quantiles(tris),
@@ -111,7 +131,7 @@ pub fn compute(asset: &Asset, render: &RenderOut, _lib: &MaterialLibrary) -> Val
             .par_iter()
             .step_by((frs.len() / 100).max(1))
             .filter(|f| !f.hulls.is_empty())
-            .map(|f| hull_fit(asset, f))
+            .map(|f| hull_fit(asset, &cp, f))
             .collect();
         fit_all.extend(fit.iter().copied());
         fit_by_level.push(json!({"level": l, "fit": quantiles(fit)}));
@@ -222,8 +242,8 @@ fn polytope_distance(x: DVec3, p: &ConvexPolytope) -> f64 {
 }
 
 /// Symmetric hull-fit deviation of a fragment / its diameter.
-fn hull_fit(asset: &Asset, f: &Fragment) -> f64 {
-    let m = cells_boundary_mesh(asset, asset.fragment_cells(f));
+fn hull_fit(asset: &Asset, cp: &CellPolys, f: &Fragment) -> f64 {
+    let m = cells_boundary_mesh_with(asset, cp, asset.fragment_cells(f));
     let q = MeshQuery::new(&m);
     let diam = m.aabb().diagonal().max(1e-300);
     let hulls: Vec<ConvexPolytope> = asset.hulls[f.hulls.start as usize..f.hulls.end as usize].iter().map(hull_polytope).collect();

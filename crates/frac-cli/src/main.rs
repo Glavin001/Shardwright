@@ -272,6 +272,11 @@ fn bake(
         let phys = out.join(format!("{vname}.fracphys"));
         std::fs::write(&glb, &res.gltf).map_err(|e| e.to_string())?;
         std::fs::write(&phys, &res.physics).map_err(|e| e.to_string())?;
+        // the external validators below read the files; free the payload
+        // buffers first (building-scale glTF payloads are gigabytes)
+        res.gltf = Vec::new();
+        res.physics = Vec::new();
+        frac_io::release_free_memory();
         // external schema validators (when available)
         let mut schema_notes = Vec::new();
         if let Some(r) = frac_io::khronos_validate(&glb) {

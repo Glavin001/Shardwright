@@ -31,6 +31,24 @@ fn dump(out: &ModesOutput, cen: &[[f64; 3]], n: usize) {
     eprintln!("  energies {:?}", out.energies);
 }
 
+fn translational(disc: Discretization) -> bool {
+    disc == Discretization::CellPolynomial(0)
+}
+
+/// Number of modes for the "weakest cut" assertions. P1 modes beyond the
+/// first are mostly other relative rigid motions of the same two fragments
+/// (opening, sliding, hinging); translational modes are distinct cut
+/// patterns (each the cheapest cut orthogonal to the previous ones), so the
+/// weakest cut is the first mode alone and later, smaller pieces would
+/// dominate the max-over-modes jumps.
+fn k_for(disc: Discretization, k_p1: usize) -> usize {
+    if translational(disc) {
+        1
+    } else {
+        k_p1
+    }
+}
+
 fn admm(k: usize) -> ModesParams {
     ModesParams {
         k,
@@ -55,7 +73,7 @@ fn notched_bar_cuts_at_notch_impl(disc: Discretization) {
     assert!(solid.topology().is_closed_manifold());
     let c = case(&solid, 0.25, [0.0, 0.0, 0.0], [4.0, 1.0, 1.0], [8, 2, 2]);
     assert_eq!(c.n_cells, 32);
-    let out = run_disc(&c, &|_, _| 1.0, &[], admm(4), disc);
+    let out = run_disc(&c, &|_, _| 1.0, &[], admm(k_for(disc, 4)), disc);
     let cen = group_centroids(&c.mesh, &c.cells, &out.groups);
     dump(&out, &cen, 8);
     assert!(out.converged.iter().all(|&b| b));
@@ -92,7 +110,7 @@ fn notched_bar_anchored_end_cuts_at_notch_impl(disc: Discretization) {
         .filter(|&v| c.mesh.verts[v as usize][0] < 1e-9)
         .collect();
     assert!(!anchors.is_empty());
-    let out = run_disc(&c, &|_, _| 1.0, &anchors, admm(2), disc);
+    let out = run_disc(&c, &|_, _| 1.0, &anchors, admm(k_for(disc, 2)), disc);
     let cen = group_centroids(&c.mesh, &c.cells, &out.groups);
     dump(&out, &cen, 6);
     let g = top_groups(&out, 1)[0];
@@ -191,13 +209,24 @@ fn plate_with_hole_ring_is_weak_impl(disc: Discretization) {
     eprintln!("  ring mean {ring_mean} ({ring_n}) far mean {far_mean} ({far_n})");
     assert_eq!(ring_n, 4);
     assert!(ring_mean > 1.5 * far_mean, "ring {ring_mean} vs far {far_mean}");
-    // the single weakest interface crosses a hole ligament
+    // the single weakest interface crosses a hole ligament. Per-cell
+    // translations open a straight cut across the plate through the hole with
+    // the same jump on every interface of the cut, so there a ligament
+    // interface must attain the maximum jump
     let g = top_groups(&out, 1)[0];
-    assert!(
-        ring(out.groups[g].0) && ring(out.groups[g].1),
-        "top group {:?}",
-        out.groups[g]
-    );
+    if translational(disc) {
+        let top = mj[g];
+        assert!(
+            (0..out.groups.len()).any(|h| ring(out.groups[h].0) && ring(out.groups[h].1) && mj[h] >= top * (1.0 - 1e-6)),
+            "no ligament interface attains the max jump {top}"
+        );
+    } else {
+        assert!(
+            ring(out.groups[g].0) && ring(out.groups[g].1),
+            "top group {:?}",
+            out.groups[g]
+        );
+    }
 }
 
 fn material_weight_moves_cut_and_forbidden_never_cut_impl(disc: Discretization) {
@@ -211,7 +240,7 @@ fn material_weight_moves_cut_and_forbidden_never_cut_impl(disc: Discretization) 
     // geometric baseline: uniform bar breaks in the middle (checked on the
     // fast reduced discretization only, to keep the full test under budget)
     if disc != Discretization::Full {
-        let base = run_disc(&c, &|_, _| 1.0, &[], admm(2), disc);
+        let base = run_disc(&c, &|_, _| 1.0, &[], admm(k_for(disc, 2)), disc);
         dump(&base, &group_centroids(&c.mesh, &c.cells, &base.groups), 4);
         let l1 = segment_level1(c.n_cells, &base.groups, &base.max_jump(), 2);
         assert_eq!(l1.n_fragments, 2);
@@ -224,7 +253,7 @@ fn material_weight_moves_cut_and_forbidden_never_cut_impl(disc: Discretization) 
 
     // material-aware: a weak interface (G_f ratio 0.01 -> w = 0.1) at x = 1
     let weak = move |a: u32, b: u32| if at_one(a, b) { 0.1 } else { 1.0 };
-    let out = run_disc(&c, &weak, &[], admm(2), disc);
+    let out = run_disc(&c, &weak, &[], admm(k_for(disc, 2)), disc);
     let cen = group_centroids(&c.mesh, &c.cells, &out.groups);
     dump(&out, &cen, 4);
     for g in top_groups(&out, 4) {
@@ -239,7 +268,7 @@ fn material_weight_moves_cut_and_forbidden_never_cut_impl(disc: Discretization) 
 
     // forbidden interfaces at the natural break (x = 2) never open
     let forb = move |a: u32, b: u32| if at_center(a, b) { f64::INFINITY } else { 1.0 };
-    let out = run_disc(&c, &forb, &[], admm(2), disc);
+    let out = run_disc(&c, &forb, &[], admm(k_for(disc, 2)), disc);
     dump(&out, &cen, 4);
     let mut n_forb = 0;
     for (g, &(a, b)) in out.groups.iter().enumerate() {
@@ -310,4 +339,32 @@ fn material_weight_moves_cut_and_forbidden_never_cut() {
 #[test]
 fn material_weight_moves_cut_and_forbidden_never_cut_reduced() {
     material_weight_moves_cut_and_forbidden_never_cut_impl(Discretization::CellPolynomial(1));
+}
+
+// The default model: the paper's per-cell translations (§3.6 of Sellán et
+// al.), area-weighted interfaces, vector-Laplacian ICCM start.
+
+#[test]
+fn notched_bar_cuts_at_notch_translational() {
+    notched_bar_cuts_at_notch_impl(Discretization::CellPolynomial(0));
+}
+
+#[test]
+fn notched_bar_anchored_end_cuts_at_notch_translational() {
+    notched_bar_anchored_end_cuts_at_notch_impl(Discretization::CellPolynomial(0));
+}
+
+#[test]
+fn l_shape_weak_at_reentrant_corner_translational() {
+    l_shape_weak_at_reentrant_corner_impl(Discretization::CellPolynomial(0));
+}
+
+#[test]
+fn plate_with_hole_ring_is_weak_translational() {
+    plate_with_hole_ring_is_weak_impl(Discretization::CellPolynomial(0));
+}
+
+#[test]
+fn material_weight_moves_cut_and_forbidden_never_cut_translational() {
+    material_weight_moves_cut_and_forbidden_never_cut_impl(Discretization::CellPolynomial(0));
 }

@@ -374,6 +374,59 @@ impl Asset {
     pub fn fragment_cells(&self, f: &Fragment) -> &[CellId] {
         &self.hierarchy.cell_order[f.cells.start as usize..f.cells.end as usize]
     }
+
+    /// Per-cell polygon index (so the boundary of a few cells never scans
+    /// a whole component).
+    pub fn cell_polys(&self) -> CellPolys {
+        let n = self.cells.len();
+        let mut ext = vec![Vec::new(); n];
+        let mut patch = vec![Vec::new(); n];
+        for comp in &self.components {
+            let g = &comp.geometry;
+            for (i, e) in g.ext_polys.iter().enumerate() {
+                ext[e.cell.idx()].push(i as u32);
+            }
+            for (i, p) in g.patches.iter().enumerate() {
+                patch[p.cells.0.idx()].push(i as u32);
+                if p.cells.1 != p.cells.0 {
+                    patch[p.cells.1.idx()].push(i as u32);
+                }
+            }
+        }
+        CellPolys { ext, patch }
+    }
+}
+
+/// Indices into the owning component's `ext_polys` and `patches`, per cell.
+#[derive(Clone, Debug, Default)]
+pub struct CellPolys {
+    pub ext: Vec<Vec<u32>>,
+    pub patch: Vec<Vec<u32>>,
+}
+
+impl CellPolys {
+    /// Exterior polygons of a cell set and its boundary patches
+    /// (`(patch, flipped)`: flipped when the set holds the patch's second
+    /// cell), both sorted. `inside` must answer membership in the set.
+    pub fn boundary_of(&self, cells: &[CellId], inside: impl Fn(CellId) -> bool, geom: &ComponentGeometry) -> (Vec<usize>, Vec<(usize, bool)>) {
+        let mut exts = Vec::new();
+        let mut pats = Vec::new();
+        for &c in cells {
+            exts.extend(self.ext[c.idx()].iter().map(|&i| i as usize));
+            for &pi in &self.patch[c.idx()] {
+                let pt = &geom.patches[pi as usize];
+                let (a, b) = (inside(pt.cells.0), inside(pt.cells.1));
+                if a != b {
+                    pats.push((pi as usize, b));
+                }
+            }
+        }
+        exts.sort_unstable();
+        exts.dedup();
+        pats.sort_unstable();
+        pats.dedup();
+        (exts, pats)
+    }
 }
 
 /// Inertia tensor helper: zero matrix (glam's default is identity!).

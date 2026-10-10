@@ -152,6 +152,51 @@ pub fn cells_boundary_mesh(asset: &Asset, cells: &[CellId]) -> TriMesh {
     out
 }
 
+/// [`cells_boundary_mesh`] through a per-cell polygon index: the same mesh
+/// (same triangles and vertex order), at a cost proportional to the cells'
+/// own polygons instead of whole components.
+pub fn cells_boundary_mesh_with(asset: &Asset, cp: &CellPolys, cells: &[CellId]) -> TriMesh {
+    let mut sorted = cells.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    let mut out = TriMesh::default();
+    let mut i = 0;
+    while i < sorted.len() {
+        let ci = asset.cells[sorted[i].idx()].component;
+        let mut j = i;
+        while j < sorted.len() && asset.cells[sorted[j].idx()].component == ci {
+            j += 1;
+        }
+        let g = &asset.components[ci.idx()].geometry;
+        let (exts, pats) = cp.boundary_of(&sorted[i..j], |c| sorted.binary_search(&c).is_ok(), g);
+        let mut used: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        let mut m = TriMesh::default();
+        let mut push = |t: [u32; 3], m: &mut TriMesh| {
+            let mut nt = [0u32; 3];
+            for k in 0..3 {
+                nt[k] = *used.entry(t[k]).or_insert_with(|| {
+                    m.verts.push(g.verts[t[k] as usize]);
+                    (m.verts.len() - 1) as u32
+                });
+            }
+            m.tris.push(nt);
+        };
+        for e in exts {
+            for &t in &g.ext_polys[e].tris {
+                push(t, &mut m);
+            }
+        }
+        for (pi, flip) in pats {
+            for &t in &g.patches[pi].tris {
+                push(if flip { [t[0], t[2], t[1]] } else { t }, &mut m);
+            }
+        }
+        out.append(&m);
+        i = j;
+    }
+    out
+}
+
 /// Per-cell lists of the polygons of the component geometry (so boundary
 /// meshes of a few cells do not scan whole components).
 struct CellIndex {
