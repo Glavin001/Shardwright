@@ -854,7 +854,7 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
             }
             let _ = origin;
             // LODs
-            let mut lods = vec![m];
+            let mut lods = vec![compact(m)];
             if s.triangle_budget > 0 && lods[0].triangle_count() > s.triangle_budget as usize {
                 lods[0] = simplify(&lods[0], s.triangle_budget as usize);
             }
@@ -932,5 +932,30 @@ fn simplify(m: &FragMesh, target_tris: usize) -> FragMesh {
     let es = m.ext_indices.len() as f64 / 3.0 / total as f64;
     out.ext_indices = simplify_part(&m.ext_indices, es);
     out.int_indices = simplify_part(&m.int_indices, 1.0 - es);
+    compact(out)
+}
+
+/// Drop vertices no index references (LODs would otherwise carry the full
+/// LOD0 vertex buffers), keeping first-use order (deterministic).
+fn compact(m: FragMesh) -> FragMesh {
+    let mut remap = vec![u32::MAX; m.positions.len()];
+    let mut out = FragMesh::default();
+    let mut take = |i: u32, out: &mut FragMesh| -> u32 {
+        let r = &mut remap[i as usize];
+        if *r == u32::MAX {
+            *r = out.positions.len() as u32;
+            out.positions.push(m.positions[i as usize]);
+            out.normals.push(m.normals[i as usize]);
+            out.uvs.push(m.uvs[i as usize]);
+        }
+        *r
+    };
+    let ext: Vec<u32> = m.ext_indices.iter().map(|&i| take(i, &mut out)).collect();
+    let int: Vec<u32> = m.int_indices.iter().map(|&i| take(i, &mut out)).collect();
+    out.ext_indices = ext;
+    out.int_indices = int;
+    out.positions.shrink_to_fit();
+    out.normals.shrink_to_fit();
+    out.uvs.shrink_to_fit();
     out
 }

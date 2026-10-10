@@ -543,9 +543,19 @@ fn bytes_of<T: bytemuck::Pod>(v: &[T]) -> Vec<u8> {
 /// Write `scene` as a binary glTF 2.0 (GLB) file.
 pub fn write_glb(scene: &RenderScene, opts: &GltfOptions) -> Result<Vec<u8>, IoError> {
     check_scene(scene)?;
+    // reserve the (uncompressed) binary size up front: doubling growth of a
+    // multi-GB buffer would nearly double the peak memory
+    let estimate: usize = scene
+        .meshes
+        .iter()
+        .map(|m| {
+            let nv = m.positions.len();
+            nv * (24 + m.uvs.as_ref().map_or(0, |_| 8) + m.tangents.as_ref().map_or(0, |_| 16)) + m.primitives.iter().map(|p| 4 * p.indices.len() + 4).sum::<usize>() + 64
+        })
+        .sum();
     let mut w = Writer {
         compress: opts.meshopt_compression,
-        bin: Vec::new(),
+        bin: Vec::with_capacity(if opts.meshopt_compression { estimate / 2 } else { estimate }),
         fallback_len: 0,
         views: Vec::new(),
         accessors: Vec::new(),

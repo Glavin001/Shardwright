@@ -5,7 +5,7 @@
 use frac_core::input::AuthoringMeta;
 use frac_core::Settings;
 use frac_material::MaterialLibrary;
-use frac_pipeline::{run, InputSpec};
+use frac_pipeline::{run_with, InputSpec};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -17,8 +17,8 @@ fn main() {
     let scene = frac_io::load_scene(&input, &opts).unwrap();
     let name = input.file_stem().and_then(|s| s.to_str()).unwrap_or("asset").to_string();
     let spec = InputSpec { name, scene, meta, variant: 0 };
-    let out = run(&spec, &settings, &MaterialLibrary::builtin()).unwrap();
-    for (fi, lods) in out.render.fragments.iter().enumerate() {
+    let out = run_with(&spec, &settings, &MaterialLibrary::builtin(), true).unwrap();
+    for (fi, lods) in out.render.as_ref().unwrap().fragments.iter().enumerate() {
         let m = &lods[0];
         let tm = m.as_trimesh();
         let si: Vec<_> = tm.self_intersections(8).into_iter().filter(|&(a, b)| !tm.is_degenerate(a as usize) && !tm.is_degenerate(b as usize)).collect();

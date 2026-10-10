@@ -37,7 +37,8 @@ pub struct PipelineOutput {
     pub gltf: Vec<u8>,
     pub physics: Vec<u8>,
     pub report: Report,
-    pub render: frac_render::RenderOut,
+    /// Render meshes, kept only by [`run_with`] with `keep_render`.
+    pub render: Option<frac_render::RenderOut>,
 }
 
 fn recipe_for(lib: &MaterialLibrary, m: MaterialId, meta: &frac_core::input::PartMeta) -> Recipe {
@@ -70,11 +71,21 @@ fn recipe_for(lib: &MaterialLibrary, m: MaterialId, meta: &frac_core::input::Par
 
 /// Run the full pipeline for one variant.
 pub fn run(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary) -> Result<PipelineOutput, FracError> {
+    run_with(input, settings, lib, false)
+}
+
+/// [`run`], optionally keeping the f64 render meshes in the output (for
+/// diagnostics; they are dropped by default to bound peak memory).
+pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, keep_render: bool) -> Result<PipelineOutput, FracError> {
     let mut timings: Vec<StageTiming> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
     let t0 = Instant::now();
+    let log = std::env::var_os("FRAC_LOG").is_some();
     let tick = |name: &str, t: &mut Instant, timings: &mut Vec<StageTiming>| {
         timings.push(StageTiming { stage: name.into(), ms: t.elapsed().as_secs_f64() * 1e3 });
+        if log {
+            eprintln!("[{}] {name}: {:.1} s (total {:.1} s), rss {:.0} MB", input.name, t.elapsed().as_secs_f64(), t0.elapsed().as_secs_f64(), rss_mb());
+        }
         *t = Instant::now();
     };
     let mut t = Instant::now();
@@ -323,16 +334,37 @@ pub fn run(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary) -> Res
     let render = frac_render::build_render(&asset, &rp);
     tick("render", &mut t, &mut timings);
     // ---- export payloads
+    // Peak memory matters on building-scale assets: the f32 render scene, the
+    // glTF buffers and the f64 render meshes are never all alive at once.
     let scene = export::render_scene(&mut asset, &render, lib);
-    let gltf = frac_io::write_glb(&scene, &frac_io::GltfOptions { meshopt_compression: settings.render.meshopt_compression })
-        .map_err(|e| FracError::new(Stage::Export, "glb", e.to_string()))?;
     let physics = frac_io::write_physics(&asset);
     tick("export", &mut t, &mut timings);
     // ---- Stage 12: validation
     let scorecard = frac_validate::validate(&asset, &render, lib, &settings.validation, &physics);
     tick("validate", &mut t, &mut timings);
     let mut report = Report::new(&asset, &render, timings, warnings, scorecard);
+    let render = if keep_render { Some(render) } else { None };
+    let tg = Instant::now();
+    let gltf = frac_io::write_glb(&scene, &frac_io::GltfOptions { meshopt_compression: settings.render.meshopt_compression })
+        .map_err(|e| FracError::new(Stage::Export, "glb", e.to_string()))?;
+    drop(scene);
+    if let Some(e) = report.timings.iter_mut().find(|x| x.stage == "export") {
+        e.ms += tg.elapsed().as_secs_f64() * 1e3;
+    }
+    if log {
+        eprintln!("[{}] glb: {:.1} s, rss {:.0} MB", input.name, tg.elapsed().as_secs_f64(), rss_mb());
+    }
     report.total_ms = t0.elapsed().as_secs_f64() * 1e3;
     report.payload_bytes = (gltf.len(), physics.len());
     Ok(PipelineOutput { asset, gltf, physics, report, render })
+}
+
+/// Resident set size of this process in MB (Linux; 0 elsewhere), for the
+/// `FRAC_LOG` stage log.
+fn rss_mb() -> f64 {
+    std::fs::read_to_string("/proc/self/statm")
+        .ok()
+        .and_then(|x| x.split_whitespace().nth(1).and_then(|v| v.parse::<f64>().ok()))
+        .map(|pages| pages * 4096.0 / 1048576.0)
+        .unwrap_or(0.0)
 }

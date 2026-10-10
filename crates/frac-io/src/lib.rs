@@ -35,7 +35,7 @@ pub mod fb {
     pub use crate::frac_generated::frac::*;
 }
 
-pub use debug::{asset_to_json, write_obj, write_ply, write_ply_polys};
+pub use debug::{asset_to_json, write_asset_json, write_obj, write_ply, write_ply_polys};
 pub use error::IoError;
 pub use gltf_out::{
     GlbSummary, GltfOptions, RenderMaterial, RenderMesh, RenderNode, RenderPrimitive, RenderScene,

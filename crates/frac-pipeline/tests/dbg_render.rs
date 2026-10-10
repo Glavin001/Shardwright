@@ -3,7 +3,7 @@ use frac_core::Settings;
 use frac_geom::mesh::box_mesh;
 use frac_geom::DVec3;
 use frac_material::MaterialLibrary;
-use frac_pipeline::{run, InputSpec};
+use frac_pipeline::{run_with, InputSpec};
 
 #[test]
 #[ignore]
@@ -20,8 +20,8 @@ fn dbg_render_si() {
     s.modes.enabled = false;
     if std::env::var("NO_NOISE").is_ok() { s.render.noise = false; }
     if std::env::var("NO_CHIP").is_ok() { s.render.chipping = false; }
-    let out = run(&input, &s, &MaterialLibrary::builtin()).unwrap();
-    for (fi, lods) in out.render.fragments.iter().enumerate() {
+    let out = run_with(&input, &s, &MaterialLibrary::builtin(), true).unwrap();
+    for (fi, lods) in out.render.as_ref().unwrap().fragments.iter().enumerate() {
         let m = &lods[0];
         let tm = m.as_trimesh();
         let si = tm.self_intersections(4);

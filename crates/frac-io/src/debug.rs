@@ -13,6 +13,20 @@ pub fn asset_to_json(asset: &Asset) -> String {
     serde_json::to_string_pretty(asset).expect("Asset serialization cannot fail")
 }
 
+/// Stream the asset as compact JSON to `path` (buffered; no in-memory copy
+/// of the document, which reaches gigabytes on building-scale assets).
+pub fn write_asset_json(asset: &Asset, path: &Path) -> Result<(), IoError> {
+    if let Some(dir) = path.parent()
+        && !dir.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(dir).map_err(|e| IoError::io(dir, e))?;
+    }
+    let f = std::fs::File::create(path).map_err(|e| IoError::io(path, e))?;
+    let mut w = std::io::BufWriter::with_capacity(1 << 20, f);
+    serde_json::to_writer(&mut w, asset).map_err(|e| IoError::io(path, std::io::Error::other(e)))?;
+    std::io::Write::flush(&mut w).map_err(|e| IoError::io(path, e))
+}
+
 fn write_file(path: &Path, s: &str) -> Result<(), IoError> {
     if let Some(dir) = path.parent()
         && !dir.as_os_str().is_empty()

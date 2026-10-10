@@ -199,7 +199,7 @@ fn bake(
                 g.detail = format!("{}; {}", g.detail, schema_notes.join("; "));
             }
         }
-        std::fs::write(out.join(format!("{vname}.asset.json")), frac_io::asset_to_json(&res.asset)).map_err(|e| e.to_string())?;
+        frac_io::write_asset_json(&res.asset, &out.join(format!("{vname}.asset.json"))).map_err(|e| e.to_string())?;
         std::fs::write(out.join(format!("{vname}.report.json")), res.report.to_json()).map_err(|e| e.to_string())?;
         std::fs::write(out.join(format!("{vname}.report.md")), res.report.to_markdown()).map_err(|e| e.to_string())?;
         if let Some(d) = dump {
