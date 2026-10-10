@@ -261,29 +261,31 @@ fractions of the fragment volume; medians unless noted.
 | Asset | Method | Hulls | Coverage | Outside med / p95 | Haus. median | Haus. p95 |
 |---|---|---|---|---|---|---|
 | rc_column L1 (12) | before | 95 | 0.869 | 0.060 / 0.089 | 0.0890 | 0.1290 |
-| | **ours** | 96 | 0.933 | 0.039 / 0.060 | **0.0619** | **0.0895** |
+| | **ours** | 96 | 0.933 | 0.039 / 0.060 | **0.0604** | **0.0894** |
 | | CoACD | 96 | 1.000 | 0.208 / 0.318 | 0.0999 | 0.1149 |
 | rc_column L2 (40) | before | 299 | 0.945 | 0.012 / 0.039 | 0.1221 | 0.1556 |
-| | **ours** | 317 | 0.970 | 0.002 / 0.010 | **0.1162** | 0.1480 |
+| | **ours** | 317 | 0.970 | 0.002 / 0.010 | **0.1163** | 0.1480 |
 | | CoACD | 317 | 1.000 | 0.154 / 0.225 | 0.1200 | 0.1462 |
 | ceramic_bowl L1 (5) | before | 40 | 0.825 | 0.512 / 0.757 | 0.0290 | 0.0463 |
-| | **ours** | 40 | 0.831 | 0.542 / 0.790 | **0.0276** | **0.0326** |
+| | **ours** | 40 | 0.827 | 0.539 / 0.787 | **0.0276** | **0.0326** |
 | | CoACD | 40 | 1.000 | 0.753 / 1.135 | 0.0362 | 0.0418 |
 | brick_wall_window L1 (12) | before | 87 | 0.916 | 0.022 / 0.045 | 0.0828 | 0.2528 |
-| | **ours** | 88 | 0.964 | 0.015 / 0.051 | **0.0608** | **0.0737** |
+| | **ours** | 88 | 0.964 | 0.017 / 0.051 | **0.0609** | **0.0737** |
 | | CoACD | 88 | 1.000 | 0.140 / 0.298 | 0.0611 | 0.0756 |
 | messy_scan L1 (12) | before | 94 | 0.839 | 0.056 / 0.094 | 0.1139 | 0.1302 |
-| | **ours** | 96 | 0.944 | 0.050 / 0.064 | **0.0814** | **0.1196** |
+| | **ours** | 96 | 0.944 | 0.048 / 0.063 | **0.0812** | **0.1197** |
 | | CoACD | 96 | 1.000 | 0.283 / 0.369 | 0.0991 | 0.1268 |
 | stone_arch L1 (12, held out) | before | 75 | 0.829 | 0.039 / 0.113 | 0.1020 | 0.1764 |
-| | **ours** | 83 | 0.953 | 0.023 / 0.111 | **0.0582** | **0.1274** |
+| | **ours** | 83 | 0.948 | 0.024 / 0.115 | **0.0537** | **0.1287** |
 | | CoACD | 83 | 1.000 | 0.090 / 0.434 | 0.1134 | 0.1725 |
 
 Our coverage is below 1 by construction (non-overlap with neighbours plus a
 0.5 mm margin; on the thin bowl shell the margin alone costs 17%: coverage
-without the non-overlap step is 0.832). The collision-aware deviation
+without the non-overlap step is 0.832). (Rows refreshed after the
+building-scale speedups below; the unlimited-budget table is from before
+them.) The collision-aware deviation
 (`cw_concavity`: surfaces of hulls − fragment and fragment − hulls only)
-is lower than CoACD's everywhere except the stone_arch p95 (0.0913 vs
+is lower than CoACD's everywhere except the stone_arch p95 (0.0914 vs
 0.0628), where coverage holes left by the separating planes dominate.
 
 **Unlimited budget**, threshold 0.03 in CoACD units for both (ours:
@@ -323,27 +325,28 @@ cells (convex atoms vs cells cut by the tree search).
 
 ### Building-scale collision time (two_storey_building)
 
-Input: `benchmarks/configs/bake.toml` with `[modes] enabled = false`.
-Leaf-baked with `FRAC_STOP_BEFORE_COLLISION`, which gives 60,920 cells and
-4 levels. Timed with `FRAC_PROFILE=1 prefracture hulls --out - --metrics`.
-Before is the merged tip (4741c12) and after is this branch. The two runs
-were back to back on the shared 4-core machine, with other jobs using
-about 1–1.5 cores. Times are wall seconds.
+Input: the full `benchmarks/configs/bake.toml` (translational fracture
+modes). Leaf-baked with `FRAC_STOP_BEFORE_COLLISION`, which gives 60,920
+cells and 4 levels. Timed with `FRAC_PROFILE=1 prefracture hulls --out -
+--metrics`. Before is 4741c12 and after is this branch. The runs were on
+the shared 4-core machine, with other jobs using about 1–1.5 cores. Times
+are wall seconds.
 
 | Stage | Before | After |
 |---|---|---|
-| atoms (cell convexity, cut search) | 3.4 | 2.1 |
-| level 3 (60,920 leaves) | 2.9 | 0.6 |
-| level 2 (11,297 fragments, 7,165 decomposed) | 41.3 | 9.8 |
-| level 1 (576 fragments) | 45.9 | 17.0 |
-| level 0 | 0.5 | 0.4 |
-| non-overlap (L1 / L2 / L3 / L0) | 35.1 (22.9 / 8.2 / 2.9 / 1.0) | 10.2 (5.6 / 3.1 / 0.6 / 0.5) |
-| output (margin shrink, vertex cap, convexity) | ≈48.8 | 6.7 |
-| **total** | **177.9** | **47.3** |
+| atoms (cell convexity, cut search) | 2.5 | 1.8 |
+| level 3 (60,920 leaves) | 2.1 | 0.6 |
+| level 2 (11,297 fragments, 7,165 decomposed) | 29.7 | 11.4 |
+| level 1 (576 fragments) | 32.8 | 16.6 |
+| level 0 | 0.4 | 0.4 |
+| non-overlap (L1 / L2 / L3 / L0) | 59.2 (39.8 / 15.7 / 3.0 / 0.5) | 9.1 (5.1 / 2.8 / 0.5 / 0.3) |
+| output (margin shrink, vertex cap, convexity) | ≈50 | 5.5 |
+| **total** | **177.1** | **46.0** |
 
-On one thread the total is 89 s. Peak RSS is 2.85 GB, which includes the
-loaded asset. The output is bit-identical with 1, 3 and 4 threads (hull
-content hash).
+On one thread the total is 121 s. Peak RSS is 2.87 GB, which includes the
+loaded asset. The output is bit-identical with 1 and 4 threads (hull
+content hash). With `[modes] enabled = false` (a geometric hierarchy of
+the same size) the total went from 177.9 s to 47.3 s.
 
 Quality metrics are the validator's per-level metrics computed over
 **all** fragments (`FRAC_FIT_ALL=1`). Overshoot is Σ hull volume / V − 1.
@@ -353,14 +356,20 @@ max overlap 0).
 
 | Level | Hulls before / after | Overshoot p50 / p95 / max / mean, before | Overshoot p50 / p95 / max / mean, after | Fit p50 / p95 / max, before | Fit p50 / p95 / max, after |
 |---|---|---|---|---|---|
-| L1 | 4417 / 4415 | 0.2654 / 0.5030 / 0.7247 / 0.2295 | 0.2633 / 0.5028 / 0.7229 / 0.2289 | 0.0551 / 0.0982 / 0.1666 | 0.0547 / 0.0984 / 0.1666 |
-| L2 | 53582 / 53582 | −0.0275 / 0.1029 / 0.3289 / −0.0098 | −0.0275 / 0.1005 / 0.3289 / −0.0101 | 0.0041 / 0.0338 / 0.0750 | 0.0041 / 0.0339 / 0.0750 |
+| L1 | 4567 / 4568 | 0.2874 / 0.5743 / 0.8296 / 0.2894 | 0.2881 / 0.5777 / 0.8281 / 0.2891 | 0.0509 / 0.0859 / 0.1182 | 0.0507 / 0.0859 / 0.1182 |
+| L2 | 53582 / 53582 | −0.0275 / 0.1029 / 0.3289 / −0.0098 | −0.0275 / 0.1015 / 0.3289 / −0.0100 | 0.0041 / 0.0338 / 0.0750 | 0.0041 / 0.0339 / 0.0750 |
 | L3 | 60995 / 60995 | unchanged (exact cells) | unchanged | 0.0041 / 0.0067 / 0.0162 | 0.0041 / 0.0067 / 0.0162 |
-| L0 | 76 / 76 | unchanged | unchanged | unchanged | unchanged |
+| L0 | 72 / 72 | unchanged | unchanged | unchanged | unchanged |
 
-Overshoot is equal or lower at every level and quantile. Fit p95 is
-0.0002 higher at L1 and 0.0001 higher at L2; every other fit quantile is
-equal or lower.
+The changes are small and go both ways:
+- L1 overshoot is 0.0007 higher at p50 and 0.0034 higher at p95, and
+  lower at the max and mean.
+- L2 fit p95 is 0.0001 higher.
+- Everything else is equal or lower.
+
+A smaller out-term budget (64 sample triangles, or 256 evaluations) is
+about 15% faster. It is not used, because it raised the L1 fit on this
+hierarchy (p95 0.0884, max 0.1489).
 
 What changed:
 - **Out-term regions.** The hull-surface out-term is now evaluated only
@@ -368,8 +377,8 @@ What changed:
   merged pieces (convex polygon subtraction). Before, triangles straddling
   the seam between the two pieces were subdivided all the way down to the
   sample spacing. The branch and bound now converges instead of running
-  into its evaluation cap. The cap is 256 evaluations
-  (`max_tri_samples` 64).
+  into its evaluation cap. The cap is 1024 evaluations
+  (`max_tri_samples` 256).
 - **Constant refinement batch.** The greedy merge refines one bound per
   round, as a constant. Fragments are already processed in parallel. The
   old batch size followed the thread count, and a capped refinement is

@@ -565,7 +565,7 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                     .unwrap_or_default();
                 let signer = coacd::Signer::new(&g.mesh);
                 tadd(&T_S_QUERY, t1);
-                let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: g.spacing, rv_k: 0.3, max_tri_samples: 64, foreign, intrusion_k: p.intrusion_k, upstream_density: None, seed: p.seed, batch: 1 };
+                let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: g.spacing, rv_k: 0.3, max_tri_samples: 256, foreign, intrusion_k: p.intrusion_k, upstream_density: None, seed: p.seed, batch: 1 };
                 // Pieces keep their own costs from the finer level (atoms: from
                 // the cut search): a fragment's surface is a subset of its
                 // children's, so those costs bound the costs at this level.
