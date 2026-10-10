@@ -115,7 +115,24 @@ pub struct ModeSettings {
     pub enabled: bool,
     pub k: usize,
     pub omega: f64,
+    /// Multiply the geometric interface weight by the fracture-energy weight
+    /// `sqrt(G_f / G_ref)` of the interface material.
     pub material_aware: bool,
+    /// Fracture-mode model (Sellán et al., "Breaking Good", ACM TOG 2023):
+    /// "translational" (default; the paper's §3.6 model: one displacement
+    /// per analysis cell, translations only, ICCM started from
+    /// vector-Laplacian eigenvectors), "p1" (linear-elastic P1 cell-exploded
+    /// field: full space for small problems, cell-affine reduction above
+    /// `large_problem_dofs`), "full" or "cell-p1" (force either P1 variant).
+    pub discretization: String,
+    /// Geometric interface weight `sqrt(A_g / mean A)`, which makes the cut
+    /// cost proportional to the interface area times the jump (the
+    /// discontinuity measure of the authors' reference implementation).
+    /// `false`: unit geometric weights (the spec's `w_g = 1`).
+    pub area_weighting: bool,
+    /// ICCM multi-start over degenerate initial eigenspaces (keeps the
+    /// lowest-energy mode; matters for symmetric parts).
+    pub multi_start: bool,
     pub target_level1_fragments: u32,
     pub max_iccm_iters: usize,
     pub iccm_tolerance: f64,
@@ -144,6 +161,9 @@ impl Default for ModeSettings {
             k: 10,
             omega: 1.0e-3,
             material_aware: true,
+            discretization: "translational".into(),
+            area_weighting: true,
+            multi_start: true,
             target_level1_fragments: 12,
             max_iccm_iters: 50,
             iccm_tolerance: 1e-4,

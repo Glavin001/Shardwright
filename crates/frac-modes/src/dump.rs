@@ -6,7 +6,7 @@
 //! `modes_bench` example). Floats are stored as IEEE bit patterns, so a
 //! reloaded problem is bit-identical.
 
-use crate::{ModesParams, Solver};
+use crate::{Discretization, ModesParams, Solver};
 use frac_fem::{ElasticMaterial, TetMesh, TransverseIsotropic};
 use std::fmt::Write as _;
 
@@ -28,6 +28,24 @@ pub struct ModesDump {
 
 fn f(x: f64) -> String {
     format!("{:016x}", x.to_bits())
+}
+
+fn disc_name(d: Option<Discretization>) -> String {
+    match d {
+        None => "auto".into(),
+        Some(Discretization::Full) => "full".into(),
+        Some(Discretization::CellPolynomial(k)) => format!("p{k}"),
+    }
+}
+
+fn parse_disc(t: &str) -> Result<Option<Discretization>, String> {
+    Ok(match t {
+        "auto" => None,
+        "full" => Some(Discretization::Full),
+        _ => Some(Discretization::CellPolynomial(
+            t.strip_prefix('p').and_then(|d| d.parse().ok()).ok_or_else(|| format!("bad discretization {t}"))?,
+        )),
+    })
 }
 
 fn solver_name(s: Solver) -> &'static str {
@@ -52,7 +70,7 @@ impl ModesDump {
         writeln!(s, "frac-modes-dump 1").unwrap();
         writeln!(
             s,
-            "params {} {} {} {} {} {} {} {}",
+            "params {} {} {} {} {} {} {} {} {} {} {}",
             p.k,
             f(p.omega),
             f(p.eps),
@@ -60,7 +78,10 @@ impl ModesDump {
             solver_name(p.solver),
             p.seed,
             p.large_dofs,
-            f(p.eps_large)
+            f(p.eps_large),
+            disc_name(p.discretization),
+            u8::from(p.area_weighted),
+            u8::from(p.multi_start)
         )
         .unwrap();
         writeln!(s, "seg {} {} {}", self.n_analysis, self.target, f(self.min_volume)).unwrap();
@@ -126,7 +147,7 @@ impl ModesDump {
         }
         let l = next()?;
         let t: Vec<&str> = l.split_whitespace().collect();
-        if !(t.len() == 7 || t.len() == 9) || t[0] != "params" {
+        if !(t.len() == 7 || t.len() == 9 || t.len() == 12) || t[0] != "params" {
             return Err("bad params line".into());
         }
         let solver = match t[5] {
@@ -141,8 +162,12 @@ impl ModesDump {
             max_iters: pu(t[4])? as usize,
             solver,
             seed: pu(t[6])?,
-            large_dofs: if t.len() == 9 { pu(t[7])? as usize } else { ModesParams::default().large_dofs },
-            eps_large: if t.len() == 9 { hf(t[8])? } else { ModesParams::default().eps_large },
+            large_dofs: if t.len() >= 9 { pu(t[7])? as usize } else { ModesParams::default().large_dofs },
+            eps_large: if t.len() >= 9 { hf(t[8])? } else { ModesParams::default().eps_large },
+            // dumps before these fields were written by the linear-elastic P1 model
+            discretization: if t.len() == 12 { parse_disc(t[9])? } else { None },
+            area_weighted: t.len() == 12 && t[10] == "1",
+            multi_start: t.len() == 12 && t[11] == "1",
         };
         let l = next()?;
         let t: Vec<&str> = l.split_whitespace().collect();

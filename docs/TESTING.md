@@ -30,9 +30,10 @@ Tier 0 exact-answer tests:
 Tier 0 differential tests: Voro++ (frozen outputs in
 `crates/frac-cells/tests/golden/`; the live binary is cross-checked when
 installed). Fracture modes against the authors' reference implementation
-(`tools/harness/test_fracture_modes_golden.py`): its dataset checks take
-seconds; scoring our modes (`FM_GOLDEN_RUN=1`) is tier 2. See
-`VALIDATION.md`.
+(`tools/harness/test_fracture_modes_golden.py`, `FM_GOLDEN_RUN=1`): our
+default model against the frozen reference outputs, with the §13.2
+thresholds, in about 5 s. The linear-elastic P1 configurations take 10–55 min
+per mesh (tier 2). See `VALIDATION.md`.
 
 ## Golden oracle dataset
 

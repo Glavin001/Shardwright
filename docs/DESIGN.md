@@ -69,13 +69,70 @@ separating plane, then shrunk by the margin.
 
 * fTetWild is replaced by a BCC-lattice mesher clipped to the solid
   (`frac-fem`), which is robust for the cell-exploded solids we feed it.
-* The fracture-modes solve uses a **cell-polynomial reduction** (displacement
-  affine per analysis cell) for large problems, solved with a hybrid
-  ADMM + Clarabel scheme. `Discretization::Full` keeps the unreduced problem.
-  This is ~100× faster with the same Level-1 segmentation on the benchmarks.
-* Material weights `w_g = sqrt(G_f / G_ref)` scale the cut cost of each
-  analysis-cell interface; the geometric (`w_g = 1`) and fallback
-  agglomeration paths remain available for the §13.4 ablation.
+* **Fracture-mode model: the paper's translational model, not linear
+  elasticity.** Spec §4.1 asks for a linear-elastic `Q`. Sellán et al.
+  ("Breaking Good: Fracture Modes for Realtime Destruction", ACM TOG 2023)
+  show that only the null space of `Q` matters in the fracture regime
+  (Fig. 12). They use `Q = I₃ ⊗ L` with one constant displacement per
+  element for all their examples (§3.6), because the rotations in the
+  elastic null space let fragments hinge and small elements break off. We
+  follow the paper (`modes.discretization = "translational"`, the default):
+  * one displacement per analysis cell;
+  * the strain energy vanishes, so every ICCM subproblem is a pure
+    second-order-cone program;
+  * ICCM starts from vector-Laplacian eigenvectors.
+
+  The objective is isotropic and the constraints separate per axis, so the
+  vector modes are scalar modes times `e_x, e_y, e_z` and we solve one
+  component. `k` modes are then `k` distinct cut patterns, with one unknown
+  per cell.
+
+  On identical meshes this reproduces the authors' reference implementation
+  exactly: 0.0° principal angles, energies to 1e-8, ARI 1.0 (see
+  `VALIDATION.md`). It is 10–100× faster than the elastic P1 path: the brick
+  wall's modes take 5.5 s instead of 168 s.
+
+  The linear-elastic P1 model stays available (`modes.discretization = "p1"`,
+  or `"full"` / `"cell-p1"`). It uses the cell-polynomial reduction
+  (displacement affine per analysis cell, hybrid ADMM + Clarabel) for large
+  problems.
+* **Interface weights.** The geometric weight is `√(A_g/Ā)`
+  (`modes.area_weighting`, default on). With a constant jump, the cut cost
+  of a cell-pair interface is then proportional to its area times the
+  jump, which is the discontinuity measure of the reference implementation.
+  The paper's patch norm `√(∫‖D‖²)` alone would favour cuts through large
+  interfaces. Material weights `w_g = sqrt(G_f / G_ref)`
+  (`modes.material_aware`) multiply the geometric weight. The geometric-only
+  and fallback agglomeration paths remain available for the §13.4 ablation.
+* **ICCM multi-start** (`modes.multi_start`, default on). ICCM is a local
+  method. When a mode's initial eigenvector belongs to a (near-)degenerate
+  eigenspace, as on symmetric parts like square slabs, columns and plates
+  with a hole, ICCM also starts from the other members and their
+  `(a ± b)/√2` combinations and keeps the lowest energy. The starts run in
+  parallel and are combined in a fixed order, so the result does not depend
+  on the thread count.
+* **Level 1 from translational modes.** For the segmentation, the jump of
+  every adjacent analysis-cell pair is computed from the per-cell
+  displacements. This also covers pairs that share no tet face in a coarse
+  analysis mesh; on the building's slabs, using the staircase faces alone
+  left a single fragment.
+
+Fracture-mode settings (`[modes]` in the bake config):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | modes for Level 1 (else agglomeration) |
+| `discretization` | `"translational"` | `"translational"` (paper §3.6), `"p1"` (linear-elastic P1, full or cell-affine by size), `"full"`, `"cell-p1"` |
+| `area_weighting` | `true` | geometric weight `√(A_g/Ā)` (`false`: `w_g = 1`) |
+| `material_aware` | `true` | multiply by `sqrt(G_f/G_ref)` of the interface material |
+| `multi_start` | `true` | ICCM multi-start over degenerate initial eigenspaces |
+| `k` | `10` | modes per component (distinct cut patterns for the translational model) |
+| `omega` | `1e-3` | sparsity weight (normalized); has no effect on translational modes (1-homogeneous objective) |
+| `target_level1_fragments` | `12` | Level-1 target (±10%) |
+| `max_iccm_iters`, `iccm_tolerance` | `50`, `1e-4` | ICCM stop |
+| `large_problem_dofs`, `large_iccm_tolerance` | `3000`, `1e-3` | ADMM-only schedule for large P1 problems |
+| `solver` | `"auto"` | `"auto"`, `"clarabel"` or `"admm"`. Auto uses Clarabel for the translational model below 100k unknowns, and for full P1 problems below 3000 |
+| `tet_edge_ratio`, `max_tets`, `ftetwild` | `0.33`, `20000`, — | analysis mesh |
 
 ## Reference bond-network solver (§13.3)
 

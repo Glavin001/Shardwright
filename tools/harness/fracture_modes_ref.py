@@ -32,14 +32,12 @@ Commands:
   # live comparison (needs the reference + venv; prints a markdown table)
   $ORACLES/fmref-venv/bin/python tools/harness/fracture_modes_ref.py run \
       [--cases notched_bar,l_shape,plate_hole,bunny] [--k 6] [--json out.json] \
-      [--configs full:uniform,...] [--fields] [--freeze] [--golden]
+      [--configs cell-p0:sqrt_area,...] [--elastic] [--freeze] [--golden]
 
-  --fields  runs our side from a copy of this workspace with
-            tools/harness/patches/*.patch applied (our own proposed changes
-            to frac-modes, not reference code): 01 exposes the mode
-            displacement fields needed for principal angles (the public
-            `ModesOutput` has jumps and energies only), 02/03 add the
-            per-cell translation model `cell-p0` of the paper's §3.6.
+  --configs our configurations "<discretization>:<group weight>" (default
+            cell-p0:sqrt_area = the library default, and cell-p0:uniform)
+  --elastic also the linear-elastic P1 model (full:uniform,
+            cell-p1:uniform; 10-55 min per mesh)
   --freeze  writes the golden dataset benchmarks/golden/fracture_modes/
             (meshes, reference modes and per-mode pieces; npz in Git LFS).
   --golden  uses the frozen meshes and reference outputs instead of running
@@ -56,7 +54,6 @@ import io
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -68,7 +65,6 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 GOLDEN = os.path.join(ROOT, "benchmarks", "golden", "fracture_modes")
-PATCHES = os.path.join(HERE, "patches")
 ORACLES = os.environ.get("ORACLES", "/opt/oracles")
 REF_DIR = os.environ.get("FRACTURE_MODES_REF", os.path.join(ORACLES, "fracture-modes"))
 # commit the golden dataset was generated with (tools/setup.sh pins the same)
@@ -319,12 +315,10 @@ def principal_angles_deg(A, B, w):
 # ------------------------------------------------------ our implementation ----
 
 
-def build_example(root=ROOT, target_dir=None, rustflags=None):
+def build_example(root=ROOT, target_dir=None):
     env = dict(os.environ)
     if target_dir:
         env["CARGO_TARGET_DIR"] = target_dir
-    if rustflags:
-        env["RUSTFLAGS"] = (env.get("RUSTFLAGS", "") + " " + rustflags).strip()
     subprocess.run(["cargo", "build", "--release", "-q", "-p", "frac-modes", "--example", "modes_from_mesh"],
                    cwd=root, env=env, check=True)
     td = target_dir or os.path.join(root, "target")
@@ -353,32 +347,58 @@ def make_mesh(exe, verts, tris, h):
 
 
 # Configurations of our implementation compared with the reference:
-# "<discretization>:<group weight>". full / cell-p1 are the current library
-# (spec §4: P1 cell-exploded field, linear-elastic Q, w_g = 1); with every
-# tet its own cell, cell-p1 spans the same space as full and exercises the
-# production solver path (hybrid ADMM + Clarabel). cell-p0 is the proposed
-# per-cell-translation model of the paper's §3.6 (needs the patches in
-# tools/harness/patches/, i.e. --fields); with sqrt_area weights its
-# per-face penalty equals the reference implementation's (∝ A_f·|jump|).
-DEFAULT_CONFIGS = ("full:uniform", "cell-p1:uniform")
-PATCHED_CONFIGS = ("cell-p0:uniform", "cell-p0:sqrt_area")
+# "<discretization>:<group weight>". cell-p0 is the paper's §3.6
+# per-cell translation model (library default); with sqrt_area weights (the
+# library default) its per-face penalty equals the reference
+# implementation's (∝ A_f·|jump|), with uniform ones it is the paper's
+# Eq. (5). full / cell-p1 are the linear-elastic P1 model (spec §4.1,
+# `modes.discretization = "p1"`); with every tet its own cell cell-p1 spans
+# the same space as full and exercises the production solver path (hybrid
+# ADMM + Clarabel).
+DEFAULT_CONFIGS = ("cell-p0:sqrt_area", "cell-p0:uniform")
+ELASTIC_CONFIGS = ("full:uniform", "cell-p1:uniform")
 
 
 def ours_params(k, omega=1e-3, disc="full"):
-    # spec defaults (eps 1e-4, 50 iterations); the interior-point solver for
-    # the full problem so that solver tolerance is not a factor, the
-    # production path (Auto: hybrid ADMM + Clarabel) for cell-p1
+    # library defaults (eps 1e-4, 50 iterations); the interior-point solver
+    # for full P1 and translational so that solver tolerance is not a factor,
+    # the production path (Auto: hybrid ADMM + Clarabel) for cell-p1. The P1
+    # rows of docs/VALIDATION.md were measured without the multi-start.
     solver = "auto" if disc == "cell-p1" else "clarabel"
-    return {"k": k, "omega": omega, "eps": 1e-4, "max_iters": 50, "solver": solver}
+    return {"k": k, "omega": omega, "eps": 1e-4, "max_iters": 50, "solver": solver, "multi_start": disc == "cell-p0"}
 
 
 def run_config(exe, V, T, k, config, targets=(2, 3, 4), omega=1e-3):
+    """Our modes for `config`, as k vector modes. The translational model
+    (cell-p0) is solved for one displacement component: each of its modes f
+    stands for the degenerate direction triple f e_x, f e_y, f e_z (see
+    crates/frac-modes/src/reduce.rs), which is how the reference's d = 3
+    modes come, so ceil(k/3) modes are requested and expanded."""
     disc, weight = config.split(":")
-    out = run_example(exe, {"verts": V.tolist(), "tets": T.tolist(), "params": ours_params(k, omega, disc),
+    kr = -(-k // 3) if disc == "cell-p0" else k
+    out = run_example(exe, {"verts": V.tolist(), "tets": T.tolist(), "params": ours_params(kr, omega, disc),
                             "discretizations": [disc], "level1_targets": list(targets), "group_weight": weight})
     run = out["runs"][0]
     run["config"] = config
+    if disc == "cell-p0":
+        expand_triples(run)
     return run
+
+
+def expand_triples(run):
+    """Scalar translational modes (x component) → direction triples."""
+    rep3 = lambda xs: [x for x in xs for _ in range(3)]
+    for key in ("jumps", "energies", "iterations", "converged"):
+        run[key] = rep3(run[key])
+    if "mode_fields" in run:
+        fields = []
+        for f in run["mode_fields"]:
+            fx = np.asarray(f, float).reshape(-1, 3)
+            for axis in range(3):
+                g = np.zeros_like(fx)
+                g[:, axis] = fx[:, 0]
+                fields.append(g.ravel().tolist())
+        run["mode_fields"] = fields
 
 
 # ------------------------------------------------------------- reference ----
@@ -655,18 +675,6 @@ def load_golden(name):
     return z["verts"], z["tets"].astype(int), {"U": z["ref_modes"], "labels": z["ref_labels"]}
 
 
-def patched_workspace(dst):
-    """Copy of this workspace with tools/harness/patches/*.patch applied
-    (mode fields for the principal-angle metric; the proposed per-cell
-    translation model)."""
-    if os.path.exists(dst):
-        shutil.rmtree(dst)
-    shutil.copytree(ROOT, dst, ignore=shutil.ignore_patterns("target", ".git", "benchmarks", "out*"))
-    for p in sorted(os.listdir(PATCHES)):
-        subprocess.run(["patch", "-p1", "-s", "-i", os.path.join(PATCHES, p)], cwd=dst, check=True)
-    return dst
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=["run"])
@@ -676,16 +684,12 @@ def main():
     ap.add_argument("--omega", type=float, default=1e-3)
     ap.add_argument("--configs", default=None, help="comma-separated disc:weight list (default: all available)")
     ap.add_argument("--json", default=None)
-    ap.add_argument("--fields", action="store_true")
+    ap.add_argument("--elastic", action="store_true")
     ap.add_argument("--golden", action="store_true", help="use the frozen meshes and reference outputs (no reference run)")
     ap.add_argument("--freeze", action="store_true")
-    ap.add_argument("--work", default=os.path.join(tempfile.gettempdir(), "fmref-work"))
     a = ap.parse_args()
     exe = build_example()
-    if a.fields:
-        ws = patched_workspace(os.path.join(a.work, "ws"))
-        exe = build_example(ws, os.path.join(a.work, "target"), "--cfg frac_modes_fields")
-    configs = a.configs.split(",") if a.configs else list(DEFAULT_CONFIGS) + (list(PATCHED_CONFIGS) if a.fields else [])
+    configs = a.configs.split(",") if a.configs else list(DEFAULT_CONFIGS) + (list(ELASTIC_CONFIGS) if a.elastic else [])
     surfaces = case_surfaces()
     results = {}
     manifest = {"reference": {"repo": "https://github.com/sgsellan/fracture-modes", "commit": REF_COMMIT,

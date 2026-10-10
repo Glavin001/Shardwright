@@ -19,20 +19,31 @@ fn anchors(c: &Case) -> Vec<u32> {
     (0..c.mesh.verts.len() as u32).filter(|&v| c.mesh.verts[v as usize][1] < 1e-9).collect()
 }
 
-#[test]
-fn rc_column_auto_k10_timing() {
+fn timing(disc: Option<Discretization>, prefix: &str, budget_s: f64) {
     let c = column();
     assert_eq!(c.n_cells, 96);
     assert!(c.mesh.tets.len() > 15_000, "{}", c.mesh.tets.len());
     let a = anchors(&c);
     let t = std::time::Instant::now();
-    let out = run(&c, &|_, _| 1.0, &a, ModesParams { k: 10, ..Default::default() });
+    let out = run(&c, &|_, _| 1.0, &a, ModesParams { k: 10, discretization: disc, ..Default::default() });
     let secs = t.elapsed().as_secs_f64();
     let l1 = segment_level1(c.n_cells, &out.groups, &out.max_jump(), 4);
     eprintln!("RC column: {} tets, {} unknowns, {} -> {secs:.2} s, level1 n={}", c.mesh.tets.len(), out.n_dofs, out.solver_used, l1.n_fragments);
-    assert!(out.solver_used.starts_with("cell-p1+admm"), "{}", out.solver_used);
+    assert!(out.solver_used.starts_with(prefix), "{}", out.solver_used);
     assert_eq!(out.jumps.len(), 10);
-    assert!(secs < 30.0, "compute_modes took {secs:.1} s");
+    assert!(secs < budget_s, "compute_modes took {secs:.1} s");
+}
+
+#[test]
+fn rc_column_auto_k10_timing() {
+    // default translational model
+    timing(Some(Discretization::CellPolynomial(0)), "cell-p0+", 30.0);
+}
+
+#[test]
+fn rc_column_p1_k10_timing() {
+    // linear-elastic P1 model (cell-affine reduction at this size)
+    timing(None, "cell-p1+admm", 30.0);
 }
 
 #[test]
@@ -49,7 +60,7 @@ fn rc_column_variants() {
             tet_cell: &c.cells,
             group_weight: &|_, _| 1.0,
             anchored_vertices: &a,
-            params: ModesParams { k, solver, ..Default::default() },
+            params: ModesParams { k, solver, discretization: None, ..Default::default() },
         };
         let t = std::time::Instant::now();
         let out = compute_modes_with(&input, disc).unwrap();

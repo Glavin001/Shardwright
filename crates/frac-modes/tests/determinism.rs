@@ -20,6 +20,7 @@ fn bits(o: &ModesOutput) -> Vec<u64> {
     v.extend(o.energies.iter().map(|x| x.to_bits()));
     v.extend(o.eigenvalues.iter().map(|x| x.to_bits()));
     v.extend(o.group_area.iter().map(|x| x.to_bits()));
+    v.extend(o.mode_fields.iter().flatten().flatten().map(|x| x.to_bits()));
     v
 }
 
@@ -27,15 +28,18 @@ fn bits(o: &ModesOutput) -> Vec<u64> {
 fn compute_modes_is_bitwise_deterministic() {
     let c = small_case();
     let w = |a: u32, b: u32| if (a + b) % 3 == 0 { 0.5 } else { 1.0 };
-    for solver in [Solver::Admm, Solver::Clarabel] {
-        let p = ModesParams { k: 3, solver, ..Default::default() };
-        let a = strip(run(&c, &w, &[], p));
-        let b = strip(run(&c, &w, &[], p));
-        assert_eq!(bits(&a), bits(&b), "{solver:?}");
-        assert_eq!(a, b, "{solver:?}");
+    // translational default and linear-elastic P1 (size-based choice)
+    for disc in [Some(Discretization::CellPolynomial(0)), None] {
+        for solver in [Solver::Admm, Solver::Clarabel] {
+            let p = ModesParams { k: 3, solver, discretization: disc, ..Default::default() };
+            let a = strip(run(&c, &w, &[], p));
+            let b = strip(run(&c, &w, &[], p));
+            assert_eq!(bits(&a), bits(&b), "{disc:?} {solver:?}");
+            assert_eq!(a, b, "{disc:?} {solver:?}");
+        }
     }
-    // reduced discretization (the Auto path for large problems)
-    for d in [1u8, 2] {
+    // reduced discretizations
+    for d in [0u8, 1, 2] {
         let p = ModesParams { k: 3, ..Default::default() };
         let a = strip(run_disc(&c, &w, &[], p, Discretization::CellPolynomial(d)));
         let b = strip(run_disc(&c, &w, &[], p, Discretization::CellPolynomial(d)));
@@ -47,14 +51,13 @@ fn compute_modes_is_bitwise_deterministic() {
     assert_eq!(c.mesh, c2.mesh);
 }
 
-#[test]
-fn auto_picks_clarabel_for_small_and_agrees_with_admm() {
+fn auto_agrees_with_admm(disc: Option<Discretization>, prefix: &str) {
     let c = small_case();
-    let auto = run(&c, &|_, _| 1.0, &[], ModesParams { k: 2, ..Default::default() });
+    let auto = run(&c, &|_, _| 1.0, &[], ModesParams { k: 2, discretization: disc, ..Default::default() });
     assert!(auto.n_dofs < AUTO_CLARABEL_MAX_DOFS);
-    assert_eq!(auto.solver_used, "clarabel");
-    let fast = run(&c, &|_, _| 1.0, &[], ModesParams { k: 2, solver: Solver::Admm, ..Default::default() });
-    assert!(fast.solver_used.starts_with("admm"));
+    assert_eq!(auto.solver_used, format!("{prefix}clarabel"));
+    let fast = run(&c, &|_, _| 1.0, &[], ModesParams { k: 2, solver: Solver::Admm, discretization: disc, ..Default::default() });
+    assert!(fast.solver_used.starts_with(&format!("{prefix}admm")), "{}", fast.solver_used);
     for i in 0..2 {
         let rel = (auto.energies[i] - fast.energies[i]).abs() / auto.energies[i];
         assert!(rel < 1e-3, "mode {i}: energies {} vs {} ({rel})", auto.energies[i], fast.energies[i]);
@@ -64,6 +67,18 @@ fn auto_picks_clarabel_for_small_and_agrees_with_admm() {
             assert!(d < 0.02 * jmax, "mode {i} group {g}: {} vs {}", auto.jumps[i][g], fast.jumps[i][g]);
         }
     }
+}
+
+#[test]
+fn auto_picks_clarabel_for_small_and_agrees_with_admm() {
+    // default: translational model
+    auto_agrees_with_admm(Some(Discretization::CellPolynomial(0)), "cell-p0+");
+}
+
+#[test]
+fn auto_picks_clarabel_for_small_and_agrees_with_admm_p1() {
+    // linear-elastic P1 model: full space for small problems
+    auto_agrees_with_admm(None, "");
 }
 
 #[test]

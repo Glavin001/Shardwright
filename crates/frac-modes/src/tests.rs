@@ -110,8 +110,7 @@ fn clarabel_vs_admm_anchored_weighted() {
     compare_subproblem(&f, &anchors, &w, 1);
 }
 
-#[test]
-fn full_modes_clarabel_vs_admm() {
+fn modes_clarabel_vs_admm(disc: Option<Discretization>, prefix: &str) {
     let f = fixture(0.3, [4, 2, 1]);
     let run = |solver| {
         let input = ModesInput {
@@ -120,14 +119,14 @@ fn full_modes_clarabel_vs_admm() {
             tet_cell: &f.cells,
             group_weight: &|_, _| 1.0,
             anchored_vertices: &[],
-            params: ModesParams { k: 3, solver, ..Default::default() },
+            params: ModesParams { k: 3, solver, discretization: disc, ..Default::default() },
         };
         compute_modes(&input).unwrap()
     };
     let a = run(Solver::Clarabel);
     let b = run(Solver::Admm);
-    assert_eq!(a.solver_used, "clarabel");
-    assert!(b.solver_used.starts_with("admm"));
+    assert_eq!(a.solver_used, format!("{prefix}clarabel"));
+    assert!(b.solver_used.starts_with(&format!("{prefix}admm")), "{}", b.solver_used);
     eprintln!("energies clarabel {:?} admm {:?}", a.energies, b.energies);
     eprintln!("iters clarabel {:?} admm {:?}", a.iterations, b.iterations);
     for i in 0..3 {
@@ -138,6 +137,18 @@ fn full_modes_clarabel_vs_admm() {
             assert!((a.jumps[i][g] - b.jumps[i][g]).abs() < 0.05 * jmax, "mode {i} group {g}");
         }
     }
+}
+
+#[test]
+fn full_modes_clarabel_vs_admm() {
+    // linear-elastic P1 model (size-based choice: full space here)
+    modes_clarabel_vs_admm(None, "");
+}
+
+#[test]
+fn translational_modes_clarabel_vs_admm() {
+    // default: the paper's per-cell translation model
+    modes_clarabel_vs_admm(Some(Discretization::CellPolynomial(0)), "cell-p0+");
 }
 
 #[test]
@@ -240,7 +251,7 @@ fn clarabel_vs_admm_reduced_subproblem() {
         params: ModesParams { k: 2, ..Default::default() },
     };
     let mut t = Vec::new();
-    let (full, info) = problem::build_full(&input, &mut t).unwrap();
+    let (full, info) = problem::build_full(&input, &mut t, false).unwrap();
     for degree in [1u8, 2] {
         let pb = reduce::reduce(&full, &info, degree, input.params.omega).unwrap();
         assert_eq!(pb.n, 16 * 3 * if degree == 1 { 4 } else { 10 });

@@ -12,12 +12,13 @@
 //! { "verts": [[x, y, z], ...], "tets": [[a, b, c, d], ...],
 //!   "tet_cell": [0, 1, ...],          // default: every tet its own cell
 //!   "anchors": [vertex, ...],         // default: free body
-//!   "group_weight": "uniform",        // or "sqrt_area": w_g = sqrt(A_g / mean A)
+//!   "group_weight": "sqrt_area",      // default; or "uniform" (w_g = 1)
 //!   "material": {"youngs": 2e11, "poisson": 0.3, "density": 7850},
-//!   "discretizations": ["full", "cell-p1"],
+//!   "discretizations": ["cell-p0"],   // or "full", "cell-p1", "cell-p2"
 //!   "level1_targets": [2, 3],
 //!   "params": {"k": 4, "omega": 1e-3, "eps": 1e-4, "max_iters": 50,
-//!              "solver": "auto" | "clarabel" | "admm", "seed": 1592652460} }
+//!              "solver": "auto" | "clarabel" | "admm", "seed": 1592652460,
+//!              "multi_start": true} }
 //! ```
 //!
 //! Instead of `verts`/`tets` the input may give a closed surface
@@ -29,9 +30,8 @@
 //!
 //! Output: `{"mesh": {...}?, "runs": [{"discretization", "groups",
 //! "group_area", "jumps", "energies", "eigenvalues", "iterations",
-//! "converged", "n_dofs", "solver_used", "timings_ms", "level1": [...]}]}`.
-
-#![allow(unexpected_cfgs)]
+//! "converged", "n_dofs", "solver_used", "timings_ms", "level1": [...],
+//! "nodes", "mode_fields"}]}` (mode displacements per `(vertex, cell)` node).
 
 use frac_fem::{ElasticMaterial, TetMesh};
 use frac_geom::{DVec3, TriMesh};
@@ -286,33 +286,6 @@ fn idx_list<const N: usize>(j: &Json) -> Result<Vec<[u32; N]>, String> {
         .collect()
 }
 
-/// Fault-face area per analysis-cell pair `(a < b)` (same faces as the
-/// library's groups).
-fn cell_pair_areas(mesh: &TetMesh, cells: &[u32]) -> BTreeMap<(u32, u32), f64> {
-    let mut acc = BTreeMap::new();
-    let f = mesh.sorted_faces();
-    let mut i = 0;
-    while i < f.len() {
-        let mut j = i + 1;
-        while j < f.len() && f[j].0 == f[i].0 {
-            j += 1;
-        }
-        if j - i == 2 {
-            let (a, b) = (cells[f[i].1 as usize], cells[f[i + 1].1 as usize]);
-            if a != b {
-                let p = f[i].0.map(|v| mesh.verts[v as usize]);
-                let e1 = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
-                let e2 = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
-                let c = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
-                let ar = 0.5 * (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt();
-                *acc.entry((a.min(b), a.max(b))).or_insert(0.0) += ar;
-            }
-        }
-        i = j;
-    }
-    acc
-}
-
 fn write_run(o: &mut Out, name: &str, out: &ModesOutput, n_cells: u32, targets: &[u32]) {
     o.0.push('{');
     o.key("discretization", true);
@@ -375,10 +348,7 @@ fn write_run(o: &mut Out, name: &str, out: &ModesOutput, n_cells: u32, targets: 
     o.0.push('}');
 }
 
-/// Mode displacement fields per exploded node. Only available in builds of
-/// the library that expose them (the harness builds a patched copy with
-/// `--cfg frac_modes_fields`, see tools/harness/patches/).
-#[cfg(frac_modes_fields)]
+/// Mode displacement fields per exploded `(vertex, cell)` node.
 fn write_fields(o: &mut Out, out: &ModesOutput) {
     o.key("nodes", false);
     o.0.push('[');
@@ -399,9 +369,6 @@ fn write_fields(o: &mut Out, out: &ModesOutput) {
     }
     o.0.push(']');
 }
-
-#[cfg(not(frac_modes_fields))]
-fn write_fields(_o: &mut Out, _out: &ModesOutput) {}
 
 fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().collect();
@@ -502,25 +469,22 @@ fn run() -> Result<(), String> {
             }
         }
 
-        // geometric group weights (no material): uniform (spec w_g = 1) or
-        // sqrt(A_g / mean A), which turns the per-group penalty
-        // ω·w_g·‖B̂_g u‖ = ω·w_g·√(A_g/L²)·rms into one proportional to A_g·rms
-        let mode = inp.get("group_weight").map(|v| v.str()).transpose()?.unwrap_or("uniform").to_string();
-        let areas = cell_pair_areas(&mesh, &tet_cell);
-        let mean_area = areas.values().sum::<f64>() / areas.len().max(1) as f64;
-        let weight = move |a: u32, b: u32| -> f64 {
-            match mode.as_str() {
-                "sqrt_area" => (areas.get(&(a, b)).copied().unwrap_or(0.0) / mean_area).sqrt(),
-                _ => 1.0,
-            }
+        // geometric group weights (no material): "sqrt_area" (the library
+        // default, w_g = sqrt(A_g / mean A): penalty ∝ A_g·|jump|) or
+        // "uniform" (the spec's w_g = 1)
+        params.area_weighted = match inp.get("group_weight").map(|v| v.str()).transpose()? {
+            None | Some("sqrt_area") => true,
+            Some("uniform") => false,
+            Some(_) => return Err("group_weight must be \"uniform\" or \"sqrt_area\"".into()),
         };
-        if !matches!(inp.get("group_weight").map(|v| v.str()).transpose()?, None | Some("uniform") | Some("sqrt_area")) {
-            return Err("group_weight must be \"uniform\" or \"sqrt_area\"".into());
+        if let Some(Json::Bool(b)) = inp.get("params").and_then(|p| p.get("multi_start")) {
+            params.multi_start = *b;
         }
+        let weight = |_: u32, _: u32| 1.0;
 
         let discs: Vec<String> = match inp.get("discretizations") {
             Some(j) => j.arr()?.iter().map(|v| v.str().map(str::to_string)).collect::<Result<_, _>>()?,
-            None => vec!["full".into()],
+            None => vec!["cell-p0".into()],
         };
         let targets = match inp.get("level1_targets") {
             Some(j) => usize_list(j)?,
@@ -540,10 +504,8 @@ fn run() -> Result<(), String> {
         for (i, name) in discs.iter().enumerate() {
             let disc = match name.as_str() {
                 "full" => Discretization::Full,
-                // per-cell translations (the paper's §3.6 space); builds
-                // without degree-0 support clamp it to degree 1, which shows
-                // in `solver_used`
-                "cell-p0" => Discretization::CellPolynomial(0),
+                // per-cell translations (the paper's §3.6 model, library default)
+                "cell-p0" | "translational" => Discretization::CellPolynomial(0),
                 "cell-p1" => Discretization::CellPolynomial(1),
                 "cell-p2" => Discretization::CellPolynomial(2),
                 s => return Err(format!("unknown discretization '{s}'")),
