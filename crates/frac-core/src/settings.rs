@@ -201,6 +201,18 @@ pub struct CollisionSettings {
     pub min_rigid_size: f64,
     /// Levels that get collision hulls (empty = all).
     pub levels: Vec<u8>,
+    /// CoACD tree-search effort for cutting non-convex cells. Upstream
+    /// defaults are 150 iterations, depth 3, 20 planes per axis and 2000
+    /// samples per unit normalized area; the bake defaults (12 iterations,
+    /// depth 1) are ~20x cheaper with no measurable loss after merging (see
+    /// `crates/frac-collision/README.md`).
+    pub mcts_iterations: u32,
+    pub mcts_depth: u32,
+    pub mcts_nodes: u32,
+    pub resolution: u32,
+    /// Maximum vertices per convex hull (physics-engine limit); larger hulls
+    /// are reduced (inner approximation by a volume-greedy vertex subset).
+    pub max_hull_vertices: u32,
 }
 
 impl Default for CollisionSettings {
@@ -212,6 +224,11 @@ impl Default for CollisionSettings {
             margin: 0.0005,
             min_rigid_size: 0.01,
             levels: Vec::new(),
+            mcts_iterations: 12,
+            mcts_depth: 1,
+            mcts_nodes: 20,
+            resolution: 2000,
+            max_hull_vertices: 64,
         }
     }
 }

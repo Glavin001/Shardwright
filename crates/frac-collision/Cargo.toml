@@ -10,3 +10,10 @@ frac-core.workspace = true
 frac-geom.workspace = true
 glam.workspace = true
 rayon.workspace = true
+frac-cells.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+libm.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

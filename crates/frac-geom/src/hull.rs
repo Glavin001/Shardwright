@@ -88,14 +88,22 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
     // Quickhull with conflict (outside) sets; visibility by exact orient3d.
     struct Face {
         v: [usize; 3],
+        /// Unnormalized normal `(y-x)×(z-x)` and its length (cached).
+        n: DVec3,
+        l: f64,
         outside: Vec<usize>,
         alive: bool,
     }
-    let mut faces: Vec<Face> = [[a, b, c], [a, d, b], [b, d, c], [c, d, a]]
-        .iter()
-        .map(|&v| Face { v, outside: Vec::new(), alive: true })
-        .collect();
-    let mut edge_face: std::collections::HashMap<(usize, usize), usize> = std::collections::HashMap::new();
+    let mk = |v: [usize; 3]| -> Face {
+        let (x, y, z) = (points[v[0]], points[v[1]], points[v[2]]);
+        let n = (y - x).cross(z - x);
+        Face { v, n, l: n.length(), outside: Vec::new(), alive: true }
+    };
+    let mut faces: Vec<Face> = [[a, b, c], [a, d, b], [b, d, c], [c, d, a]].iter().map(|&v| mk(v)).collect();
+    let mut edge_face: std::collections::HashMap<(usize, usize), usize, EdgeHash> = std::collections::HashMap::with_capacity_and_hasher(4 * n.min(4096), EdgeHash);
+    // visited stamps per face (faces are only appended)
+    let mut stamp: Vec<u32> = Vec::new();
+    let mut round: u32 = 0;
     for (fi, f) in faces.iter().enumerate() {
         for k in 0..3 {
             edge_face.insert((f.v[k], f.v[(k + 1) % 3]), fi);
@@ -103,27 +111,22 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
     }
     let scale = crate::aabb::Aabb::from_points(points.iter()).diagonal().max(1e-300);
     let tol = 1e-11 * scale;
-    let sees = |f: &[usize; 3], q: usize| {
+    let sees = |f: &Face, q: usize| {
         if fast {
-            let (x, y, z) = (points[f[0]], points[f[1]], points[f[2]]);
-            let nrm = (y - x).cross(z - x);
-            let l = nrm.length();
-            l > 0.0 && nrm.dot(points[q] - x) > tol * l
+            f.l > 0.0 && f.n.dot(points[q] - points[f.v[0]]) > tol * f.l
         } else {
+            let f = &f.v;
             orient3d(&p(f[0]), &p(f[1]), &p(f[2]), &p(q)) > 0
         }
     };
-    let dist = |f: &[usize; 3], q: usize| -> f64 {
-        let (x, y, z) = (points[f[0]], points[f[1]], points[f[2]]);
-        (y - x).cross(z - x).dot(points[q] - x)
-    };
+    let dist = |f: &Face, q: usize| -> f64 { f.n.dot(points[q] - points[f.v[0]]) };
     let used = [a, b, c, d];
     for q in 0..n {
         if used.contains(&q) {
             continue;
         }
         for f in faces.iter_mut() {
-            if sees(&f.v, q) {
+            if sees(f, q) {
                 f.outside.push(q);
                 break;
             }
@@ -135,16 +138,13 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
             continue;
         }
         // farthest outside point (ties: smallest index)
-        let fv = faces[fi].v;
-        let apex = *faces[fi]
-            .outside
-            .iter()
-            .max_by(|&&x, &&y| dist(&fv, x).partial_cmp(&dist(&fv, y)).unwrap().then(y.cmp(&x)))
-            .unwrap();
+        let ff = &faces[fi];
+        let apex = *ff.outside.iter().max_by(|&&x, &&y| dist(ff, x).partial_cmp(&dist(ff, y)).unwrap().then(y.cmp(&x))).unwrap();
         // visible region (connected) by BFS over edge neighbors
         let mut visible = vec![fi];
-        let mut in_vis = std::collections::HashSet::new();
-        in_vis.insert(fi);
+        round += 1;
+        stamp.resize(faces.len(), 0);
+        stamp[fi] = round;
         let mut k = 0;
         while k < visible.len() {
             let f = visible[k];
@@ -152,8 +152,8 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
             let v = faces[f].v;
             for e in 0..3 {
                 if let Some(&g) = edge_face.get(&(v[(e + 1) % 3], v[e])) {
-                    if faces[g].alive && !in_vis.contains(&g) && sees(&faces[g].v, apex) {
-                        in_vis.insert(g);
+                    if faces[g].alive && stamp[g] != round && sees(&faces[g], apex) {
+                        stamp[g] = round;
                         visible.push(g);
                     }
                 }
@@ -166,7 +166,7 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
             for e in 0..3 {
                 let (u, w) = (v[e], v[(e + 1) % 3]);
                 let nb = edge_face.get(&(w, u)).copied();
-                if nb.map(|g| !in_vis.contains(&g)).unwrap_or(true) {
+                if nb.map(|g| stamp[g] != round).unwrap_or(true) {
                     horizon.push((u, w));
                 }
             }
@@ -188,7 +188,7 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
         let first_new = faces.len();
         for (u, w) in horizon {
             let fi2 = faces.len();
-            faces.push(Face { v: [u, w, apex], outside: Vec::new(), alive: true });
+            faces.push(mk([u, w, apex]));
             for (x, y) in [(u, w), (w, apex), (apex, u)] {
                 edge_face.insert((x, y), fi2);
             }
@@ -198,7 +198,7 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
                 continue;
             }
             for f2 in first_new..faces.len() {
-                if sees(&faces[f2].v, q) {
+                if sees(&faces[f2], q) {
                     faces[f2].outside.push(q);
                     break;
                 }
@@ -226,6 +226,31 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
     let verts = keys.iter().map(|&k| points[k]).collect();
     let tris = tris_idx.iter().map(|t| [remap[&t[0]], remap[&t[1]], remap[&t[2]]]).collect();
     Some(TriMesh { verts, tris })
+}
+
+/// Cheap deterministic hasher for vertex-index edge keys (lookups only;
+/// map iteration order is never used).
+#[derive(Clone, Copy, Default)]
+struct EdgeHash;
+impl std::hash::BuildHasher for EdgeHash {
+    type Hasher = EdgeHasher;
+    fn build_hasher(&self) -> EdgeHasher {
+        EdgeHasher(0)
+    }
+}
+struct EdgeHasher(u64);
+impl std::hash::Hasher for EdgeHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 = (self.0.rotate_left(5) ^ b as u64).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+        }
+    }
+    fn write_usize(&mut self, i: usize) {
+        self.0 = (self.0.rotate_left(5) ^ i as u64).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    }
 }
 
 /// Plane `n·x <= d` (n unit length) bounding a convex polytope.

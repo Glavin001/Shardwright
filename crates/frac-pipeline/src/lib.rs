@@ -298,14 +298,7 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
     }
     tick("bonds", &mut t, &mut timings);
     // ---- Stage 8: collision
-    let cp = frac_collision::CollisionParams {
-        concavity: settings.collision.concavity,
-        max_hulls: settings.collision.max_hulls_per_fragment as usize,
-        margin: settings.collision.margin,
-        min_rigid_size: settings.collision.min_rigid_size,
-        levels: settings.collision.levels.clone(),
-        max_split_depth: 3,
-    };
+    let cp = collision_params(settings);
     let (hulls, ranges) = frac_collision::build_hulls(&asset, &cp);
     asset.hulls = hulls;
     for (i, r) in ranges.into_iter().enumerate() {
@@ -367,4 +360,27 @@ fn rss_mb() -> f64 {
         .and_then(|x| x.split_whitespace().nth(1).and_then(|v| v.parse::<f64>().ok()))
         .map(|pages| pages * 4096.0 / 1048576.0)
         .unwrap_or(0.0)
+}
+
+pub use frac_collision;
+pub use frac_collision::{build_hulls, hull_polytope};
+
+/// Collision-stage parameters from the bake settings.
+pub fn collision_params(settings: &Settings) -> frac_collision::CollisionParams {
+    frac_collision::CollisionParams {
+        concavity: settings.collision.concavity,
+        max_hulls: settings.collision.max_hulls_per_fragment as usize,
+        margin: settings.collision.margin,
+        min_rigid_size: settings.collision.min_rigid_size,
+        levels: settings.collision.levels.clone(),
+        search: frac_collision::SearchEffort {
+            mcts_iterations: settings.collision.mcts_iterations,
+            mcts_depth: settings.collision.mcts_depth,
+            mcts_nodes: settings.collision.mcts_nodes,
+            resolution: settings.collision.resolution,
+        },
+        max_hull_vertices: settings.collision.max_hull_vertices as usize,
+        seed: settings.seed,
+        ..Default::default()
+    }
 }
