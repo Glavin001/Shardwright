@@ -894,15 +894,24 @@ pub fn h_cost(part: &Solid, ch: &Ch, p: &CoacdParams, cap: f64) -> f64 {
 /// (every `tris/R'`-th triangle when there are more triangles than `R'`),
 /// uniform barycentric samples with the sqrt warp.
 fn upstream_samples(m: &TriMesh, resolution: u32, rng: &mut ChaCha8Rng) -> (Vec<DVec3>, Vec<u32>) {
+    upstream_samples_f(m, resolution as f64, rng, &|_| true)
+}
+
+/// [`upstream_samples`] with a fractional resolution and a triangle filter
+/// (upstream skips the triangles on the two hulls' common face).
+fn upstream_samples_f(m: &TriMesh, resolution: f64, rng: &mut ChaCha8Rng, keep: &dyn Fn(usize) -> bool) -> (Vec<DVec3>, Vec<u32>) {
     use rand::Rng;
     let a_obj: f64 = (0..m.tris.len()).map(|t| {
         let [a, b, c] = m.tri_points(t);
         0.5 * (b - a).cross(c - a).length()
     }).sum();
-    let r = (1000.0f64).max(resolution as f64 * a_obj);
+    let r = (1000.0f64).max(resolution * a_obj);
     let nt = m.tris.len();
     let (mut pts, mut ids) = (Vec::new(), Vec::new());
     for t in 0..nt {
+        if !keep(t) {
+            continue;
+        }
         let [a, b, c] = m.tri_points(t);
         let area = 0.5 * (b - a).cross(c - a).length();
         let every = if (nt as f64) > r { (nt as f64 / r).floor().max(1.0) as usize } else { 2 };
@@ -948,14 +957,20 @@ pub fn hb_upstream(a: &TriMesh, b: &TriMesh, resolution: u32, seed: u64) -> f64 
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let (sa, ia) = upstream_samples(a, resolution, &mut rng);
     let (sb, ib) = upstream_samples(b, resolution, &mut rng);
+    face_hausdorff(a, &sa, &ia, b, &sb, &ib)
+}
+
+/// Upstream `face_hausdorff_distance`: for every sample, the distance to the
+/// triangles of its 10 nearest samples on the other surface; the maximum.
+fn face_hausdorff(a: &TriMesh, sa: &[DVec3], ia: &[u32], b: &TriMesh, sb: &[DVec3], ib: &[u32]) -> f64 {
     if sa.is_empty() || sb.is_empty() {
         return f64::INFINITY;
     }
     let tree = |s: &[DVec3]| frac_geom::bvh::Bvh::build(&s.iter().map(|&q| Aabb::from_points([&q])).collect::<Vec<_>>());
-    let (ta, tb) = (tree(&sa), tree(&sb));
+    let (ta, tb) = (tree(sa), tree(sb));
     let mut cmax: f64 = 0.0;
     let mut nn = Vec::new();
-    for (from, (tree_to, samples_to, ids_to, mesh_to)) in [(&sb, (&ta, &sa, &ia, a)), (&sa, (&tb, &sb, &ib, b))] {
+    for (from, (tree_to, samples_to, ids_to, mesh_to)) in [(sb, (&ta, sa, ia, a)), (sa, (&tb, sb, ib, b))] {
         for &x in from.iter() {
             knn10(tree_to, samples_to, x, &mut nn);
             let mut cmin = f64::INFINITY;
@@ -1352,62 +1367,36 @@ pub fn cut(input: Solid, p: &CoacdParams) -> Vec<CutPart> {
 /// on their common face, found like `ComputeOverlapFace`) and the merged
 /// hull's surface; 0 when every input vertex is a vertex of `CH`. Distances
 /// are exact (upstream: 10-nearest-sample triangles).
-fn upstream_merge_cost(a: &Piece, b: &Piece, ch: &Ch, k: f64, resolution: f64) -> f64 {
+fn upstream_merge_cost(a: &Piece, b: &Piece, ch: &Ch, k: f64, resolution: f64, seed: u64) -> f64 {
     let r = rv(a.hull_volume() + b.hull_volume(), ch.volume, k);
     if a.pts.len() + b.pts.len() == ch.pts.len() {
         return r;
     }
-    // common face: a face plane of `a` with `b` entirely on its other side
-    let tol = 1e-3;
+    // common face (`ComputeOverlapFace`): a face plane of `a` with `b` on
+    // its other side; triangles on it (within 1e-3) are not sampled
     let overlap = a.poly.faces.iter().map(|(h, _)| *h).find(|h| b.pts.iter().all(|q| h.dist(*q) >= -1e-8));
-    let (ma, mb) = (a.poly.to_mesh(), b.poly.to_mesh());
-    // upstream sample counts: max(1000, resolution × area) per surface
-    let a_in = ma.area() + mb.area();
-    let density = resolution.max(1000.0 / a_in.max(1e-300));
-    let a_ch = ch.poly.to_mesh().area();
-    let density_ch = resolution.max(1000.0 / a_ch.max(1e-300));
-    let mut src = TriMesh::default();
-    let mut samples = Vec::new();
-    for m in [&ma, &mb] {
-        for t in 0..m.tris.len() {
-            let [p, q, w] = m.tri_points(t);
-            if let Some(h) = overlap {
-                if [p, q, w].iter().all(|x| h.dist(*x).abs() <= tol) {
-                    continue;
-                }
-            }
-            let ar = 0.5 * (q - p).cross(w - p).length();
-            tri_samples(p, q, w, ((ar * density) as usize).max(1), &mut samples);
-            let base = src.verts.len() as u32;
-            src.verts.extend([p, q, w]);
-            src.tris.push([base, base + 1, base + 2]);
+    let mut src = a.poly.to_mesh();
+    let na = src.tris.len();
+    src.append(&b.poly.to_mesh());
+    let (aa, ab) = (src.submesh_area(0..na), src.submesh_area(na..src.tris.len()));
+    let keep = |t: usize| -> bool {
+        match overlap {
+            Some(h) => !src.tri_points(t).iter().all(|x| h.dist(*x).abs() <= 1e-3),
+            None => true,
         }
+    };
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    // per hull: resolution split by area (upstream ExtractPointSet(cvx1, cvx2))
+    let (mut sa, mut ia) = (Vec::new(), Vec::new());
+    for (range, area) in [(0..na, aa), (na..src.tris.len(), ab)] {
+        let sub = TriMesh { verts: src.verts.clone(), tris: src.tris[range.clone()].to_vec() };
+        let (p, i) = upstream_samples_f(&sub, resolution * area / (aa + ab).max(1e-300), &mut rng, &|t| keep(t + range.start));
+        sa.extend(p);
+        ia.extend(i.into_iter().map(|t| t + range.start as u32));
     }
-    if src.tris.is_empty() {
-        return r;
-    }
-    // input-hull samples -> merged hull boundary (inside it: exact depth)
-    let mut hb: f64 = 0.0;
-    for &x in &samples {
-        hb = hb.max(inside_depth(&ch.poly, x).max(0.0));
-    }
-    // merged-hull samples -> input hull surfaces
-    let q = MeshQuery::new(&src);
-    let mut cs = Vec::new();
-    for (_, f) in &ch.poly.faces {
-        for i in 1..f.len().saturating_sub(1) {
-            let (p, qq, w) = (f[0], f[i], f[i + 1]);
-            let ar = 0.5 * (qq - p).cross(w - p).length();
-            cs.clear();
-            tri_samples(p, qq, w, ((ar * density_ch) as usize).max(1), &mut cs);
-            for &x in &cs {
-                if let Some((_, d2)) = farther_than(&q, x, hb) {
-                    hb = hb.max(d2.sqrt());
-                }
-            }
-        }
-    }
-    r.max(hb)
+    let chm = ch.poly.to_mesh();
+    let (sb, ib) = upstream_samples_f(&chm, resolution, &mut rng, &|_| true);
+    r.max(face_hausdorff(&src, &sa, &ia, &chm, &sb, &ib))
 }
 
 /// Branch-and-bound triangle ordered by its upper bound.
@@ -1477,6 +1466,8 @@ pub struct MergeCtx<'a> {
     /// resolution (samples per unit area, at least 1000 per surface);
     /// `None`: collision-aware cost.
     pub upstream_density: Option<f64>,
+    /// Seed of the upstream-style samples.
+    pub seed: u64,
 }
 
 /// A convex piece of foreign geometry (with its volume scale: true volume /
@@ -1645,7 +1636,7 @@ impl MergeCtx<'_> {
         T_HULLC.fetch_add(t0.elapsed().as_nanos() as u64, AO::Relaxed);
         if let Some(density) = self.upstream_density {
             // exact in this mode: stage 2 returns it unchanged
-            return Some((upstream_merge_cost(a, b, &ch, self.rv_k, density), ch));
+            return Some((upstream_merge_cost(a, b, &ch, self.rv_k, density, self.seed), ch));
         }
         let base = a.own.max(b.own);
         let r = rv(a.vol + b.vol, ch.volume, self.rv_k);
@@ -1999,7 +1990,7 @@ pub fn decompose_detailed(mesh: &TriMesh, p: &CoacdParams) -> Vec<(ConvexPolytop
         MergeCost::Upstream => Some((p.resolution + 2000) as f64),
         MergeCost::CollisionAware => None,
     };
-    let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: 1.0 / (p.resolution.max(1) as f64).sqrt(), rv_k: p.rv_k, max_tri_samples: 4096, foreign: Vec::new(), intrusion_k: 0.0, upstream_density };
+    let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: 1.0 / (p.resolution.max(1) as f64).sqrt(), rv_k: p.rv_k, max_tri_samples: 4096, foreign: Vec::new(), intrusion_k: 0.0, upstream_density, seed: p.seed };
     // upstream: only hulls closer than 0.01 (normalized vertex distance)
     let adjacent = |a: &Piece, b: &Piece| -> bool {
         if !a.bbox.expanded(0.01).overlaps(&b.bbox) {
