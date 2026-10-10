@@ -317,7 +317,7 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
 
 /// Patches whose displaced triangles take part in a self-intersection of
 /// some cell's render mesh (exact test, zero-area triangles ignored).
-fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface]) -> (Vec<usize>, Vec<u32>) {
+fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface]) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
     let g = &comp.geometry;
     let mut per_cell: BTreeMap<CellId, (Vec<usize>, Vec<(usize, bool)>)> = BTreeMap::new();
     for (i, e) in g.ext_polys.iter().enumerate() {
@@ -327,9 +327,42 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
         per_cell.entry(pt.cells.0).or_default().1.push((pi, false));
         per_cell.entry(pt.cells.1).or_default().1.push((pi, true));
     }
-    let bad: Vec<(Vec<usize>, Vec<u32>)> = per_cell
+    let parts: Vec<(Vec<usize>, Vec<(usize, bool)>)> = per_cell.into_values().collect();
+    offending_in(g, verts, surfaces, &parts)
+}
+
+/// Offending patches / exterior vertices of multi-cell fragments: the
+/// fragment's render mesh holds displaced patches of different cells that
+/// no single-cell check sees together.
+fn offending_fragments(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface], sets: &[std::collections::BTreeSet<CellId>]) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
+    let g = &comp.geometry;
+    let parts: Vec<(Vec<usize>, Vec<(usize, bool)>)> = sets
+        .iter()
+        .map(|set| {
+            let exts = g.ext_polys.iter().enumerate().filter(|(_, e)| set.contains(&e.cell)).map(|(i, _)| i).collect();
+            let pats = g
+                .patches
+                .iter()
+                .enumerate()
+                .filter_map(|(pi, pt)| {
+                    let (a, b) = (set.contains(&pt.cells.0), set.contains(&pt.cells.1));
+                    (a != b).then_some((pi, b))
+                })
+                .collect();
+            (exts, pats)
+        })
+        .collect();
+    offending_in(g, verts, surfaces, &parts)
+}
+
+/// Exact self-intersection check of closed surface parts (exterior polygons
+/// plus oriented patches); returns the patches and exterior vertices of
+/// intersecting triangle pairs.
+fn offending_in(g: &ComponentGeometry, verts: &[DVec3], surfaces: &[PatchSurface], parts: &[(Vec<usize>, Vec<(usize, bool)>)]) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
+    #[allow(clippy::type_complexity)]
+    let bad: Vec<(Vec<usize>, Vec<u32>, Vec<u32>)> = parts
         .par_iter()
-        .map(|(_, (exts, pats))| {
+        .map(|(exts, pats)| {
             let mut m = TriMesh::default();
             let mut tag: Vec<Option<usize>> = Vec::new();
             let mut ext_of: Vec<Option<usize>> = Vec::new();
@@ -370,6 +403,7 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
             let wm = TriMesh { verts: nv, tris };
             let mut out = Vec::new();
             let mut ev = Vec::new();
+            let mut pv = Vec::new();
             for (a, b) in wm.self_intersections(usize::MAX) {
                 if wm.is_degenerate(a as usize) || wm.is_degenerate(b as usize) {
                     continue;
@@ -377,22 +411,28 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
                 for t in [a, b] {
                     if let Some(pi) = tag[t as usize] {
                         out.push(pi);
+                        // chipped exterior vertices on the patch boundary
+                        // also deform the patch (fold next to the chip)
+                        pv.extend(g.patches[pi].loops.iter().flatten().copied());
                     }
                     if let Some(ei) = ext_of[t as usize] {
                         ev.extend(g.ext_polys[ei].verts.iter().copied());
                     }
                 }
             }
-            (out, ev)
+            (out, ev, pv)
         })
         .collect();
     let mut v: Vec<usize> = bad.iter().flat_map(|b| b.0.iter().copied()).collect();
     v.sort_unstable();
     v.dedup();
-    let mut ev: Vec<u32> = bad.into_iter().flat_map(|b| b.1).collect();
+    let mut ev: Vec<u32> = bad.iter().flat_map(|b| b.1.iter().copied()).collect();
     ev.sort_unstable();
     ev.dedup();
-    (v, ev)
+    let mut pv: Vec<u32> = bad.into_iter().flat_map(|b| b.2).collect();
+    pv.sort_unstable();
+    pv.dedup();
+    (v, ev, pv)
 }
 
 /// Interior dihedral angles (cell A side, cell B side) at every boundary
@@ -694,14 +734,47 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
             // Guarantee validity: exact self-intersection check per cell;
             // halve the noise of offending patches (flat on late rounds) and
             // undo chipping on offending exterior vertices.
-            for round in 0..5 {
-                let (bad, bad_verts) = offending_patches(comp, &verts, &surfaces);
+            for round in 0..6 {
+                let (bad, mut bad_verts, patch_verts) = offending_patches(comp, &verts, &surfaces);
                 if bad.is_empty() && bad_verts.is_empty() {
                     break;
+                }
+                if round >= 1 {
+                    bad_verts.extend(patch_verts);
                 }
                 let mut rebuild: std::collections::BTreeSet<usize> = bad.iter().copied().collect();
                 for &pi in &bad {
                     scale[pi] = if round >= 2 { 0.0 } else { scale[pi] * 0.5 };
+                }
+                for v in bad_verts {
+                    if verts[v as usize] != comp.geometry.verts[v as usize] {
+                        verts[v as usize] = comp.geometry.verts[v as usize];
+                        rebuild.extend(vpatches.get(&v).into_iter().flatten().copied());
+                    }
+                }
+                for pi in rebuild {
+                    surfaces[pi] = make(&verts, pi, scale[pi]);
+                }
+            }
+            // the same guarantee for every multi-cell fragment (coarser levels)
+            let sets: Vec<std::collections::BTreeSet<CellId>> = asset
+                .hierarchy
+                .fragments
+                .iter()
+                .filter(|f| f.component == comp.id && f.cells.len() > 1)
+                .map(|f| asset.fragment_cells(f).iter().copied().collect())
+                .collect();
+            for round in 0..6 {
+                let (bad, mut bad_verts, patch_verts) = offending_fragments(comp, &verts, &surfaces, &sets);
+                if bad.is_empty() && bad_verts.is_empty() {
+                    break;
+                }
+                if round >= 1 {
+                    bad_verts.extend(patch_verts);
+                }
+                let mut rebuild: std::collections::BTreeSet<usize> = bad.iter().copied().collect();
+                for &pi in &bad {
+                    scale[pi] = if round >= 1 { 0.0 } else { scale[pi] * 0.5 };
                 }
                 for v in bad_verts {
                     if verts[v as usize] != comp.geometry.verts[v as usize] {

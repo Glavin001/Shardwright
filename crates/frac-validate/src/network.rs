@@ -840,8 +840,11 @@ impl<'a> BondNetworkSolver for ReferenceSolver<'a> {
         let centers = self.centers(asset, level);
         let (k, dim, _) = self.assemble(asset, level, &centers, false);
         let m = self.mass_matrix(asset, level);
-        if dim == 0 || dim > 6000 {
+        if dim == 0 {
             return Vec::new();
+        }
+        if dim > 3000 {
+            return modal_subspace(&k, &m, dim, nmodes);
         }
         // generalized symmetric eigenproblem via Cholesky of M: L^-1 K L^-T
         let mm = Mat::<f64>::from_fn(dim, dim, |i, j| m[i * dim + j]);
@@ -858,4 +861,50 @@ impl<'a> BondNetworkSolver for ReferenceSolver<'a> {
         let tol = w.last().cloned().unwrap_or(0.0).abs() * 1e-10;
         w.into_iter().filter(|&x| x > tol).take(nmodes).map(|x| x.sqrt() / std::f64::consts::TAU).collect()
     }
+}
+
+/// Lowest `nmodes` natural frequencies of `K x = λ M x` by block inverse
+/// (subspace) iteration with Rayleigh–Ritz, for systems too large for a
+/// dense eigendecomposition. `K` is factored once (Cholesky, with a tiny
+/// mass shift so free-floating systems factor too); modes with
+/// `λ ≤ 1e-8 · tr K / tr M` (rigid motions) are dropped.
+fn modal_subspace(k: &[f64], m: &[f64], dim: usize, nmodes: usize) -> Vec<f64> {
+    use faer::Mat;
+    let km = Mat::<f64>::from_fn(dim, dim, |i, j| k[i * dim + j]);
+    let mm = Mat::<f64>::from_fn(dim, dim, |i, j| m[i * dim + j]);
+    let scale = (0..dim).map(|i| k[i * dim + i]).sum::<f64>() / (0..dim).map(|i| m[i * dim + i]).sum::<f64>().max(1e-300);
+    let shift = 1e-8 * scale;
+    let ks = Mat::<f64>::from_fn(dim, dim, |i, j| k[i * dim + j] + shift * m[i * dim + j]);
+    let Ok(llt) = ks.llt(faer::Side::Lower) else { return Vec::new() };
+    let b = (2 * nmodes + 8).min(dim);
+    // deterministic start block
+    let mut x = Mat::<f64>::from_fn(dim, b, |i, j| (((i * 7919 + j * 104_729 + 13) % 1009) as f64 / 1009.0) - 0.5);
+    let mut prev: Vec<f64> = Vec::new();
+    let mut lam: Vec<f64> = Vec::new();
+    for _ in 0..200 {
+        let y = llt.solve(&mm * &x);
+        let kr = y.transpose() * &km * &y;
+        let mr = y.transpose() * &mm * &y;
+        // small generalized problem kr q = λ mr q via Cholesky of mr
+        let mr = Mat::<f64>::from_fn(b, b, |i, j| 0.5 * (mr[(i, j)] + mr[(j, i)]));
+        let Ok(lr) = mr.llt(faer::Side::Lower) else { return Vec::new() };
+        let linv = lr.L().to_owned().as_ref().partial_piv_lu().inverse();
+        let a = &linv * &kr * linv.transpose();
+        let a = Mat::<f64>::from_fn(b, b, |i, j| 0.5 * (a[(i, j)] + a[(j, i)]));
+        let Ok(evd) = a.self_adjoint_eigen(faer::Side::Lower) else { return Vec::new() };
+        let mut order: Vec<usize> = (0..b).collect();
+        let sv = evd.S();
+        order.sort_by(|&p, &q| sv[p].partial_cmp(&sv[q]).unwrap());
+        let q = linv.transpose() * evd.U();
+        let qs = Mat::<f64>::from_fn(b, b, |i, j| q[(i, order[j])]);
+        x = &y * &qs;
+        lam = order.iter().map(|&o| sv[o]).collect();
+        let conv = prev.len() == lam.len() && (0..nmodes.min(b)).all(|i| (lam[i] - prev[i]).abs() <= 1e-10 * lam[i].abs().max(1e-300));
+        prev = lam.clone();
+        if conv {
+            break;
+        }
+    }
+    let tol = 1e-8 * scale;
+    lam.into_iter().filter(|&l| l > tol).take(nmodes).map(|l| l.sqrt() / std::f64::consts::TAU).collect()
 }
