@@ -16,5 +16,6 @@ glam.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rayon.workspace = true
+blake3.workspace = true
 faer.workspace = true
 libm.workspace = true

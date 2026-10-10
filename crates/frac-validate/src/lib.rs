@@ -63,5 +63,6 @@ pub fn validate(asset: &Asset, render: &RenderOut, lib: &MaterialLibrary, vs: &V
     let mut gates = gates::run_gates(asset, render, vs, physics);
     gates.sort_by_key(|g| gates::order(&g.name));
     let metrics = metrics::compute(asset, render, lib);
+    gates::log_step("metrics");
     Scorecard { gates, metrics }
 }

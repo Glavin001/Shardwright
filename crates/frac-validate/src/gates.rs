@@ -28,7 +28,31 @@ pub fn order(n: &str) -> usize {
     NAMES.iter().position(|x| *x == n).unwrap_or(99)
 }
 
+static STEP: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+/// `FRAC_LOG` progress line: time since the previous step and current RSS.
+pub(crate) fn log_step(name: &str) {
+    if std::env::var_os("FRAC_LOG").is_none() {
+        return;
+    }
+    let mut last = STEP.lock().unwrap();
+    let now = std::time::Instant::now();
+    let dt = last.map(|t| now.duration_since(t).as_secs_f64()).unwrap_or(0.0);
+    *last = Some(now);
+    let rss = std::fs::read_to_string("/proc/self/statm")
+        .ok()
+        .and_then(|x| x.split_whitespace().nth(1).and_then(|v| v.parse::<f64>().ok()))
+        .map(|p| p * 4096.0 / 1048576.0)
+        .unwrap_or(0.0);
+    eprintln!("    [validate] {name}: {dt:.1} s, rss {rss:.0} MB");
+}
+
+pub(crate) fn reset_steps() {
+    *STEP.lock().unwrap() = Some(std::time::Instant::now());
+}
+
 fn gate(name: &str, ok: bool, value: f64, threshold: f64, detail: String) -> GateResult {
+    log_step(name);
     GateResult { name: name.into(), status: if ok { GateStatus::Pass } else { GateStatus::Fail }, value, threshold, detail }
 }
 
@@ -51,6 +75,7 @@ pub fn mesh_validity(m: &TriMesh) -> (bool, String) {
 }
 
 pub fn run_gates(asset: &Asset, render: &RenderOut, vs: &ValidationSettings, physics: &[u8]) -> Vec<GateResult> {
+    reset_steps();
     let mut out = Vec::new();
     let h = &asset.hierarchy;
     let nl = h.levels as usize;
@@ -127,38 +152,60 @@ pub fn run_gates(asset: &Asset, render: &RenderOut, vs: &ValidationSettings, phy
         GateResult { name: "no_overlap_hulls".into(), status: GateStatus::NotEvaluated, value: 0.0, threshold: 1e-9, detail: "no hulls".into() }
     });
 
-    // ---- no gaps (render): interior triangles appear exactly twice with opposite winding
+    // ---- no gaps (render): interior triangles appear exactly twice with opposite winding.
+    // Triangles are identified by a 128-bit BLAKE3 fingerprint of their exact
+    // vertex bits (rotation-canonical), kept in sorted vectors: ~16 bytes per
+    // triangle instead of a map of 72-byte keys (building-scale assets have
+    // tens of millions of leaf triangles).
     let leaf = nl - 1;
-    let mut cnt: BTreeMap<[[u64; 3]; 3], i32> = BTreeMap::new();
-    let mut interior: Vec<[[u64; 3]; 3]> = Vec::new();
     let key = |p: DVec3| [p.x.to_bits(), p.y.to_bits(), p.z.to_bits()];
-    let canon = |t: [[u64; 3]; 3]| {
+    let fp = |t: [[u64; 3]; 3]| -> u128 {
         let r = [t, [t[1], t[2], t[0]], [t[2], t[0], t[1]]];
-        *r.iter().min().unwrap()
-    };
-    for f in asset.level_fragments(leaf as u8) {
-        let m = &render.fragments[f.id.idx()][0];
-        for (idx, is_int) in [(&m.ext_indices, false), (&m.int_indices, true)] {
-            for t in idx.chunks(3) {
-                let k = canon([key(m.positions[t[0] as usize]), key(m.positions[t[1] as usize]), key(m.positions[t[2] as usize])]);
-                *cnt.entry(k).or_default() += 1;
-                if is_int {
-                    interior.push(k);
-                }
+        let c = r.iter().min().unwrap();
+        let mut h = blake3::Hasher::new();
+        for v in c {
+            for x in v {
+                h.update(&x.to_le_bytes());
             }
         }
+        u128::from_le_bytes(h.finalize().as_bytes()[..16].try_into().unwrap())
+    };
+    let per_frag: Vec<(Vec<u128>, Vec<(u128, u128)>)> = asset
+        .level_fragments(leaf as u8)
+        .par_iter()
+        .map(|f| {
+            let m = &render.fragments[f.id.idx()][0];
+            let mut all = Vec::with_capacity((m.ext_indices.len() + m.int_indices.len()) / 3);
+            let mut int = Vec::with_capacity(m.int_indices.len() / 3);
+            for (idx, is_int) in [(&m.ext_indices, false), (&m.int_indices, true)] {
+                for t in idx.chunks(3) {
+                    let k = [key(m.positions[t[0] as usize]), key(m.positions[t[1] as usize]), key(m.positions[t[2] as usize])];
+                    let h = fp(k);
+                    all.push(h);
+                    if is_int {
+                        int.push((h, fp([k[0], k[2], k[1]])));
+                    }
+                }
+            }
+            (all, int)
+        })
+        .collect();
+    let mut all: Vec<u128> = Vec::with_capacity(per_frag.iter().map(|x| x.0.len()).sum());
+    let mut interior: Vec<(u128, u128)> = Vec::with_capacity(per_frag.iter().map(|x| x.1.len()).sum());
+    for (a, i) in per_frag {
+        all.extend(a);
+        interior.extend(i);
     }
-    let mut unmatched = 0usize;
-    let mut dup = 0usize;
-    for k in &interior {
-        let rev = canon([k[0], k[2], k[1]]);
-        if cnt.get(&rev).copied().unwrap_or(0) != 1 {
-            unmatched += 1;
-        }
-        if cnt[k] != 1 {
-            dup += 1;
-        }
-    }
+    all.par_sort_unstable();
+    let count = |h: u128| -> usize {
+        let lo = all.partition_point(|&x| x < h);
+        let hi = all.partition_point(|&x| x <= h);
+        hi - lo
+    };
+    let (unmatched, dup) = interior
+        .par_iter()
+        .map(|&(h, rev)| ((count(rev) != 1) as usize, (count(h) != 1) as usize))
+        .reduce(|| (0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
     out.push(gate("no_gaps_render", unmatched == 0 && dup == 0, (unmatched + dup) as f64, 0.0, format!("{} interior triangles at leaf level, {unmatched} unmatched, {dup} duplicated", interior.len())));
 
     // ---- bond coverage: each interface in exactly one bond per level, or internal
