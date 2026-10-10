@@ -35,6 +35,29 @@ provide.
    sequential one. Hulls are then shrunk by `margin`.
 4. Particle candidates keep a single hull.
 
+### Fast path (no decomposition for convex shapes)
+
+A solid is treated as **convex** when the volume of its convex hull exceeds
+its exact volume by at most a relative `CONVEX_TOL = 1e-6` (cell volumes
+are exact polyhedral integrals; the hull is the floating-point Quickhull of
+the cell vertices). Convex leaf cells become atoms directly (no tree search),
+and any fragment that is convex as a whole (or a particle candidate) gets
+its single hull without merging. Only non-convex cells are cut and only
+non-convex fragments are merged. `FRAC_PROFILE=1` prints, per level, how
+many fragments take the fast path vs decomposition (see the table below).
+
+### Hull vertex cap (`collision.max_hull_vertices`, default 64)
+
+Every output hull has at most 64 vertices (physics-engine limit). A hull
+over the limit is replaced by the hull of a vertex subset grown greedily
+from its axis-extreme vertices, always adding the vertex farthest outside
+the current hull (a budgeted Quickhull: most volume per vertex). This is an
+inner approximation — it adds no overshoot and preserves separations — and
+is applied before the non-overlap cuts and again after the cuts and the
+margin shrink (plane clipping adds vertices). Measured effect at equal
+budget (L1): bowl Hausdorff 0.0271/0.0326 → 0.0266/0.0325, messy_scan
+0.0889/0.1186 → 0.0886/0.1192 (median/p95), coverage within 0.001.
+
 ## Merge cost (collision-aware)
 
 For two pieces `a, b` with merged hull `H` (all in world units, compared

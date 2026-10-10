@@ -100,6 +100,20 @@ pub struct CoacdParams {
     pub max_convex_hull: Option<usize>,
     /// Safety bound on the number of parts produced by cutting.
     pub max_parts: usize,
+    /// Merge cost: upstream CoACD 1.0.x hull-vs-hull `ComputeHCost(cvx1,
+    /// cvx2, CH)` (faithful baseline) or the collision-aware cost measured
+    /// against the original geometry.
+    pub merge_cost: MergeCost,
+}
+
+/// Merge cost of [`decompose`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MergeCost {
+    /// `max(Rv(cvx1 + cvx2 vs CH), Hb(cvx1 ∪ cvx2 surface minus their
+    /// common face, CH))` with `resolution + 2000` samples, as upstream 1.0.x.
+    Upstream,
+    /// Collision-aware cost against the input surface (pipeline default).
+    CollisionAware,
 }
 
 impl Default for CoacdParams {
@@ -115,6 +129,7 @@ impl Default for CoacdParams {
             merge: true,
             max_convex_hull: None,
             max_parts: 1024,
+            merge_cost: MergeCost::Upstream,
         }
     }
 }
@@ -1189,6 +1204,70 @@ pub fn cut(input: Solid, p: &CoacdParams) -> Vec<CutPart> {
 // ---------------------------------------------------------------------------
 // Merging (upstream `MergeConvexHulls`, collision-aware cost)
 
+/// Upstream 1.0.x merge cost `ComputeHCost(cvx1, cvx2, CH)`:
+/// `max(k·∛(3|V1 + V2 − V_CH|/4π), Hb)` where `Hb` is the symmetric
+/// distance between samples of the two hull surfaces (without the triangles
+/// on their common face, found like `ComputeOverlapFace`) and the merged
+/// hull's surface; 0 when every input vertex is a vertex of `CH`. Distances
+/// are exact (upstream: 10-nearest-sample triangles).
+fn upstream_merge_cost(a: &Piece, b: &Piece, ch: &Ch, k: f64, resolution: f64) -> f64 {
+    let r = rv(a.hull_volume() + b.hull_volume(), ch.volume, k);
+    if a.pts.len() + b.pts.len() == ch.pts.len() {
+        return r;
+    }
+    // common face: a face plane of `a` with `b` entirely on its other side
+    let tol = 1e-3;
+    let overlap = a.poly.faces.iter().map(|(h, _)| *h).find(|h| b.pts.iter().all(|q| h.dist(*q) >= -1e-8));
+    let (ma, mb) = (a.poly.to_mesh(), b.poly.to_mesh());
+    // upstream sample counts: max(1000, resolution × area) per surface
+    let a_in = ma.area() + mb.area();
+    let density = resolution.max(1000.0 / a_in.max(1e-300));
+    let a_ch = ch.poly.to_mesh().area();
+    let density_ch = resolution.max(1000.0 / a_ch.max(1e-300));
+    let mut src = TriMesh::default();
+    let mut samples = Vec::new();
+    for m in [&ma, &mb] {
+        for t in 0..m.tris.len() {
+            let [p, q, w] = m.tri_points(t);
+            if let Some(h) = overlap {
+                if [p, q, w].iter().all(|x| h.dist(*x).abs() <= tol) {
+                    continue;
+                }
+            }
+            let ar = 0.5 * (q - p).cross(w - p).length();
+            tri_samples(p, q, w, ((ar * density) as usize).max(1), &mut samples);
+            let base = src.verts.len() as u32;
+            src.verts.extend([p, q, w]);
+            src.tris.push([base, base + 1, base + 2]);
+        }
+    }
+    if src.tris.is_empty() {
+        return r;
+    }
+    // input-hull samples -> merged hull boundary (inside it: exact depth)
+    let mut hb: f64 = 0.0;
+    for &x in &samples {
+        hb = hb.max(inside_depth(&ch.poly, x).max(0.0));
+    }
+    // merged-hull samples -> input hull surfaces
+    let q = MeshQuery::new(&src);
+    let mut cs = Vec::new();
+    for (_, f) in &ch.poly.faces {
+        for i in 1..f.len().saturating_sub(1) {
+            let (p, qq, w) = (f[0], f[i], f[i + 1]);
+            let ar = 0.5 * (qq - p).cross(w - p).length();
+            cs.clear();
+            tri_samples(p, qq, w, ((ar * density_ch) as usize).max(1), &mut cs);
+            for &x in &cs {
+                if let Some((_, d2)) = farther_than(&q, x, hb) {
+                    hb = hb.max(d2.sqrt());
+                }
+            }
+        }
+    }
+    r.max(hb)
+}
+
 /// Branch-and-bound triangle ordered by its upper bound.
 struct BbTri {
     ub: f64,
@@ -1252,6 +1331,10 @@ pub struct MergeCtx<'a> {
     /// covered volume `V` adds `intrusion_k·∛(3V/4π)` to the merge cost.
     pub foreign: Vec<Foreign<'a>>,
     pub intrusion_k: f64,
+    /// Upstream 1.0.x hull-vs-hull merge cost with this sampling
+    /// resolution (samples per unit area, at least 1000 per surface);
+    /// `None`: collision-aware cost.
+    pub upstream_density: Option<f64>,
 }
 
 /// A convex piece of foreign geometry (with its volume scale: true volume /
@@ -1418,6 +1501,10 @@ impl MergeCtx<'_> {
         pts.extend_from_slice(&b.pts);
         let ch = hull_tri(&pts)?;
         T_HULLC.fetch_add(t0.elapsed().as_nanos() as u64, AO::Relaxed);
+        if let Some(density) = self.upstream_density {
+            // exact in this mode: stage 2 returns it unchanged
+            return Some((upstream_merge_cost(a, b, &ch, self.rv_k, density), ch));
+        }
         let base = a.own.max(b.own);
         let r = rv(a.vol + b.vol, ch.volume, self.rv_k);
         let i = Self::in_term(&ch.poly, &[&a.samples, &b.samples]);
@@ -1428,6 +1515,9 @@ impl MergeCtx<'_> {
     /// Exact merge cost given the stage-1 bound (stops above `cap`, then
     /// returning a lower bound above `cap`).
     pub fn stage2(&self, a: &Piece, b: &Piece, ch: &Ch, c1: f64, cap: f64) -> f64 {
+        if self.upstream_density.is_some() {
+            return c1;
+        }
         let t2 = std::time::Instant::now();
         let mut c = c1;
         if self.intrusion_k > 0.0 && !self.foreign.is_empty() {
@@ -1744,7 +1834,11 @@ pub fn decompose_detailed(mesh: &TriMesh, p: &CoacdParams) -> Vec<(ConvexPolytop
         })
         .collect();
     let signer = Signer::new(&nm);
-    let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: 1.0 / (p.resolution.max(1) as f64).sqrt(), rv_k: p.rv_k, max_tri_samples: 4096, foreign: Vec::new(), intrusion_k: 0.0 };
+    let upstream_density = match p.merge_cost {
+        MergeCost::Upstream => Some((p.resolution + 2000) as f64),
+        MergeCost::CollisionAware => None,
+    };
+    let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: 1.0 / (p.resolution.max(1) as f64).sqrt(), rv_k: p.rv_k, max_tri_samples: 4096, foreign: Vec::new(), intrusion_k: 0.0, upstream_density };
     // upstream: only hulls closer than 0.01 (normalized vertex distance)
     let adjacent = |a: &Piece, b: &Piece| -> bool {
         if !a.bbox.expanded(0.01).overlaps(&b.bbox) {

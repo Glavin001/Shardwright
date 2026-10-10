@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Baseline parity of the stand-alone CoACD port against upstream CoACD.
 
-Runs our Rust port (`prefracture decompose`: `coacd::decompose`, no
-cell-complex adaptations, no non-overlap step, no hull budget) and the
+Runs our Rust port (`prefracture decompose`: `coacd::decompose` with the
+upstream 1.0.x merge cost; no cell-complex adaptations, no non-overlap step,
+no hull budget, no vertex cap) and the
 upstream `coacd` Python package with the same (upstream default) parameters
 on identical closed meshes: standard non-convex shapes (L block, U block,
 square ring, torus, the ceramic bowl) and the largest fragments of baked
@@ -19,6 +20,9 @@ normalized frame (longest bounding-box side = 2):
                 CoACD where every part is scored against its own hull);
   * vol_ratio   Σ V(hull) / V(mesh) (overlap counted, like CoACD's merge Rv);
   * seconds     wall time of the decomposition call.
+
+A second table lists our hulls under the 64-vertex physics cap and the
+variant with the collision-aware merge cost (`--merge-cost collision`).
 
 Usage: coacd_baseline.py --cli target/release/prefracture --asset out/rc_column.asset.json:1:3 \\
                          [--asset ...] [--threshold 0.05] [--cache DIR] [--json out.json]
@@ -86,13 +90,14 @@ def key_of(V, T, extra):
     return h.hexdigest()
 
 
-def run_ours(cli, V, T, threshold, cache):
-    k = key_of(V, T, f"ours/{threshold}")
+def run_ours(cli, V, T, threshold, cache, mode="upstream"):
+    k = key_of(V, T, f"ours/{threshold}" if mode == "collision" else f"ours/{threshold}/{mode}")
     path = os.path.join(cache, k + ".ours.json")
     if not os.path.exists(path):
         mp = os.path.join(cache, k + ".mesh.json")
         json.dump({"vertices": np.asarray(V, float).tolist(), "faces": np.asarray(T, int).tolist()}, open(mp, "w"))
-        subprocess.run([cli, "decompose", "--mesh", mp, "--out", path, "--threshold", str(threshold), "--seed", "0"], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run([cli, "decompose", "--mesh", mp, "--out", path, "--threshold", str(threshold), "--seed", "0", "--merge-cost", mode],
+                       check=True, stdout=subprocess.DEVNULL)
         os.remove(mp)
     d = json.load(open(path))
     return d["hulls"], d["seconds"], d.get("hulls_capped64")
@@ -180,14 +185,18 @@ def main():
     rng = np.random.default_rng(1)
     rows = []
     for name, (V, T) in meshes:
-        ho, so, hc = run_ours(args.cli, V, T, args.threshold, cache)
+        ho, so, hc = run_ours(args.cli, V, T, args.threshold, cache, "upstream")
+        hx, sx, _ = run_ours(args.cli, V, T, args.threshold, cache, "collision")
         hu, su = run_upstream(V, T, args.threshold, cache)
         eo, eu = evaluate(V, T, ho, rng), evaluate(V, T, hu, rng)
         ec = evaluate(V, T, hc, rng) if hc else None
+        ex = evaluate(V, T, hx, rng)
         if eo and eu:
             eo["seconds"], eu["seconds"] = so, su
             eo["max_verts"], eu["max_verts"] = max(len(h) for h in ho), max(len(h) for h in hu)
-            rows.append({"mesh": name, "tris": int(len(T)), "ours": eo, "coacd": eu, "ours_capped64": ec})
+            if ex:
+                ex["seconds"] = sx
+            rows.append({"mesh": name, "tris": int(len(T)), "ours": eo, "coacd": eu, "ours_capped64": ec, "ours_collision_merge": ex})
             print(f"{name}: ours {eo['hulls']} hulls h={eo['h']:.4f} ({so:.1f}s) | coacd {eu['hulls']} hulls h={eu['h']:.4f} ({su:.1f}s)", file=sys.stderr)
     print(f"### Stand-alone port vs upstream CoACD 1.0.14 (threshold {args.threshold}, upstream defaults)\n")
     print("| Mesh | Tris | Hulls ours / CoACD | h ours / CoACD | Rv ours / CoACD | Hb ours / CoACD | Σ hull vol / V ours / CoACD | Seconds ours / CoACD |")
@@ -201,12 +210,12 @@ def main():
         print(f"| **median** | | {med('hulls','ours'):.0f} / {med('hulls','coacd'):.0f} | {med('h','ours'):.4f} / {med('h','coacd'):.4f} | "
               f"{med('rv','ours'):.4f} / {med('rv','coacd'):.4f} | {med('hb','ours'):.4f} / {med('hb','coacd'):.4f} | "
               f"{med('vol_ratio','ours'):.3f} / {med('vol_ratio','coacd'):.3f} | {med('seconds','ours'):.1f} / {med('seconds','coacd'):.1f} |")
-    capped = [r for r in rows if r.get("ours_capped64")]
-    if capped:
-        print("\n| Mesh | max hull vertices ours / CoACD | h ours (≤64 vertices) | Σ hull vol / V ours (≤64 vertices) |\n|---|---|---|---|")
-        for r in capped:
-            c = r["ours_capped64"]
-            print(f"| {r['mesh']} | {r['ours']['max_verts']} / {r['coacd']['max_verts']} | {c['h']:.4f} | {c['vol_ratio']:.3f} |")
+    print("\n| Mesh | max hull vertices ours / CoACD | h ours, ≤64 vertices | Σ hull vol / V ours, ≤64 vertices | collision-aware merge: hulls / h / seconds |\n|---|---|---|---|---|")
+    for r in rows:
+        c, x = r.get("ours_capped64"), r.get("ours_collision_merge")
+        cs = f"{c['h']:.4f} | {c['vol_ratio']:.3f}" if c else "- | -"
+        xs = f"{x['hulls']} / {x['h']:.4f} / {x['seconds']:.1f}" if x else "-"
+        print(f"| {r['mesh']} | {r['ours']['max_verts']} / {r['coacd']['max_verts']} | {cs} | {xs} |")
     if args.json:
         json.dump(rows, open(args.json, "w"), indent=2)
 
