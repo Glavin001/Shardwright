@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+libc = "0.2"
 frac-core.workspace = true
 frac-geom.workspace = true
 glam.workspace = true

@@ -39,7 +39,7 @@ pub use debug::{asset_to_json, write_asset_json, write_obj, write_ply, write_ply
 pub use error::IoError;
 pub use gltf_out::{
     GlbSummary, GltfOptions, RenderMaterial, RenderMesh, RenderNode, RenderPrimitive, RenderScene,
-    decompress_meshopt_glb, read_glb_summary, write_glb, write_glb_owned,
+    decompress_meshopt_glb, read_glb_summary, release_free_memory, write_glb, write_glb_owned,
 };
 pub use import::{ImportOptions, load_scene, load_scene_bytes};
 pub use physics::{

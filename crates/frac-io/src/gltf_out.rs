@@ -576,7 +576,22 @@ impl MeshList<'_> {
     fn release(&mut self, i: usize) {
         if let MeshList::Owned(m) = self {
             m[i] = RenderMesh::default();
+            // the binary buffer is one large (mmap'd) allocation that cannot
+            // reuse the freed mesh memory; hand it back to the OS regularly
+            if i % 4096 == 4095 {
+                release_free_memory();
+            }
         }
+    }
+}
+
+/// Return freed heap pages to the OS (glibc `malloc_trim`; no-op
+/// elsewhere). Keeps the resident set of building-scale exports near the
+/// live data instead of the sum of every stage's peak.
+pub fn release_free_memory() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    unsafe {
+        libc::malloc_trim(0);
     }
 }
 
