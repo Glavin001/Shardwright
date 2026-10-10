@@ -117,6 +117,10 @@ enum Cmd {
         /// Levels to compute (comma separated; default: settings).
         #[arg(long)]
         levels: Option<String>,
+        /// Also report the validator's hull metrics per level (overshoot,
+        /// count, fit on <= 100 sampled fragments) as JSON on stdout.
+        #[arg(long)]
+        metrics: bool,
     },
     /// Stand-alone convex decomposition of a closed mesh with the CoACD port
     /// (upstream default parameters unless overridden). Input/output JSON:
@@ -375,7 +379,8 @@ fn decompose_cmd(mesh: &Path, out: &Path, threshold: f64, max_ch: usize, iters: 
     Ok(true)
 }
 
-fn hulls_cmd(asset: &Path, config: &Option<PathBuf>, out: &Path, coacd_threshold: Option<f64>, max_hulls: Option<usize>, levels: &Option<String>) -> Result<bool, String> {
+#[allow(clippy::too_many_arguments)]
+fn hulls_cmd(asset: &Path, config: &Option<PathBuf>, out: &Path, coacd_threshold: Option<f64>, max_hulls: Option<usize>, levels: &Option<String>, metrics: bool) -> Result<bool, String> {
     let settings = match config {
         Some(c) => Settings::from_toml(&std::fs::read_to_string(c).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?,
         None => Settings::default(),
@@ -391,12 +396,38 @@ fn hulls_cmd(asset: &Path, config: &Option<PathBuf>, out: &Path, coacd_threshold
         cp.levels = l.split(',').filter(|s| !s.trim().is_empty()).map(|s| s.trim().parse::<u8>().map_err(|e| e.to_string())).collect::<Result<_, _>>()?;
     }
     let t = std::time::Instant::now();
-    let (hulls, ranges) = frac_pipeline::build_hulls(&a, &cp);
-    let secs = t.elapsed().as_secs_f64();
-    a.hulls = hulls;
-    for (i, r) in ranges.into_iter().enumerate() {
-        a.hierarchy.fragments[i].hulls = r;
+    // `FRAC_HULLS_KEEP`: evaluate the asset's own hulls (no recompute)
+    if std::env::var_os("FRAC_HULLS_KEEP").is_none() {
+        let (hulls, ranges) = frac_pipeline::build_hulls(&a, &cp);
+        a.hulls = hulls;
+        for (i, r) in ranges.into_iter().enumerate() {
+            a.hierarchy.fragments[i].hulls = r;
+        }
     }
+    let secs = t.elapsed().as_secs_f64();
+    if let Some(l) = std::fs::read_to_string("/proc/self/status").ok().and_then(|s| s.lines().find(|l| l.starts_with("VmHWM")).map(str::to_string)) {
+        eprintln!("collision: {secs:.1} s, peak {}", l.split_whitespace().skip(1).collect::<Vec<_>>().join(" "));
+    }
+    // content hash of the hulls (determinism checks)
+    let mut hasher = blake3::Hasher::new();
+    for f in &a.hierarchy.fragments {
+        hasher.update(&f.hulls.start.to_le_bytes());
+        hasher.update(&f.hulls.end.to_le_bytes());
+    }
+    for h in &a.hulls {
+        for v in &h.vertices {
+            for c in [v.x, v.y, v.z] {
+                hasher.update(&c.to_bits().to_le_bytes());
+            }
+        }
+        for f in &h.faces {
+            for &i in f {
+                hasher.update(&i.to_le_bytes());
+            }
+            hasher.update(&u32::MAX.to_le_bytes());
+        }
+    }
+    eprintln!("hulls hash: {}", hasher.finalize().to_hex());
     // non-overlap check (as the hard gate)
     let polys: Vec<_> = a.hulls.iter().map(frac_pipeline::hull_polytope).collect();
     let mut worst: f64 = 0.0;
@@ -410,13 +441,102 @@ fn hulls_cmd(asset: &Path, config: &Option<PathBuf>, out: &Path, coacd_threshold
             }
         }
     }
-    frac_io::write_asset_json(&a, out).map_err(|e| e.to_string())?;
+    // `--out -`: no output asset
+    if out != Path::new("-") {
+        frac_io::write_asset_json(&a, out).map_err(|e| e.to_string())?;
+    }
+    if metrics {
+        println!("{}", serde_json::to_string(&hull_metrics(&a, &polys)).map_err(|e| e.to_string())?);
+    }
     // collision-shape limits (as the collision_shapes gate)
     let nonconvex = a.hulls.iter().filter(|h| !frac_pipeline::frac_collision::coacd::stored_hull_is_convex(&h.vertices, &h.faces)).count();
     let maxv = a.hulls.iter().map(|h| h.vertices.len()).max().unwrap_or(0);
     println!("collision shapes: {nonconvex} non-convex, max {maxv} vertices");
     println!("{}: {} hulls in {secs:.2} s; max neighbour hull overlap {worst:.3e} m3 over {pairs} pairs ({})", out.display(), a.hulls.len(), if worst <= 1e-9 { "PASS" } else { "FAIL" });
     Ok(worst <= 1e-9)
+}
+
+/// The validator's hull metrics per level: overshoot (Σ hull volume / V -
+/// 1) and hull count over all fragments with hulls, and the symmetric fit
+/// deviation / diameter on <= 100 evenly strided fragments (same sampling as
+/// `frac-validate`).
+fn hull_metrics(a: &frac_core::Asset, polys: &[frac_geom::hull::ConvexPolytope]) -> serde_json::Value {
+    use frac_geom::inside::MeshQuery;
+    use rayon::prelude::*;
+    let q = |mut v: Vec<f64>| -> serde_json::Value {
+        v.sort_by(|a, b| a.total_cmp(b));
+        let at = |p: f64| v.get(((v.len() as f64 - 1.0) * p).round().max(0.0) as usize).copied().unwrap_or(0.0);
+        serde_json::json!({"n": v.len(), "p50": at(0.5), "p95": at(0.95), "max": at(1.0), "mean": if v.is_empty() { 0.0 } else { v.iter().sum::<f64>() / v.len() as f64 }})
+    };
+    let pdist = |x: frac_geom::DVec3, p: &frac_geom::hull::ConvexPolytope| -> f64 {
+        let tol = 1e-12 * p.scale().max(1e-300);
+        if p.faces.iter().all(|(h, _)| h.dist(x) <= tol) {
+            return 0.0;
+        }
+        let mut best = f64::INFINITY;
+        for (h, poly) in &p.faces {
+            let dn = h.dist(x);
+            if dn <= 0.0 || poly.len() < 3 {
+                continue;
+            }
+            let qp = x - h.n * dn;
+            if (0..poly.len()).all(|i| (poly[(i + 1) % poly.len()] - poly[i]).cross(qp - poly[i]).dot(h.n) >= -tol) {
+                best = best.min(dn);
+                continue;
+            }
+            for i in 0..poly.len() {
+                let (s, e) = (poly[i], poly[(i + 1) % poly.len()]);
+                let se = e - s;
+                let t = ((x - s).dot(se) / se.length_squared().max(1e-300)).clamp(0.0, 1.0);
+                best = best.min((s + se * t - x).length());
+            }
+        }
+        if best.is_finite() { best } else { 0.0 }
+    };
+    let h = &a.hierarchy;
+    let mut levels = Vec::new();
+    for l in 0..h.levels {
+        let frs = a.level_fragments(l);
+        let with: Vec<&frac_core::Fragment> = frs.iter().filter(|f| !f.hulls.is_empty()).collect();
+        let over: Vec<f64> = with.iter().map(|f| f.hulls.clone().map(|i| polys[i as usize].volume()).sum::<f64>() / f.mass.volume.max(1e-300) - 1.0).collect();
+        let count: Vec<f64> = with.iter().map(|f| f.hulls.len() as f64).collect();
+        let fit: Vec<(u32, f64)> = frs
+            .par_iter()
+            .step_by(if std::env::var_os("FRAC_FIT_ALL").is_some() { 1 } else { (frs.len() / 100).max(1) })
+            .filter(|f| !f.hulls.is_empty())
+            .map(|f| {
+                let m = frac_pipeline::frac_collision::cells_boundary_mesh(a, a.fragment_cells(f));
+                let mq = MeshQuery::new(&m);
+                let diam = m.aabb().diagonal().max(1e-300);
+                let hp = &polys[f.hulls.start as usize..f.hulls.end as usize];
+                let mut worst: f64 = 0.0;
+                for hh in &a.hulls[f.hulls.start as usize..f.hulls.end as usize] {
+                    for v in &hh.vertices {
+                        if !mq.contains(*v) {
+                            if let Some((_, d2, _)) = mq.closest_point(*v) {
+                                worst = worst.max(d2.sqrt());
+                            }
+                        }
+                    }
+                }
+                let cents = m.tris.iter().map(|t| (m.verts[t[0] as usize] + m.verts[t[1] as usize] + m.verts[t[2] as usize]) / 3.0);
+                for x in m.verts.iter().copied().chain(cents) {
+                    let d = hp.iter().map(|p| pdist(x, p)).fold(f64::INFINITY, f64::min);
+                    if d.is_finite() {
+                        worst = worst.max(d);
+                    }
+                }
+                (f.id.0, worst / diam)
+            })
+            .collect();
+        // worst fragments (for diagnosis)
+        let mut top = fit.clone();
+        top.sort_by(|a, b| b.1.total_cmp(&a.1));
+        let top: Vec<(u32, f64)> = top.into_iter().take(5).collect();
+        let fit: Vec<f64> = fit.into_iter().map(|x| x.1).collect();
+        levels.push(serde_json::json!({"level": l, "fragments": frs.len(), "hulls": count.iter().sum::<f64>(), "hull_overshoot": q(over), "hull_count": q(count), "hull_fit": q(fit), "worst_fit": top}));
+    }
+    serde_json::json!({ "levels": levels })
 }
 
 fn debug_dump(asset: &frac_core::Asset, out: &Path, name: &str, what: &str) -> Result<(), String> {
@@ -600,7 +720,7 @@ fn main() -> ExitCode {
             println!("{}", preview::preview(&asset, &MaterialLibrary::builtin(), out, &o)?);
             Ok(true)
         })(),
-        Cmd::Hulls { asset, config, out, coacd_threshold, max_hulls, levels } => hulls_cmd(asset, config, out, *coacd_threshold, *max_hulls, levels),
+        Cmd::Hulls { asset, config, out, coacd_threshold, max_hulls, levels, metrics } => hulls_cmd(asset, config, out, *coacd_threshold, *max_hulls, levels, *metrics),
         Cmd::Decompose { mesh, out, threshold, max_convex_hull, mcts_iterations, mcts_depth, mcts_nodes, resolution, seed, merge_cost, no_merge, hb } => {
             decompose_cmd(mesh, out, *threshold, *max_convex_hull, *mcts_iterations, *mcts_depth, *mcts_nodes, *resolution, *seed, merge_cost, !*no_merge, hb)
         }

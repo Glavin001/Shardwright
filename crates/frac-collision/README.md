@@ -321,7 +321,81 @@ cells (convex atoms vs cells cut by the tree search).
 
 (fast path / decomposed)
 
-PERF_TABLE
+### Building-scale collision time (two_storey_building)
+
+Input: `benchmarks/configs/bake.toml` with `[modes] enabled = false`.
+Leaf-baked with `FRAC_STOP_BEFORE_COLLISION`, which gives 60,920 cells and
+4 levels. Timed with `FRAC_PROFILE=1 prefracture hulls --out - --metrics`.
+Before is the merged tip (4741c12) and after is this branch. The two runs
+were back to back on the shared 4-core machine, with other jobs using
+about 1–1.5 cores. Times are wall seconds.
+
+| Stage | Before | After |
+|---|---|---|
+| atoms (cell convexity, cut search) | 3.4 | 2.1 |
+| level 3 (60,920 leaves) | 2.9 | 0.6 |
+| level 2 (11,297 fragments, 7,165 decomposed) | 41.3 | 9.8 |
+| level 1 (576 fragments) | 45.9 | 17.0 |
+| level 0 | 0.5 | 0.4 |
+| non-overlap (L1 / L2 / L3 / L0) | 35.1 (22.9 / 8.2 / 2.9 / 1.0) | 10.2 (5.6 / 3.1 / 0.6 / 0.5) |
+| output (margin shrink, vertex cap, convexity) | ≈48.8 | 6.7 |
+| **total** | **177.9** | **47.3** |
+
+On one thread the total is 89 s. Peak RSS is 2.85 GB, which includes the
+loaded asset. The output is bit-identical with 1, 3 and 4 threads (hull
+content hash).
+
+Quality metrics are the validator's per-level metrics computed over
+**all** fragments (`FRAC_FIT_ALL=1`). Overshoot is Σ hull volume / V − 1.
+Fit is the symmetric deviation / diameter. Both gates pass in both runs
+(`collision_shapes`: 0 non-convex, max 64 vertices; `no_overlap_hulls`:
+max overlap 0).
+
+| Level | Hulls before / after | Overshoot p50 / p95 / max / mean, before | Overshoot p50 / p95 / max / mean, after | Fit p50 / p95 / max, before | Fit p50 / p95 / max, after |
+|---|---|---|---|---|---|
+| L1 | 4417 / 4415 | 0.2654 / 0.5030 / 0.7247 / 0.2295 | 0.2633 / 0.5028 / 0.7229 / 0.2289 | 0.0551 / 0.0982 / 0.1666 | 0.0547 / 0.0984 / 0.1666 |
+| L2 | 53582 / 53582 | −0.0275 / 0.1029 / 0.3289 / −0.0098 | −0.0275 / 0.1005 / 0.3289 / −0.0101 | 0.0041 / 0.0338 / 0.0750 | 0.0041 / 0.0339 / 0.0750 |
+| L3 | 60995 / 60995 | unchanged (exact cells) | unchanged | 0.0041 / 0.0067 / 0.0162 | 0.0041 / 0.0067 / 0.0162 |
+| L0 | 76 / 76 | unchanged | unchanged | unchanged | unchanged |
+
+Overshoot is equal or lower at every level and quantile. Fit p95 is
+0.0002 higher at L1 and 0.0001 higher at L2; every other fit quantile is
+equal or lower.
+
+What changed:
+- **Out-term regions.** The hull-surface out-term is now evaluated only
+  on the exact parts of the merged hull's faces that lie outside both
+  merged pieces (convex polygon subtraction). Before, triangles straddling
+  the seam between the two pieces were subdivided all the way down to the
+  sample spacing. The branch and bound now converges instead of running
+  into its evaluation cap. The cap is 256 evaluations
+  (`max_tri_samples` 64).
+- **Constant refinement batch.** The greedy merge refines one bound per
+  round, as a constant. Fragments are already processed in parallel. The
+  old batch size followed the thread count, and a capped refinement is
+  only a lower bound, so results could depend on the number of threads.
+- **Cheaper geometry.**
+  - Clips skip half-spaces that do not cut the polytope (intrusion
+    volumes, overlap detection).
+  - `ConvexPolytope::scale` and `vertices` no longer build ordered sets.
+  - Atom polytope volumes are cached.
+  - Separation losses use clipped volumes summed as cones from a point on
+    the plane, with no cap polygon.
+  - Overlap detection rejects pairs separated by a face plane before
+    clipping.
+- **Merge bookkeeping.**
+  - A fragment with a single piece is output directly.
+  - Adjacency tests use cached sorted cell keys and halos, and candidate
+    pairs come from a key index instead of all pairs.
+  - Coarsening merges boxes only and builds one hull per final group.
+- **Vertex cap after the margin shrink.** Shrinking splits vertices where
+  more than three faces meet. Each group of split copies is replaced by
+  its centroid, which is still an inner approximation, instead of running
+  a greedy re-hull.
+- **Quickhull and parallel output.** Quickhull reuses its buffers and
+  renumbers vertices without maps, and `from_hull_mesh` uses sorted edge
+  lists. The output is identical. The output stage runs in parallel per
+  fragment.
 
 
 ## Reproducing
@@ -335,3 +409,8 @@ python tools/harness/coacd_diff.py --asset out/rc_column.nb.asset.json --level 1
 ```
 
 `FRAC_PROFILE=1` prints per-level timings and cost-component counters.
+`FRAC_STOP_BEFORE_COLLISION=<path>` makes `prefracture bake` write the
+asset just before the collision stage and stop; `prefracture hulls --out -
+--metrics` then recomputes the hulls without writing them and prints the
+validator's hull metrics (`FRAC_FIT_ALL=1`: fit over all fragments,
+`FRAC_HULLS_KEEP=1`: evaluate the asset's own hulls).

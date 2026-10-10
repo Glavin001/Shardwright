@@ -78,6 +78,8 @@ pub static T_HULLC: AtomicU64 = AtomicU64::new(0);
 pub static T_IN: AtomicU64 = AtomicU64::new(0);
 pub static T_OUT: AtomicU64 = AtomicU64::new(0);
 pub static N_EVAL: AtomicU64 = AtomicU64::new(0);
+pub static T_COV: AtomicU64 = AtomicU64::new(0);
+pub static N_STAGE2: AtomicU64 = AtomicU64::new(0);
 pub static N_CLIP: AtomicU64 = AtomicU64::new(0);
 pub static T_CLIP: AtomicU64 = AtomicU64::new(0);
 pub static T_HV: AtomicU64 = AtomicU64::new(0);
@@ -598,22 +600,47 @@ pub fn greedy_subset(poly: &ConvexPolytope, max_v: usize, eps: f64) -> ConvexPol
         }
     }
     let mut cur: Option<Ch> = None;
+    let mut is_chosen = vec![false; vs.len()];
+    for &c in &chosen {
+        is_chosen[c] = true;
+    }
     loop {
         let pts: Vec<DVec3> = chosen.iter().map(|&i| vs[i]).collect();
         let h = hull(&pts);
-        // farthest vertex outside the current hull (or from the chosen set
-        // while it is still degenerate)
-        let far = match &h {
-            Some(h) => (0..vs.len())
-                .filter(|i| !chosen.contains(i))
-                .map(|i| (i, h.poly.faces.iter().map(|(f, _)| f.dist(vs[i])).fold(f64::NEG_INFINITY, f64::max)))
-                .filter(|x| x.1 > eps)
-                .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0))),
+        // vertices outside the current hull: the farthest beyond each face
+        // (Quickhull's choice; several per round while far from the
+        // budget, else only the globally farthest), or the farthest from
+        // the chosen set while it is still degenerate
+        let add: Vec<usize> = match &h {
+            Some(h) => {
+                let mut per_face: Vec<Option<(usize, f64)>> = vec![None; h.poly.faces.len()];
+                for i in (0..vs.len()).filter(|&i| !is_chosen[i]) {
+                    let (mut bf, mut bd) = (usize::MAX, eps);
+                    for (k, (f, _)) in h.poly.faces.iter().enumerate() {
+                        let d = f.dist(vs[i]);
+                        if d > bd {
+                            bd = d;
+                            bf = k;
+                        }
+                    }
+                    if bf != usize::MAX && per_face[bf].map(|(j, dj)| bd > dj || (bd == dj && i < j)).unwrap_or(true) {
+                        per_face[bf] = Some((i, bd));
+                    }
+                }
+                let mut cand: Vec<(usize, f64)> = per_face.into_iter().flatten().collect();
+                cand.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+                cand.dedup_by_key(|c| c.0);
+                let room = max_v.saturating_sub(h.pts.len());
+                let take = cand.len().min((room / 2).max(1));
+                cand.into_iter().take(take).map(|c| c.0).collect()
+            }
             None => (0..vs.len())
-                .filter(|i| !chosen.contains(i))
+                .filter(|&i| !is_chosen[i])
                 .map(|i| (i, chosen.iter().map(|&c| (vs[i] - vs[c]).length()).fold(f64::INFINITY, f64::min)))
                 .filter(|x| x.1 > eps)
-                .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0))),
+                .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
+                .map(|x| vec![x.0])
+                .unwrap_or_default(),
         };
         if let Some(h) = h {
             if h.pts.len() > max_v {
@@ -621,9 +648,12 @@ pub fn greedy_subset(poly: &ConvexPolytope, max_v: usize, eps: f64) -> ConvexPol
             }
             cur = Some(h);
         }
-        match far {
-            Some((i, _)) if chosen.len() < 4 * max_v.min(1 << 20) => chosen.push(i),
-            _ => break,
+        if add.is_empty() || chosen.len() >= 4 * max_v.min(1 << 20) {
+            break;
+        }
+        for i in add {
+            is_chosen[i] = true;
+            chosen.push(i);
         }
     }
     cur.map(|c| c.poly).unwrap_or_else(|| poly.clone())
@@ -1435,12 +1465,17 @@ pub struct Piece {
     pub samples: Vec<DVec3>,
     /// Caller tags (cells or part ids), kept sorted.
     pub tags: Vec<u32>,
+    /// Optional caller keys for adjacency tests (sorted, unique; unions on
+    /// merge): the piece's own keys (e.g. cells) and its halo (own keys
+    /// and their neighbours).
+    pub keys: Vec<u32>,
+    pub halo: Vec<u32>,
 }
 
 impl Piece {
     pub fn new(ch: Ch, vol: f64, samples: Vec<DVec3>, tags: Vec<u32>) -> Piece {
         let bbox = Aabb::from_points(ch.pts.iter());
-        Piece { poly: ch.poly, pts: ch.pts, bbox, vol, own: 0.0, samples, tags }
+        Piece { poly: ch.poly, pts: ch.pts, bbox, vol, own: 0.0, samples, tags, keys: Vec::new(), halo: Vec::new() }
     }
     pub fn hull_volume(&self) -> f64 {
         self.poly.volume()
@@ -1468,6 +1503,11 @@ pub struct MergeCtx<'a> {
     pub upstream_density: Option<f64>,
     /// Seed of the upstream-style samples.
     pub seed: u64,
+    /// Candidate bounds refined per round of the greedy merge (in parallel).
+    /// A constant, so results do not depend on the thread count: a refined
+    /// bound that stops at the round's cap is a lower bound, and later
+    /// refinements start from it.
+    pub batch: usize,
 }
 
 /// A convex piece of foreign geometry (with its volume scale: true volume /
@@ -1478,6 +1518,8 @@ pub struct Foreign<'a> {
     pub pts: &'a [DVec3],
     pub bbox: Aabb,
     pub scale: f64,
+    /// Volume of `poly`.
+    pub pvol: f64,
 }
 
 /// Volume of the intersection of a convex polytope with foreign pieces.
@@ -1492,10 +1534,99 @@ pub fn covered_volume(poly: &ConvexPolytope, bbox: &Aabb, foreign: &[Foreign]) -
             continue;
         }
         let inside = f.pts.iter().all(|q| in_poly(poly, *q, 0.0));
-        let c = if inside { f.poly.volume() } else { f.poly.clip_all(&poly.halfspaces()).volume() };
+        let c = if inside { f.pvol } else { clip_all_cutting(f.poly, &poly.halfspaces()).volume() };
         v += c * f.scale;
     }
     v
+}
+
+/// Split a convex polygon by a plane: (part with `dist > 0`, part with
+/// `dist <= 0`); points within `tol` of the plane belong to both. A part
+/// that only touches the plane is empty.
+fn split_polygon(poly: &[DVec3], h: &HalfSpace, tol: f64) -> (Vec<DVec3>, Vec<DVec3>) {
+    let d: Vec<f64> = poly.iter().map(|&x| h.dist(x)).collect();
+    let (mut pos, mut neg) = (Vec::new(), Vec::new());
+    let (any_pos, any_neg) = (d.iter().any(|&v| v > tol), d.iter().any(|&v| v < -tol));
+    if !any_pos {
+        return (pos, poly.to_vec());
+    }
+    if !any_neg {
+        return (poly.to_vec(), neg);
+    }
+    let n = poly.len();
+    for i in 0..n {
+        let (a, b) = (poly[i], poly[(i + 1) % n]);
+        let (da, db) = (d[i], d[(i + 1) % n]);
+        if da >= -tol {
+            pos.push(a);
+        }
+        if da <= tol {
+            neg.push(a);
+        }
+        if (da > tol && db < -tol) || (da < -tol && db > tol) {
+            let x = a + (b - a) * (da / (da - db));
+            pos.push(x);
+            neg.push(x);
+        }
+    }
+    (if pos.len() >= 3 { pos } else { Vec::new() }, if neg.len() >= 3 { neg } else { Vec::new() })
+}
+
+/// The parts of a convex polygon outside all the given convex polytopes,
+/// as convex polygons (a polygon on a polytope's boundary is inside).
+pub fn polygon_minus(poly: &[DVec3], skip: &[&ConvexPolytope], tol: f64) -> Vec<Vec<DVec3>> {
+    let mut cur = vec![poly.to_vec()];
+    for s in skip {
+        let mut next = Vec::new();
+        for pg in cur {
+            // pg \ s = ∪_i pg ∩ {h_i > 0} ∩ {h_j <= 0, j < i}
+            let mut rest = pg;
+            for (h, _) in &s.faces {
+                let (out, inn) = split_polygon(&rest, h, tol);
+                if !out.is_empty() {
+                    next.push(out);
+                }
+                rest = inn;
+                if rest.is_empty() {
+                    break;
+                }
+            }
+        }
+        cur = next;
+    }
+    cur
+}
+
+/// [`ConvexPolytope::clip_all`] restricted to the half-spaces that cut the
+/// polytope (others leave its volume unchanged, or empty it).
+pub fn clip_all_cutting(p: &ConvexPolytope, hs: &[HalfSpace]) -> ConvexPolytope {
+    // the input is only cloned once a half-space cuts it
+    let mut cur: Option<ConvexPolytope> = None;
+    let mut eps = 1e-12 * p.scale().max(1e-300);
+    for h in hs {
+        let q = cur.as_ref().unwrap_or(p);
+        if q.is_empty() {
+            break;
+        }
+        let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+        for (_, f) in &q.faces {
+            for &x in f {
+                let d = h.dist(x);
+                lo = lo.min(d);
+                hi = hi.max(d);
+            }
+        }
+        if hi <= eps {
+            continue;
+        }
+        if lo > -eps {
+            return ConvexPolytope::default();
+        }
+        let c = q.clip(h);
+        eps = 1e-12 * c.scale().max(1e-300);
+        cur = Some(c);
+    }
+    cur.unwrap_or_else(|| p.clone())
 }
 
 #[inline]
@@ -1515,15 +1646,18 @@ impl MergeCtx<'_> {
     fn out_term(&self, poly: &ConvexPolytope, skip: &[&ConvexPolytope], start: f64, cap: f64) -> f64 {
         let mut worst = start;
         let tol = 1e-9 * self.q.bbox.diagonal();
+        // the hull surface inside the skipped polytopes is excluded exactly:
+        // every face is cut into convex polygons outside all of them
+        let mut regions: Vec<Vec<DVec3>> = Vec::new();
+        for (_, f) in &poly.faces {
+            regions.extend(polygon_minus(f, skip, tol));
+        }
         // (upper bound, triangle), explored best first
         let mut heap: std::collections::BinaryHeap<BbTri> = std::collections::BinaryHeap::new();
         let evals = std::cell::Cell::new(0usize);
         let max_evals = self.max_tri_samples * 4;
         let visit = |tri: [DVec3; 3], worst: &mut f64, heap: &mut std::collections::BinaryHeap<BbTri>| {
             let [a, b, c] = tri;
-            if skip.iter().any(|s| in_poly(s, a, tol) && in_poly(s, b, tol) && in_poly(s, c, tol)) {
-                return;
-            }
             let g = (a + b + c) / 3.0;
             let rho = (a - g).length().max((b - g).length()).max((c - g).length());
             let near = if *worst - rho > 0.0 { farther_than(self.q, g, *worst - rho) } else { self.q.closest_point(g).map(|(_, d2, t)| (t, d2)) };
@@ -1536,7 +1670,7 @@ impl MergeCtx<'_> {
             // segment to the centroid crosses it). The (costly) side test is
             // only needed when it can change the maximum or prune.
             let ub = if d > *worst || d >= rho {
-                let outside = !skip.iter().any(|s| in_poly(s, g, tol)) && self.signer.and_then(|sg| sg.outside(self.q.mesh, g, t)).unwrap_or_else(|| is_outside(self.q, g, t));
+                let outside = self.signer.and_then(|sg| sg.outside(self.q.mesh, g, t)).unwrap_or_else(|| is_outside(self.q, g, t));
                 if outside && d > *worst {
                     *worst = d;
                 }
@@ -1556,7 +1690,7 @@ impl MergeCtx<'_> {
                 heap.push(BbTri { ub, tri });
             }
         };
-        for (_, f) in &poly.faces {
+        for f in &regions {
             for k in 1..f.len().saturating_sub(1) {
                 visit([f[0], f[k], f[k + 1]], &mut worst, &mut heap);
             }
@@ -1652,6 +1786,7 @@ impl MergeCtx<'_> {
             return c1;
         }
         let t2 = std::time::Instant::now();
+        N_STAGE2.fetch_add(1, AO::Relaxed);
         let mut c = c1;
         if self.intrusion_k > 0.0 && !self.foreign.is_empty() {
             let bb = Aabb::from_points(ch.pts.iter());
@@ -1659,6 +1794,7 @@ impl MergeCtx<'_> {
             // the parts' own intrusions are already in their costs
             c = c.max(rv(v, 0.0, self.intrusion_k));
         }
+        T_COV.fetch_add(t2.elapsed().as_nanos() as u64, AO::Relaxed);
         if c > cap {
             return c;
         }
@@ -1673,6 +1809,83 @@ impl MergeCtx<'_> {
     }
 }
 
+/// Union of two sorted unique lists.
+fn sorted_union(a: &[u32], b: &[u32]) -> Vec<u32> {
+    let mut out = Vec::with_capacity(a.len() + b.len());
+    let (mut i, mut j) = (0, 0);
+    while i < a.len() && j < b.len() {
+        match a[i].cmp(&b[j]) {
+            std::cmp::Ordering::Less => {
+                out.push(a[i]);
+                i += 1;
+            }
+            std::cmp::Ordering::Greater => {
+                out.push(b[j]);
+                j += 1;
+            }
+            std::cmp::Ordering::Equal => {
+                out.push(a[i]);
+                i += 1;
+                j += 1;
+            }
+        }
+    }
+    out.extend_from_slice(&a[i..]);
+    out.extend_from_slice(&b[j..]);
+    out
+}
+
+/// Pieces by adjacency key (when every piece has keys): candidate
+/// neighbours of a piece are the pieces owning a key of its halo, which is
+/// exactly the set the key-based adjacency test can accept.
+struct KeyIndex {
+    by_key: std::collections::HashMap<u32, Vec<usize>>,
+}
+
+impl KeyIndex {
+    fn new<'a>(pieces: impl Iterator<Item = (usize, &'a Piece)>) -> Option<KeyIndex> {
+        let mut by_key: std::collections::HashMap<u32, Vec<usize>> = std::collections::HashMap::new();
+        for (i, pc) in pieces {
+            if pc.keys.is_empty() || pc.halo.is_empty() {
+                return None;
+            }
+            for &k in &pc.keys {
+                by_key.entry(k).or_default().push(i);
+            }
+        }
+        Some(KeyIndex { by_key })
+    }
+    /// Pieces owning a key of `halo` (sorted, unique).
+    fn candidates(&self, halo: &[u32]) -> Vec<usize> {
+        let mut v: Vec<usize> = halo.iter().filter_map(|k| self.by_key.get(k)).flatten().copied().collect();
+        v.sort_unstable();
+        v.dedup();
+        v
+    }
+    /// Pieces `i` and `j` were merged into `m` (keys `keys`).
+    fn merge(&mut self, i: usize, j: usize, m: usize, keys: &[u32]) {
+        for k in keys {
+            if let Some(v) = self.by_key.get_mut(k) {
+                v.retain(|&x| x != i && x != j);
+                v.push(m);
+            }
+        }
+    }
+}
+
+/// Whether two sorted lists share an element.
+pub fn sorted_intersects(a: &[u32], b: &[u32]) -> bool {
+    let (mut i, mut j) = (0, 0);
+    while i < a.len() && j < b.len() {
+        match a[i].cmp(&b[j]) {
+            std::cmp::Ordering::Less => i += 1,
+            std::cmp::Ordering::Greater => j += 1,
+            std::cmp::Ordering::Equal => return true,
+        }
+    }
+    false
+}
+
 fn merged_piece(a: &Piece, b: &Piece, ch: Ch, cost: f64) -> Piece {
     let mut samples = a.samples.clone();
     samples.extend_from_slice(&b.samples);
@@ -1682,7 +1895,7 @@ fn merged_piece(a: &Piece, b: &Piece, ch: Ch, cost: f64) -> Piece {
     // candidate hulls have triangle faces: rebuild with merged faces
     let ch = hull(&ch.pts).unwrap_or(ch);
     let bbox = Aabb::from_points(ch.pts.iter());
-    Piece { poly: ch.poly, pts: ch.pts, bbox, vol: a.vol + b.vol, own: cost, samples, tags }
+    Piece { poly: ch.poly, pts: ch.pts, bbox, vol: a.vol + b.vol, own: cost, samples, tags, keys: sorted_union(&a.keys, &b.keys), halo: sorted_union(&a.halo, &b.halo) }
 }
 
 /// Cheap pre-merging for fragments with very many pieces: greedily merge
@@ -1716,14 +1929,24 @@ pub fn coarsen(pieces: Vec<Piece>, target: usize, adjacent: &(dyn Fn(&Piece, &Pi
         };
         v(&u) - a.vol - b.vol
     };
-    let mut alive: BTreeMap<usize, Piece> = pieces.into_iter().enumerate().collect();
+    // Groups are merged on their boxes, volumes and adjacency keys only
+    // (light pieces); hulls are built once per final group.
+    let light = |pc: &Piece| Piece { poly: ConvexPolytope::default(), pts: Vec::new(), bbox: pc.bbox, vol: pc.vol, own: pc.own, samples: Vec::new(), tags: Vec::new(), keys: pc.keys.clone(), halo: pc.halo.clone() };
+    let mut alive: BTreeMap<usize, (Piece, Vec<usize>)> = pieces.iter().enumerate().map(|(i, pc)| (i, (light(pc), vec![i]))).collect();
     let mut next_id = alive.len();
     let mut heap: BinaryHeap<Reverse<Key>> = BinaryHeap::new();
     let ids: Vec<usize> = alive.keys().copied().collect();
+    let mut index = KeyIndex::new(alive.iter().map(|(&i, g)| (i, &g.0)));
     let found: Vec<Vec<Key>> = ids
         .par_iter()
         .enumerate()
-        .map(|(k, &i)| ids[k + 1..].iter().filter(|&&j| adjacent(&alive[&i], &alive[&j])).map(|&j| Key(excess(&alive[&i], &alive[&j]), i, j)).collect())
+        .map(|(k, &i)| {
+            let cands: Vec<usize> = match &index {
+                Some(ix) => ix.candidates(&alive[&i].0.halo).into_iter().filter(|&j| j > i).collect(),
+                None => ids[k + 1..].to_vec(),
+            };
+            cands.into_iter().filter(|&j| adjacent(&alive[&i].0, &alive[&j].0)).map(|j| Key(excess(&alive[&i].0, &alive[&j].0), i, j)).collect()
+        })
         .collect();
     for v in found {
         for k in v {
@@ -1735,27 +1958,57 @@ pub fn coarsen(pieces: Vec<Piece>, target: usize, adjacent: &(dyn Fn(&Piece, &Pi
         if !alive.contains_key(&i) || !alive.contains_key(&j) {
             continue;
         }
-        let a = alive.remove(&i).unwrap();
-        let b = alive.remove(&j).unwrap();
-        let mut pts = a.pts.clone();
-        pts.extend_from_slice(&b.pts);
-        let Some(ch) = hull(&pts) else {
-            alive.insert(i, a);
-            alive.insert(j, b);
-            continue;
+        let (a, ma) = alive.remove(&i).unwrap();
+        let (b, mb) = alive.remove(&j).unwrap();
+        let m = Piece {
+            poly: ConvexPolytope::default(),
+            pts: Vec::new(),
+            bbox: a.bbox.union(&b.bbox),
+            vol: a.vol + b.vol,
+            own: a.own.max(b.own),
+            samples: Vec::new(),
+            tags: Vec::new(),
+            keys: sorted_union(&a.keys, &b.keys),
+            halo: sorted_union(&a.halo, &b.halo),
         };
-        let own = a.own.max(b.own).max(rv(a.vol + b.vol, ch.volume, 0.3));
-        let m = merged_piece(&a, &b, ch, own);
+        let members: Vec<usize> = ma.into_iter().chain(mb).collect();
         let nid = next_id;
         next_id += 1;
-        let others: Vec<usize> = alive.keys().copied().collect();
-        let keys: Vec<Option<Key>> = others.par_iter().map(|&o| if adjacent(&alive[&o], &m) { Some(Key(excess(&alive[&o], &m), o, nid)) } else { None }).collect();
+        let others: Vec<usize> = match index.as_mut() {
+            Some(ix) => {
+                ix.merge(i, j, nid, &m.keys);
+                ix.candidates(&m.halo).into_iter().filter(|o| alive.contains_key(o)).collect()
+            }
+            None => alive.keys().copied().collect(),
+        };
+        let keys: Vec<Option<Key>> = others.iter().map(|&o| if adjacent(&alive[&o].0, &m) { Some(Key(excess(&alive[&o].0, &m), o, nid)) } else { None }).collect();
         for k in keys.into_iter().flatten() {
             heap.push(Reverse(k));
         }
-        alive.insert(nid, m);
+        alive.insert(nid, (m, members));
     }
-    alive.into_values().collect()
+    // one hull per group (the hull of the members' hull vertices); its own
+    // cost also bounds the group's Rv
+    let groups: Vec<(Piece, Vec<usize>)> = alive.into_values().collect();
+    let built: Vec<Vec<Piece>> = groups
+        .par_iter()
+        .map(|(g, members)| {
+            if members.len() == 1 {
+                return vec![pieces[members[0]].clone()];
+            }
+            let pts: Vec<DVec3> = members.iter().flat_map(|&k| pieces[k].pts.iter().copied()).collect();
+            let Some(ch) = hull(&pts) else {
+                return members.iter().map(|&k| pieces[k].clone()).collect();
+            };
+            let mut tags: Vec<u32> = members.iter().flat_map(|&k| pieces[k].tags.iter().copied()).collect();
+            tags.sort_unstable();
+            let samples: Vec<DVec3> = members.iter().flat_map(|&k| pieces[k].samples.iter().copied()).collect();
+            let bbox = Aabb::from_points(ch.pts.iter());
+            let own = g.own.max(rv(g.vol, ch.volume, 0.3));
+            vec![Piece { poly: ch.poly, pts: ch.pts, bbox, vol: g.vol, own, samples, tags, keys: g.keys.clone(), halo: g.halo.clone() }]
+        })
+        .collect();
+    built.into_iter().flatten().collect()
 }
 
 /// Result of a greedy merge.
@@ -1823,9 +2076,13 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
         }
     };
     let ids: Vec<usize> = alive.keys().copied().collect();
-    let pairs: Vec<(usize, usize)> = ids.iter().enumerate().flat_map(|(k, &i)| ids[k + 1..].iter().map(move |&j| (i, j))).collect();
+    let mut index = KeyIndex::new(alive.iter().map(|(&i, pc)| (i, pc)));
+    let pairs: Vec<(usize, usize)> = match &index {
+        Some(ix) => ids.iter().flat_map(|&i| ix.candidates(&alive[&i].halo).into_iter().filter(move |&j| j > i).map(move |j| (i, j))).collect(),
+        None => ids.iter().enumerate().flat_map(|(k, &i)| ids[k + 1..].iter().map(move |&j| (i, j))).collect(),
+    };
     add_pairs(&alive, &mut cache, &mut heap, pairs, false);
-    let batch_min = rayon::current_num_threads().max(1) * 2;
+    let batch_min = ctx.batch.max(1);
     let mut carry: Option<Vec<Piece>> = None;
     // a heap key is current when it matches its cache entry
     let current = |cache: &BTreeMap<(usize, usize), Entry>, k: &Key| cache.get(&(k.1, k.2)).map(|e| e.cost.total_cmp(&k.0).is_eq()).unwrap_or(false);
@@ -1935,7 +2192,13 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
         let m = merged_piece(&a, &b, ch, cost);
         let nid = next_id;
         next_id += 1;
-        let pairs: Vec<(usize, usize)> = alive.keys().map(|&o| (o, nid)).collect();
+        let pairs: Vec<(usize, usize)> = match index.as_mut() {
+            Some(ix) if !all_pairs => {
+                ix.merge(i, j, nid, &m.keys);
+                ix.candidates(&m.halo).into_iter().filter(|o| alive.contains_key(o)).map(|o| (o, nid)).collect()
+            }
+            _ => alive.keys().map(|&o| (o, nid)).collect(),
+        };
         alive.insert(nid, m);
         add_pairs(&alive, &mut cache, &mut heap, pairs, all_pairs);
     }
@@ -1990,7 +2253,7 @@ pub fn decompose_detailed(mesh: &TriMesh, p: &CoacdParams) -> Vec<(ConvexPolytop
         MergeCost::Upstream => Some((p.resolution + 2000) as f64),
         MergeCost::CollisionAware => None,
     };
-    let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: 1.0 / (p.resolution.max(1) as f64).sqrt(), rv_k: p.rv_k, max_tri_samples: 4096, foreign: Vec::new(), intrusion_k: 0.0, upstream_density, seed: p.seed };
+    let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: 1.0 / (p.resolution.max(1) as f64).sqrt(), rv_k: p.rv_k, max_tri_samples: 4096, foreign: Vec::new(), intrusion_k: 0.0, upstream_density, seed: p.seed, batch: 8 };
     // upstream: only hulls closer than 0.01 (normalized vertex distance)
     let adjacent = |a: &Piece, b: &Piece| -> bool {
         if !a.bbox.expanded(0.01).overlaps(&b.bbox) {
@@ -2270,5 +2533,44 @@ mod bench {
             v += hull_volume(&pts);
         }
         eprintln!("hull volume of {} pts: {:?} each ({v})", pts.len(), t.elapsed() / 1000);
+        // merge candidates: two random convex cells (~20 vertices each)
+        use rand::Rng;
+        let mut rng = ChaCha8Rng::seed_from_u64(3);
+        let cells: Vec<Vec<DVec3>> = (0..200)
+            .map(|k| {
+                let c = DVec3::new((k % 10) as f64, (k / 10) as f64 * 0.7, 0.0);
+                let raw: Vec<DVec3> = (0..60).map(|_| c + DVec3::new(rng.gen_range(-0.6..0.6), rng.gen_range(-0.4..0.4), rng.gen_range(-0.3..0.3))).collect();
+                hull(&raw).unwrap().pts
+            })
+            .collect();
+        let nv: usize = cells.iter().map(|c| c.len()).sum();
+        let t = std::time::Instant::now();
+        let mut n = 0;
+        for k in 0..cells.len() - 1 {
+            let mut pts = cells[k].clone();
+            pts.extend_from_slice(&cells[k + 1]);
+            for _ in 0..20 {
+                n += hull_tri(&pts).map(|h| h.poly.faces.len()).unwrap_or(0);
+            }
+        }
+        eprintln!("hull_tri of 2 cells ({} vertices avg): {:?} each ({n})", 2 * nv / cells.len(), t.elapsed() / (20 * (cells.len() as u32 - 1)));
+        let t = std::time::Instant::now();
+        for k in 0..cells.len() - 1 {
+            let mut pts = cells[k].clone();
+            pts.extend_from_slice(&cells[k + 1]);
+            for _ in 0..20 {
+                n += convex_hull_fast(&pts).map(|h| h.tris.len()).unwrap_or(0);
+            }
+        }
+        eprintln!("quickhull of 2 cells: {:?} each ({n})", t.elapsed() / (20 * (cells.len() as u32 - 1)));
+        let t = std::time::Instant::now();
+        for k in 0..cells.len() - 1 {
+            let mut pts = cells[k].clone();
+            pts.extend_from_slice(&cells[k + 1]);
+            for _ in 0..20 {
+                n += hull(&pts).map(|h| h.poly.faces.len()).unwrap_or(0);
+            }
+        }
+        eprintln!("hull (merged faces) of 2 cells: {:?} each ({n})", t.elapsed() / (20 * (cells.len() as u32 - 1)));
     }
 }
