@@ -2,8 +2,8 @@
 """Baseline parity of the stand-alone CoACD port against upstream CoACD.
 
 Runs our Rust port (`prefracture decompose`: `coacd::decompose` with the
-upstream 1.0.x merge cost; no cell-complex adaptations, no non-overlap step,
-no hull budget, no vertex cap) and the
+upstream Hb estimator and 1.0.x merge cost; no cell-complex adaptations, no
+non-overlap step, no hull budget, no vertex cap) and the
 upstream `coacd` Python package with the same (upstream default) parameters
 on identical closed meshes: standard non-convex shapes (L block, U block,
 square ring, torus, the ceramic bowl) and the largest fragments of baked
@@ -22,7 +22,8 @@ normalized frame (longest bounding-box side = 2):
   * seconds     wall time of the decomposition call.
 
 A second table lists our hulls under the 64-vertex physics cap and the
-variant with the collision-aware merge cost (`--merge-cost collision`).
+variant with exact Hb distances and the collision-aware merge cost
+(`--hb exact --merge-cost collision`, the estimators used in the pipeline).
 
 Usage: coacd_baseline.py --cli target/release/prefracture --asset out/rc_column.asset.json:1:3 \\
                          [--asset ...] [--threshold 0.05] [--cache DIR] [--json out.json]
@@ -90,13 +91,16 @@ def key_of(V, T, extra):
     return h.hexdigest()
 
 
-def run_ours(cli, V, T, threshold, cache, mode="upstream"):
-    k = key_of(V, T, f"ours/{threshold}" if mode == "collision" else f"ours/{threshold}/{mode}")
+def run_ours(cli, V, T, threshold, cache, mode="faithful"):
+    """mode "faithful": upstream Hb estimator and 1.0.x merge cost (the 1:1
+    port); "exact": exact Hb and the collision-aware merge cost."""
+    k = key_of(V, T, f"ours/{threshold}/{mode}" + ("/knn-merge" if mode == "faithful" else ""))
+    flags = ["--hb", "upstream", "--merge-cost", "upstream"] if mode == "faithful" else ["--hb", "exact", "--merge-cost", "collision"]
     path = os.path.join(cache, k + ".ours.json")
     if not os.path.exists(path):
         mp = os.path.join(cache, k + ".mesh.json")
         json.dump({"vertices": np.asarray(V, float).tolist(), "faces": np.asarray(T, int).tolist()}, open(mp, "w"))
-        subprocess.run([cli, "decompose", "--mesh", mp, "--out", path, "--threshold", str(threshold), "--seed", "0", "--merge-cost", mode],
+        subprocess.run([cli, "decompose", "--mesh", mp, "--out", path, "--threshold", str(threshold), "--seed", "0", *flags],
                        check=True, stdout=subprocess.DEVNULL)
         os.remove(mp)
     d = json.load(open(path))
@@ -119,7 +123,6 @@ def run_upstream(V, T, threshold, cache):
 
 def evaluate(V, T, hulls, rng):
     import trimesh
-    from scipy.spatial import cKDTree
     L = float((V.max(0) - V.min(0)).max())
     s = 2.0 / max(L, 1e-300)
     mesh = to_manifold(V, T)
@@ -135,22 +138,24 @@ def evaluate(V, T, hulls, rng):
     tm = trimesh.Trimesh(V, T, process=False)
     um = union.to_mesh()
     ut = trimesh.Trimesh(np.asarray(um.vert_properties)[:, :3], np.asarray(um.tri_verts), process=False)
-    seed = int(rng.integers(1 << 31))
-    fs, _ = trimesh.sample.sample_surface(tm, 40000, seed=seed)
-    us, _ = trimesh.sample.sample_surface(ut, 40000, seed=seed + 1)
+    # deterministic per mesh; distances to dense surface samples (200k,
+    # bias ≈ half the sample spacing)
+    from scipy.spatial import cKDTree
+    seed = int(hashlib.sha1(np.ascontiguousarray(V, np.float64).tobytes()).hexdigest()[:8], 16)
+    dense = lambda m: cKDTree(np.vstack([trimesh.sample.sample_surface(m, 200000, seed=seed + 7)[0], m.vertices]))
     # collision-aware symmetric deviation: surface of (∪hulls − mesh) to the
     # mesh surface and surface of (mesh − ∪hulls) to the hull surface
     # (crevices between touching hulls inside the mesh are not surface)
     hb = 0.0
-    for region, ref in ((union - mesh, np.vstack([fs, V])), (mesh - union, np.vstack([us, ut.vertices]))):
+    for region, ref in ((union - mesh, dense(tm)), (mesh - union, dense(ut))):
         if region.volume() <= 1e-12 * vm:
             continue
         rm = region.to_mesh()
         rt = trimesh.Trimesh(np.asarray(rm.vert_properties)[:, :3], np.asarray(rm.tri_verts), process=False)
         if rt.area <= 0:
             continue
-        rs, _ = trimesh.sample.sample_surface(rt, 20000, seed=seed + 2)
-        hb = max(hb, float(cKDTree(ref).query(rs)[0].max()))
+        rs, _ = trimesh.sample.sample_surface(rt, 20000, seed=seed)
+        hb = max(hb, float(ref.query(rs)[0].max()))
     hb *= s
     return {"hulls": len(hulls), "h": float(max(rv, hb)), "rv": float(rv), "hb": float(hb), "vol_ratio": float(sum(h.volume() for h in hs) / vm)}
 
@@ -185,8 +190,8 @@ def main():
     rng = np.random.default_rng(1)
     rows = []
     for name, (V, T) in meshes:
-        ho, so, hc = run_ours(args.cli, V, T, args.threshold, cache, "upstream")
-        hx, sx, _ = run_ours(args.cli, V, T, args.threshold, cache, "collision")
+        ho, so, hc = run_ours(args.cli, V, T, args.threshold, cache, "faithful")
+        hx, sx, _ = run_ours(args.cli, V, T, args.threshold, cache, "exact")
         hu, su = run_upstream(V, T, args.threshold, cache)
         eo, eu = evaluate(V, T, ho, rng), evaluate(V, T, hu, rng)
         ec = evaluate(V, T, hc, rng) if hc else None
@@ -210,7 +215,7 @@ def main():
         print(f"| **median** | | {med('hulls','ours'):.0f} / {med('hulls','coacd'):.0f} | {med('h','ours'):.4f} / {med('h','coacd'):.4f} | "
               f"{med('rv','ours'):.4f} / {med('rv','coacd'):.4f} | {med('hb','ours'):.4f} / {med('hb','coacd'):.4f} | "
               f"{med('vol_ratio','ours'):.3f} / {med('vol_ratio','coacd'):.3f} | {med('seconds','ours'):.1f} / {med('seconds','coacd'):.1f} |")
-    print("\n| Mesh | max hull vertices ours / CoACD | h ours, ≤64 vertices | Σ hull vol / V ours, ≤64 vertices | collision-aware merge: hulls / h / seconds |\n|---|---|---|---|---|")
+    print("\n| Mesh | max hull vertices ours / CoACD | h ours, ≤64 vertices | Σ hull vol / V ours, ≤64 vertices | exact Hb + collision-aware merge: hulls / h / seconds |\n|---|---|---|---|---|")
     for r in rows:
         c, x = r.get("ours_capped64"), r.get("ours_collision_merge")
         cs = f"{c['h']:.4f} | {c['vol_ratio']:.3f}" if c else "- | -"

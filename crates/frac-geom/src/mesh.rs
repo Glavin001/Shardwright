@@ -70,6 +70,14 @@ impl TriMesh {
     pub fn signed_volume(&self) -> f64 {
         self.volume_integrals().volume
     }
+    /// Area of a range of triangles.
+    pub fn submesh_area(&self, tris: std::ops::Range<usize>) -> f64 {
+        tris.map(|t| {
+            let [a, b, c] = self.tri_points(t);
+            0.5 * (b - a).cross(c - a).length()
+        })
+        .sum()
+    }
     pub fn area(&self) -> f64 {
         (0..self.tris.len())
             .map(|t| {

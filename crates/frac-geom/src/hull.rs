@@ -6,7 +6,6 @@ use crate::mesh::{p3, TriMesh};
 use crate::predicates::orient3d;
 use glam::DVec3;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// Exact 3D convex hull of a point set (incremental, exact orientation).
 /// Returns a closed outward-oriented triangle mesh over a subset of the input
@@ -133,15 +132,26 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
         }
     }
     let mut queue: std::collections::VecDeque<usize> = (0..4).collect();
+    // buffers reused across iterations
+    let (mut visible, mut horizon, mut orphans): (Vec<usize>, Vec<(usize, usize)>, Vec<usize>) = (Vec::new(), Vec::new(), Vec::new());
     while let Some(fi) = queue.pop_front() {
         if !faces[fi].alive || faces[fi].outside.is_empty() {
             continue;
         }
         // farthest outside point (ties: smallest index)
         let ff = &faces[fi];
-        let apex = *ff.outside.iter().max_by(|&&x, &&y| dist(ff, x).partial_cmp(&dist(ff, y)).unwrap().then(y.cmp(&x))).unwrap();
+        let mut apex = ff.outside[0];
+        let mut best_d = dist(ff, apex);
+        for &x in &ff.outside[1..] {
+            let d = dist(ff, x);
+            if d > best_d || (d == best_d && x < apex) {
+                best_d = d;
+                apex = x;
+            }
+        }
         // visible region (connected) by BFS over edge neighbors
-        let mut visible = vec![fi];
+        visible.clear();
+        visible.push(fi);
         round += 1;
         stamp.resize(faces.len(), 0);
         stamp[fi] = round;
@@ -160,7 +170,7 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
             }
         }
         // horizon edges, in the orientation of the visible faces
-        let mut horizon: Vec<(usize, usize)> = Vec::new();
+        horizon.clear();
         for &f in &visible {
             let v = faces[f].v;
             for e in 0..3 {
@@ -172,7 +182,7 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
             }
         }
         horizon.sort_unstable();
-        let mut orphans: Vec<usize> = Vec::new();
+        orphans.clear();
         for &f in &visible {
             faces[f].alive = false;
             let v = faces[f].v;
@@ -186,14 +196,14 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
         orphans.sort_unstable();
         orphans.dedup();
         let first_new = faces.len();
-        for (u, w) in horizon {
+        for &(u, w) in &horizon {
             let fi2 = faces.len();
             faces.push(mk([u, w, apex]));
             for (x, y) in [(u, w), (w, apex), (apex, u)] {
                 edge_face.insert((x, y), fi2);
             }
         }
-        for q in orphans {
+        for &q in &orphans {
             if q == apex {
                 continue;
             }
@@ -210,21 +220,22 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
             }
         }
     }
-    let faces: Vec<Option<[usize; 3]>> = faces.into_iter().map(|f| if f.alive { Some(f.v) } else { None }).collect();
-    let tris_idx: Vec<[usize; 3]> = faces.into_iter().flatten().collect();
-    let mut map: BTreeMap<usize, u32> = BTreeMap::new();
+    let tris_idx: Vec<[usize; 3]> = faces.iter().filter(|f| f.alive).map(|f| f.v).collect();
+    // re-number in ascending original index for determinism
+    let mut remap: Vec<u32> = vec![u32::MAX; n];
     for t in &tris_idx {
         for &v in t {
-            let k = map.len() as u32;
-            map.entry(v).or_insert(k);
+            remap[v] = 0;
         }
     }
-    // re-number in ascending original index for determinism
-    let mut keys: Vec<usize> = map.keys().copied().collect();
-    keys.sort_unstable();
-    let remap: BTreeMap<usize, u32> = keys.iter().enumerate().map(|(i, &k)| (k, i as u32)).collect();
-    let verts = keys.iter().map(|&k| points[k]).collect();
-    let tris = tris_idx.iter().map(|t| [remap[&t[0]], remap[&t[1]], remap[&t[2]]]).collect();
+    let mut verts = Vec::new();
+    for (i, r) in remap.iter_mut().enumerate() {
+        if *r == 0 {
+            *r = verts.len() as u32;
+            verts.push(points[i]);
+        }
+    }
+    let tris = tris_idx.iter().map(|t| [remap[t[0]], remap[t[1]], remap[t[2]]]).collect();
     Some(TriMesh { verts, tris })
 }
 
@@ -250,6 +261,9 @@ impl std::hash::Hasher for EdgeHasher {
     }
     fn write_usize(&mut self, i: usize) {
         self.0 = (self.0.rotate_left(5) ^ i as u64).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    }
+    fn write_u64(&mut self, i: u64) {
+        self.0 = (self.0.rotate_left(5) ^ i).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
     }
 }
 
@@ -287,7 +301,19 @@ impl ConvexPolytope {
         // group by plane (tolerance-based merge of coplanar adjacent tris)
         let mut done = vec![false; m.tris.len()];
         let scale = m.aabb().diagonal().max(1e-300);
-        let em = m.edge_map();
+        // directed edge -> triangles, as a sorted list (ties by triangle)
+        let mut em: Vec<((u32, u32), u32)> = Vec::with_capacity(3 * m.tris.len());
+        for (t, tri) in m.tris.iter().enumerate() {
+            for k in 0..3 {
+                em.push(((tri[k], tri[(k + 1) % 3]), t as u32));
+            }
+        }
+        em.sort_unstable();
+        let tris_of = |e: (u32, u32)| -> &[((u32, u32), u32)] {
+            let lo = em.partition_point(|x| x.0 < e);
+            let hi = lo + em[lo..].partition_point(|x| x.0 == e);
+            &em[lo..hi]
+        };
         for t in 0..m.tris.len() {
             if done[t] {
                 continue;
@@ -310,8 +336,8 @@ impl ConvexPolytope {
                 let tri = m.tris[g];
                 for e in 0..3 {
                     let (u, v) = (tri[e], tri[(e + 1) % 3]);
-                    if let Some(ns) = em.get(&(v, u)) {
-                        for &o in ns {
+                    {
+                        for &(_, o) in tris_of((v, u)) {
                             let o = o as usize;
                             if done[o] {
                                 continue;
@@ -325,28 +351,35 @@ impl ConvexPolytope {
                     }
                 }
             }
-            // boundary loop of the group
-            let mut dir: BTreeMap<u32, u32> = BTreeMap::new();
-            let mut set = std::collections::BTreeSet::new();
+            // boundary loop of the group (sorted edge lists; for a vertex
+            // with several boundary edges the last one in order is used)
+            let mut set: Vec<(u32, u32)> = Vec::with_capacity(3 * group.len());
             for &g in &group {
                 let tri = m.tris[g];
                 for e in 0..3 {
-                    set.insert((tri[e], tri[(e + 1) % 3]));
+                    set.push((tri[e], tri[(e + 1) % 3]));
                 }
             }
+            set.sort_unstable();
+            set.dedup();
+            let mut dir: Vec<(u32, u32)> = Vec::new();
             for &(u, v) in &set {
-                if !set.contains(&(v, u)) {
-                    dir.insert(u, v);
+                if set.binary_search(&(v, u)).is_err() {
+                    if dir.last().map(|l| l.0 == u).unwrap_or(false) {
+                        dir.pop();
+                    }
+                    dir.push((u, v));
                 }
             }
-            if let Some((&start, _)) = dir.iter().next() {
+            let next = |u: u32| -> Option<u32> { dir.binary_search_by(|x| x.0.cmp(&u)).ok().map(|i| dir[i].1) };
+            if let Some(&(start, first)) = dir.first() {
                 let mut poly = vec![m.verts[start as usize]];
-                let mut cur = dir[&start];
+                let mut cur = first;
                 let mut guard = 0;
                 while cur != start && guard < dir.len() + 2 {
                     poly.push(m.verts[cur as usize]);
-                    cur = match dir.get(&cur) {
-                        Some(&x) => x,
+                    cur = match next(cur) {
+                        Some(x) => x,
                         None => break,
                     };
                     guard += 1;
@@ -362,8 +395,9 @@ impl ConvexPolytope {
     }
 
     pub fn vertices(&self) -> Vec<DVec3> {
+        // first occurrence order (the set is only used for membership)
         let mut v: Vec<DVec3> = Vec::new();
-        let mut seen = std::collections::BTreeSet::new();
+        let mut seen: std::collections::HashSet<[u64; 3], EdgeHash> = std::collections::HashSet::with_capacity_and_hasher(64, EdgeHash);
         for (_, f) in &self.faces {
             for p in f {
                 if seen.insert([p.x.to_bits(), p.y.to_bits(), p.z.to_bits()]) {
@@ -391,9 +425,9 @@ impl ConvexPolytope {
         self.volume_integrals().volume.max(0.0)
     }
 
+    /// Bounding-box diagonal of the vertices.
     pub fn scale(&self) -> f64 {
-        let vs = self.vertices();
-        crate::aabb::Aabb::from_points(vs.iter()).diagonal()
+        crate::aabb::Aabb::from_points(self.faces.iter().flat_map(|f| f.1.iter())).diagonal()
     }
 
     /// Keep the part with `h.dist(x) <= 0`.

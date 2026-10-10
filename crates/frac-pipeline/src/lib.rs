@@ -308,6 +308,13 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
         asset.hierarchy.fragments[i].interior_area = a;
     }
     tick("bonds", &mut t, &mut timings);
+    // diagnostics: `FRAC_STOP_BEFORE_COLLISION=<path>` writes the asset
+    // (cells, hierarchy, bonds; no hulls) and stops, for collision
+    // experiments with `prefracture hulls`
+    if let Some(p) = std::env::var_os("FRAC_STOP_BEFORE_COLLISION") {
+        frac_io::write_asset_json(&asset, std::path::Path::new(&p)).map_err(|e| FracError::new(Stage::Export, input.name.clone(), e.to_string()))?;
+        return Err(FracError::new(Stage::Export, input.name.clone(), "stopped before collision (FRAC_STOP_BEFORE_COLLISION)"));
+    }
     // ---- Stage 8: collision
     let cp = collision_params(settings);
     let (hulls, ranges) = frac_collision::build_hulls(&asset, &cp);
