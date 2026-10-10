@@ -8,7 +8,7 @@ use faer::sparse::linalg::cholesky::{
     SymbolicCholeskyRaw, SymmetricOrdering,
 };
 use faer::sparse::{SparseColMatRef, SymbolicSparseColMatRef};
-use faer::{Conj, Mat, MatMut, MatRef, Par, Side};
+use faer::{Conj, Mat, MatMut, Par, Side};
 use rayon::prelude::*;
 
 /// Compressed sparse row matrix with sorted, unique column indices per row.
@@ -306,240 +306,6 @@ impl CsrMatrix {
     }
 }
 
-/// Number of subtree tasks of [`TreeSolve`]. Fixed (independent of the
-/// thread count) so the floating-point operation order never depends on how
-/// many threads run the tasks.
-const TREE_TASKS: usize = 16;
-
-/// Supernodal triangular solves parallelized over disjoint subtrees of the
-/// supernodal elimination tree, on top of faer's factor layout (supernode
-/// `s` stores its columns `begin[s]..begin[s+1]` as a dense column-major
-/// block: diagonal block first, then the rows listed in its pattern).
-///
-/// Forward solve: every task (a set of disjoint subtrees) eliminates its
-/// supernodes in increasing order on a private copy of its rows; updates of
-/// rows outside its subtrees (always "top" rows: ancestors of several tasks)
-/// are accumulated in a private buffer. The buffers are then subtracted in
-/// task order and the top supernodes are eliminated sequentially. Backward
-/// solve: top supernodes first (sequentially), then the tasks in parallel
-/// (they only read top rows). The partition is fixed at construction, so
-/// results are bitwise identical for any number of threads.
-struct TreeSolve {
-    begin: Vec<usize>,
-    rptr: Vec<usize>,
-    vptr: Vec<usize>,
-    rows: Vec<usize>,
-    /// Tasks: supernodes in increasing order, and the (permuted) rows they own.
-    tasks: Vec<(Vec<usize>, Vec<usize>)>,
-    top: Vec<usize>,
-    top_rows: Vec<usize>,
-    /// Per permuted row: owning task (`usize::MAX` = top) and local index.
-    owner: Vec<(usize, usize)>,
-    max_pattern: usize,
-}
-
-impl TreeSolve {
-    fn new(sn: &faer::sparse::linalg::cholesky::supernodal::SymbolicSupernodalCholesky<usize>) -> TreeSolve {
-        let ns = sn.n_supernodes();
-        let n = sn.nrows();
-        let mut begin: Vec<usize> = sn.supernode_begin().to_vec();
-        begin.push(sn.supernode_end()[ns - 1]);
-        let rptr = sn.col_ptr_for_row_idx().to_vec();
-        let vptr = sn.col_ptr_for_val().to_vec();
-        let rows = sn.row_idx().to_vec();
-        let mut sn_of_row = vec![0usize; n];
-        for s in 0..ns {
-            for r in begin[s]..begin[s + 1] {
-                sn_of_row[r] = s;
-            }
-        }
-        // supernodal elimination tree and subtree work (stored values)
-        let mut parent = vec![usize::MAX; ns];
-        let mut children: Vec<Vec<usize>> = vec![Vec::new(); ns];
-        for s in 0..ns {
-            if rptr[s + 1] > rptr[s] {
-                let p = sn_of_row[rows[rptr[s]..rptr[s + 1]].iter().copied().min().unwrap()];
-                parent[s] = p;
-                children[p].push(s);
-            }
-        }
-        let mut work: Vec<usize> = (0..ns).map(|s| vptr[s + 1] - vptr[s]).collect();
-        for s in 0..ns {
-            // children have smaller indices than their parent
-            if parent[s] != usize::MAX {
-                work[parent[s]] += work[s];
-            }
-        }
-        let total: usize = (0..ns).filter(|&s| parent[s] == usize::MAX).map(|s| work[s]).sum();
-        // split the heaviest subtree until there are enough of them
-        let mut subtrees: Vec<usize> = (0..ns).filter(|&s| parent[s] == usize::MAX).collect();
-        let mut top: Vec<usize> = Vec::new();
-        loop {
-            let (k, &r) = match subtrees.iter().enumerate().max_by_key(|&(_, &s)| (work[s], usize::MAX - s)) {
-                Some(x) => x,
-                None => break,
-            };
-            if subtrees.len() >= 4 * TREE_TASKS || work[r] * 2 * TREE_TASKS <= total || children[r].is_empty() {
-                break;
-            }
-            subtrees.swap_remove(k);
-            top.push(r);
-            subtrees.extend(children[r].iter().copied());
-        }
-        // longest-processing-time assignment of subtrees to tasks
-        subtrees.sort_by_key(|&s| (usize::MAX - work[s], s));
-        let mut bins: Vec<(usize, Vec<usize>)> = vec![(0, Vec::new()); TREE_TASKS.min(subtrees.len()).max(1)];
-        for &r in &subtrees {
-            let b = (0..bins.len()).min_by_key(|&b| (bins[b].0, b)).unwrap();
-            bins[b].0 += work[r];
-            bins[b].1.push(r);
-        }
-        let mut owner = vec![(usize::MAX, 0usize); n];
-        let mut tasks = Vec::new();
-        for (_, roots) in bins {
-            let mut sns = Vec::new();
-            let mut stack = roots;
-            while let Some(s) = stack.pop() {
-                sns.push(s);
-                stack.extend(children[s].iter().copied());
-            }
-            sns.sort_unstable();
-            let t = tasks.len();
-            let mut own = Vec::new();
-            for &s in &sns {
-                own.extend(begin[s]..begin[s + 1]);
-            }
-            own.sort_unstable();
-            for (k, &r) in own.iter().enumerate() {
-                owner[r] = (t, k);
-            }
-            tasks.push((sns, own));
-        }
-        top.sort_unstable();
-        let mut top_rows = Vec::new();
-        for &s in &top {
-            top_rows.extend(begin[s]..begin[s + 1]);
-        }
-        top_rows.sort_unstable();
-        for (k, &r) in top_rows.iter().enumerate() {
-            owner[r] = (usize::MAX, k);
-        }
-        let max_pattern = (0..ns).map(|s| rptr[s + 1] - rptr[s]).max().unwrap_or(0);
-        TreeSolve { begin, rptr, vptr, rows, tasks, top, top_rows, owner, max_pattern }
-    }
-
-    /// Diagonal block and below-diagonal block of supernode `s`.
-    fn blocks<'a>(&self, s: usize, l: &'a [f64]) -> (MatRef<'a, f64>, MatRef<'a, f64>) {
-        let ncols = self.begin[s + 1] - self.begin[s];
-        let nrows = ncols + self.rptr[s + 1] - self.rptr[s];
-        let m = MatRef::from_column_major_slice(&l[self.vptr[s]..self.vptr[s + 1]], nrows, ncols);
-        m.split_at_row(ncols)
-    }
-
-    /// Forward elimination of supernode `s` on `x` (the supernode's own rows
-    /// at `x[off..off + size]`); returns the update `L_bot x_s` in `tmp`.
-    fn fwd_node(&self, s: usize, l: &[f64], xs: &mut [f64], tmp: &mut [f64]) {
-        let (top, bot) = self.blocks(s, l);
-        let size = xs.len();
-        let mut xm = MatMut::from_column_major_slice_mut(xs, size, 1);
-        faer::linalg::triangular_solve::solve_lower_triangular_in_place(top, xm.as_mut(), Par::Seq);
-        let np = bot.nrows();
-        let tm = MatMut::from_column_major_slice_mut(&mut tmp[..np], np, 1);
-        faer::linalg::matmul::matmul(tm, faer::Accum::Replace, bot, xm.as_ref(), 1.0, Par::Seq);
-    }
-
-    /// Backward step of supernode `s`: `x_s ← L_topᵀ⁻¹ (x_s − L_botᵀ tmp)`.
-    fn bwd_node(&self, s: usize, l: &[f64], xs: &mut [f64], tmp: &[f64]) {
-        let (top, bot) = self.blocks(s, l);
-        let size = xs.len();
-        let np = bot.nrows();
-        let mut xm = MatMut::from_column_major_slice_mut(xs, size, 1);
-        let tm = MatRef::from_column_major_slice(&tmp[..np], np, 1);
-        faer::linalg::matmul::matmul(xm.as_mut(), faer::Accum::Add, bot.transpose(), tm, -1.0, Par::Seq);
-        faer::linalg::triangular_solve::solve_upper_triangular_in_place(top.transpose(), xm, Par::Seq);
-    }
-
-    /// Solves `L Lᵀ x = b` in the permuted space, in place.
-    fn solve(&self, l: &[f64], x: &mut [f64]) {
-        let nt = self.top_rows.len();
-        // ---- forward: tasks ----
-        let parts: Vec<(Vec<f64>, Vec<f64>)> = self
-            .tasks
-            .par_iter()
-            .enumerate()
-            .map(|(t, (sns, own))| {
-                let mut xl: Vec<f64> = own.iter().map(|&r| x[r]).collect();
-                let mut acc = vec![0.0; nt];
-                let mut tmp = vec![0.0; self.max_pattern];
-                for &s in sns {
-                    let off = self.owner[self.begin[s]].1;
-                    let size = self.begin[s + 1] - self.begin[s];
-                    self.fwd_node(s, l, &mut xl[off..off + size], &mut tmp);
-                    for (idx, &r) in self.rows[self.rptr[s]..self.rptr[s + 1]].iter().enumerate() {
-                        let (o, k) = self.owner[r];
-                        if o == t {
-                            xl[k] -= tmp[idx];
-                        } else {
-                            acc[k] += tmp[idx];
-                        }
-                    }
-                }
-                (xl, acc)
-            })
-            .collect();
-        for (t, (xl, acc)) in parts.iter().enumerate() {
-            for (k, &r) in self.tasks[t].1.iter().enumerate() {
-                x[r] = xl[k];
-            }
-            for k in 0..nt {
-                x[self.top_rows[k]] -= acc[k];
-            }
-        }
-        // ---- forward/backward: top supernodes (sequential) ----
-        let mut tmp = vec![0.0; self.max_pattern];
-        for &s in &self.top {
-            let (b, e) = (self.begin[s], self.begin[s + 1]);
-            self.fwd_node(s, l, &mut x[b..e], &mut tmp);
-            for (idx, &r) in self.rows[self.rptr[s]..self.rptr[s + 1]].iter().enumerate() {
-                x[r] -= tmp[idx];
-            }
-        }
-        for &s in self.top.iter().rev() {
-            let (b, e) = (self.begin[s], self.begin[s + 1]);
-            for (idx, &r) in self.rows[self.rptr[s]..self.rptr[s + 1]].iter().enumerate() {
-                tmp[idx] = x[r];
-            }
-            self.bwd_node(s, l, &mut x[b..e], &tmp);
-        }
-        // ---- backward: tasks (read top rows only) ----
-        let xr: &[f64] = x;
-        let parts: Vec<Vec<f64>> = self
-            .tasks
-            .par_iter()
-            .enumerate()
-            .map(|(t, (sns, own))| {
-                let mut xl: Vec<f64> = own.iter().map(|&r| xr[r]).collect();
-                let mut tmp = vec![0.0; self.max_pattern];
-                for &s in sns.iter().rev() {
-                    for (idx, &r) in self.rows[self.rptr[s]..self.rptr[s + 1]].iter().enumerate() {
-                        let (o, k) = self.owner[r];
-                        tmp[idx] = if o == t { xl[k] } else { xr[r] };
-                    }
-                    let off = self.owner[self.begin[s]].1;
-                    let size = self.begin[s + 1] - self.begin[s];
-                    self.bwd_node(s, l, &mut xl[off..off + size], &tmp);
-                }
-                xl
-            })
-            .collect();
-        for (t, xl) in parts.iter().enumerate() {
-            for (k, &r) in self.tasks[t].1.iter().enumerate() {
-                x[r] = xl[k];
-            }
-        }
-    }
-}
-
 /// Scratch buffers for [`SparseCholesky::solve_in_place_work`] (tied to one
 /// factorization's dimensions).
 pub struct SolveWork {
@@ -567,8 +333,6 @@ pub struct SparseCholesky {
     col_idx: Vec<usize>,
     /// Simplicial fast path: (L col_ptr, L row_idx, perm fwd, perm inv).
     simplicial: Option<(Vec<usize>, Vec<usize>, Vec<usize>, Vec<usize>)>,
-    /// Supernodal path: subtree-parallel solves and (perm fwd, perm inv).
-    tree: Option<(TreeSolve, Vec<usize>, Vec<usize>)>,
 }
 
 impl SparseCholesky {
@@ -583,9 +347,9 @@ impl SparseCholesky {
         Self::with_threshold(a, faer::sparse::linalg::SupernodalThreshold::FORCE_SIMPLICIAL)
     }
 
-    /// Forces the supernodal factorization (dense blocks; solves parallelized
-    /// over subtrees of the elimination tree, deterministically); best for
-    /// large matrices.
+    /// Forces the supernodal factorization (dense blocks: about half the
+    /// memory traffic per solve of the simplicial one); best for large
+    /// matrices.
     pub fn new_supernodal(a: &CsrMatrix) -> Result<Self, String> {
         Self::with_threshold(a, faer::sparse::linalg::SupernodalThreshold::FORCE_SUPERNODAL)
     }
@@ -612,16 +376,6 @@ impl SparseCholesky {
             }
             _ => None,
         };
-        let tree = match symbolic.raw() {
-            SymbolicCholeskyRaw::Supernodal(sn) if sn.n_supernodes() > 0 => {
-                let (fwd, inv) = match symbolic.perm() {
-                    Some(p) => (p.arrays().0.to_vec(), p.arrays().1.to_vec()),
-                    None => ((0..n).collect(), (0..n).collect()),
-                };
-                Some((TreeSolve::new(sn), fwd, inv))
-            }
-            _ => None,
-        };
         let mut s = SparseCholesky {
             values: vec![0.0; symbolic.len_val()],
             symbolic,
@@ -629,7 +383,6 @@ impl SparseCholesky {
             row_ptr: a.row_ptr.clone(),
             col_idx: a.col_idx.clone(),
             simplicial,
-            tree,
         };
         s.refactor(a)?;
         Ok(s)
@@ -720,17 +473,6 @@ impl SparseCholesky {
             }
             return;
         }
-        if let Some((tree, fwd, inv)) = &self.tree {
-            w.x.resize(n, 0.0);
-            for (xi, &f) in w.x.iter_mut().zip(fwd) {
-                *xi = b[f];
-            }
-            tree.solve(&self.values, &mut w.x);
-            for i in 0..n {
-                b[i] = w.x[inv[i]];
-            }
-            return;
-        }
         if w.mat.nrows() != n || w.mat.ncols() != 1 {
             w.mat = Mat::<f64>::zeros(n, 1);
         }
@@ -811,7 +553,7 @@ mod tests {
         }
         let a2 = CsrMatrix::from_triplets(g * g, g * g, t);
         let x2: Vec<f64> = (0..g * g).map(|i| (i as f64 * 0.11).cos()).collect();
-        for ch in [SparseCholesky::new_simplicial(&a2).unwrap(), SparseCholesky::new(&a2).unwrap()] {
+        for ch in [SparseCholesky::new_simplicial(&a2).unwrap(), SparseCholesky::new(&a2).unwrap(), SparseCholesky::new_supernodal(&a2).unwrap()] {
             let mut b = a2.mul(&x2);
             ch.solve_in_place(&mut b);
             for i in 0..g * g {
@@ -826,66 +568,6 @@ mod tests {
                 let s: f64 = (0..n).map(|k| d[k * n + i] * d[k * n + j]).sum();
                 assert!((s - dd[i * n + j]).abs() < 1e-12);
             }
-        }
-    }
-
-    #[test]
-    fn supernodal_tree_solve_matches_and_is_thread_independent() {
-        // 3D grid, 3 DOFs per node with coupled blocks: many supernodes and subtrees
-        let g = 11;
-        let id = |i: usize, j: usize, k: usize| (i * g + j) * g + k;
-        let mut t = Vec::new();
-        for i in 0..g {
-            for j in 0..g {
-                for k in 0..g {
-                    let p = id(i, j, k);
-                    for a in 0..3 {
-                        for b in 0..3 {
-                            t.push((3 * p + a, 3 * p + b, if a == b { 6.5 } else { 0.3 }));
-                        }
-                    }
-                    let mut nb = Vec::new();
-                    if i + 1 < g {
-                        nb.push(id(i + 1, j, k));
-                    }
-                    if j + 1 < g {
-                        nb.push(id(i, j + 1, k));
-                    }
-                    if k + 1 < g {
-                        nb.push(id(i, j, k + 1));
-                    }
-                    for q in nb {
-                        for a in 0..3 {
-                            t.push((3 * p + a, 3 * q + a, -1.0));
-                            t.push((3 * q + a, 3 * p + a, -1.0));
-                        }
-                    }
-                }
-            }
-        }
-        let n = 3 * g * g * g;
-        let a = CsrMatrix::from_triplets(n, n, t);
-        let sn = SparseCholesky::new_supernodal(&a).unwrap();
-        let tree = sn.tree.as_ref().expect("supernodal factor");
-        assert!(tree.0.tasks.len() > 1 && !tree.0.top.is_empty());
-        let x: Vec<f64> = (0..n).map(|i| (i as f64 * 0.013).sin() + 0.5).collect();
-        let b = a.mul(&x);
-        let solve = |threads: usize| {
-            let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
-            pool.install(|| {
-                let mut v = b.clone();
-                sn.solve_in_place(&mut v);
-                v
-            })
-        };
-        let y1 = solve(1);
-        let y4 = solve(4);
-        assert_eq!(y1, y4, "tree solve depends on the thread count");
-        let mut z = b.clone();
-        sn.solve_mat(faer::MatMut::from_column_major_slice_mut(&mut z, n, 1));
-        for i in 0..n {
-            assert!((y1[i] - x[i]).abs() < 1e-10, "{i}: {} vs {}", y1[i], x[i]);
-            assert!((y1[i] - z[i]).abs() < 1e-11);
         }
     }
 }

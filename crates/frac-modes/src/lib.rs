@@ -49,6 +49,14 @@
 //! starts, and an inexact-ICCM tolerance schedule; for ≤ 3000 unknowns the
 //! tight confirmation solves are delegated to Clarabel).
 //!
+//! Large problems (more than [`ModesParams::large_dofs`] unknowns, e.g. a
+//! brick wall with ~1300 analysis cells → 16k unknowns) run ADMM only: an
+//! interior-point confirmation costs ~35 s there and a tight ADMM tail
+//! thousands of iterations. ICCM then stops at
+//! `max(eps, ModesParams::eps_large)` with subproblems certified to a tenth
+//! of it; on the benchmark wall this reproduces the Level-1 segmentation of
+//! the tight schedule exactly (ARI 1.0) at ~1/20 of the cost.
+//!
 //! # Performance: cell-polynomial reduction
 //! The full exploded problem has `3 × #(vertex, cell) pairs` unknowns
 //! (~30k for a 20k-tet mesh) and costs minutes. [`Solver::Auto`] therefore
@@ -322,7 +330,6 @@ struct Schedule {
     tol_min: f64,
     /// Certify with Clarabel (hybrid mode) instead of a tight ADMM solve.
     clarabel_confirm: bool,
-    scale_warm: bool,
 }
 
 impl Schedule {
@@ -337,15 +344,11 @@ impl Schedule {
         let large = matches!(backend, Backend::Admm(_)) && n > p.large_dofs;
         if large {
             let eps = p.eps.max(p.eps_large);
-            Schedule { eps, tol_min: (0.1 * eps).clamp(1e-8, ADMM_TOL_MAX), clarabel_confirm: false, scale_warm: scale_warm_enabled() }
+            Schedule { eps, tol_min: (0.1 * eps).clamp(1e-8, ADMM_TOL_MAX), clarabel_confirm: false }
         } else {
-            Schedule { eps: p.eps, tol_min: (0.01 * p.eps).clamp(1e-8, 1e-4), clarabel_confirm: hybrid, scale_warm: scale_warm_enabled() }
+            Schedule { eps: p.eps, tol_min: (0.01 * p.eps).clamp(1e-8, 1e-4), clarabel_confirm: hybrid }
         }
     }
-}
-
-fn scale_warm_enabled() -> bool {
-    std::env::var_os("FX_WSCALE").is_some()
 }
 
 fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> Result<IccmResult, String> {
@@ -447,12 +450,6 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> R
                 return Err(format!("mode {i}: degenerate subproblem solution"));
             }
             c = u.iter().map(|x| x / nu).collect();
-            if sched.scale_warm {
-                if let Backend::Admm(a) = backend {
-                    // the next solution is ≈ u/‖u‖: rescale the warm-start jumps
-                    a.scale_warm(1.0 / nu);
-                }
-            }
             last_diff = d2.sqrt();
             if admm::debug_enabled() {
                 eprintln!("[iccm] mode {i} it {it} diff {last_diff:.3e} obj {:.6e}", pb.objective(&u));

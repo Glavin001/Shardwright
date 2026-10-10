@@ -54,16 +54,7 @@ pub(crate) struct AdmmSettings {
 
 impl Default for AdmmSettings {
     fn default() -> Self {
-        let ev = |k: &str, d: f64| std::env::var(k).ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(d);
-        AdmmSettings {
-            eps_abs: 1e-9,
-            eps_rel: 1e-6,
-            max_iter: 20_000,
-            alpha: ev("FX_ALPHA", 1.0),
-            adaptive: ev("FX_ADAPT", 1.0) > 0.0,
-            anderson: ev("FX_MEM", 6.0) as usize,
-            dr_state: ev("FX_DR", 1.0) > 0.0,
-        }
+        AdmmSettings { eps_abs: 1e-9, eps_rel: 1e-6, max_iter: 20_000, alpha: 1.0, adaptive: true, anderson: 6, dr_state: true }
     }
 }
 
@@ -79,6 +70,9 @@ pub(crate) fn debug_enabled() -> bool {
 fn norm(v: &[f64]) -> f64 {
     dot(v, v).sqrt()
 }
+
+/// Unknowns from which the u-step matrix is factorized supernodally.
+const SUPERNODAL_MIN_DOFS: usize = 5000;
 
 /// Chunk length of the parallel reductions (fixed, so the summation order
 /// never depends on the thread count).
@@ -191,7 +185,7 @@ impl Admm {
         // s_g normalizing the groups' Frobenius norms (a per-group ρ)
         let mut b = pb.b_act.clone();
         let mut lam = pb.lam_act.clone();
-        if std::env::var_os("FX_NOEQ").is_none() {
+        {
             let fro: Vec<f64> = pb
                 .rows_act
                 .iter()
@@ -221,15 +215,16 @@ impl Admm {
                 sb += bd[i];
             }
         }
-        let f0 = std::env::var("FX_RHO").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.03);
-        let rho = rho0.unwrap_or(if sb > 0.0 { (f0 * sq / sb).clamp(1e-6, 1e6) } else { 1.0 });
+        let rho = rho0.unwrap_or(if sb > 0.0 { (0.03 * sq / sb).clamp(1e-6, 1e6) } else { 1.0 });
         let a = base.add(1.0, &btb, rho);
         // simplicial factors have lean, allocation-free solves (the u-step is
-        // solved thousands of times); supernodal pays off for big systems
-        let chol = if pb.n < 20_000 && std::env::var_os("FRAC_SN").is_none() {
+        // solved thousands of times); supernodal ones (dense blocks, half the
+        // memory traffic) win for big systems: 14 vs 22 ms per solve at 16k
+        // unknowns (masonry wall)
+        let chol = if pb.n < SUPERNODAL_MIN_DOFS {
             SparseCholesky::new_simplicial(&a)?
         } else {
-            SparseCholesky::new(&a)?
+            SparseCholesky::new_supernodal(&a)?
         };
         let nr = pb.b_act.n_rows;
         if debug_enabled() {
@@ -246,21 +241,6 @@ impl Admm {
                 chol.factor_nnz(),
                 t.elapsed().as_secs_f64() * 1e3 / 20.0
             );
-            if std::env::var_os("FX_BENCH_SOLVE").is_some() {
-                for rep in 0..2 {
-                    let t = std::time::Instant::now();
-                    for _ in 0..20 {
-                        chol.solve_mat(faer::MatMut::from_column_major_slice_mut(&mut v, pb.n, 1));
-                    }
-                    let a1 = t.elapsed().as_secs_f64() * 1e3 / 20.0;
-                    let t = std::time::Instant::now();
-                    for _ in 0..20 {
-                        chol.solve_in_place_work(&mut v, &mut w);
-                    }
-                    let a2 = t.elapsed().as_secs_f64() * 1e3 / 20.0;
-                    eprintln!("[admm] bench {rep}: faer solve {a1:.3} ms, ours {a2:.3} ms");
-                }
-            }
         }
         let mut settings = AdmmSettings::default();
         if settings.alpha != 1.0 {
@@ -295,12 +275,6 @@ impl Admm {
     pub fn warm_from(&mut self, _pb: &Problem, u0: &[f64]) {
         self.b.matvec(u0, &mut self.z0);
         self.y0.iter_mut().for_each(|v| *v = 0.0);
-    }
-
-    /// Scales the warm-start `z` (the scaled duals `y` are scale-invariant at
-    /// the optimum: `λ_g/ρ` times a unit direction on active groups).
-    pub fn scale_warm(&mut self, s: f64) {
-        self.z0.iter_mut().for_each(|v| *v *= s);
     }
 
     fn state_len(&self, nr: usize) -> usize {
