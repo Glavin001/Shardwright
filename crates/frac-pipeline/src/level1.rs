@@ -1,6 +1,7 @@
 //! Level-1 structural fragments: material-aware fracture modes (Stage 3/4)
 //! with agglomeration (method B) as the fallback.
 
+use rayon::prelude::*;
 use crate::assemble::ComponentCells;
 use frac_core::input::PartMeta;
 use frac_core::*;
@@ -60,40 +61,66 @@ pub fn analysis_adjacency(
 
 /// Locate points in the cells of a component (exact parity per candidate
 /// cell, nearest boundary as fallback). Returns local cell indices.
-pub struct CellLocator {
-    meshes: Vec<TriMesh>,
+/// Closed boundary mesh of every cell of a component (local vertex
+/// numbering: a whole-component vertex table per cell would make this
+/// quadratic in the cell count).
+pub fn cell_meshes(comp: &Component) -> Vec<TriMesh> {
+    let g = &comp.geometry;
+    let n = (comp.cells.end - comp.cells.start) as usize;
+    let mut tris: Vec<Vec<[u32; 3]>> = vec![Vec::new(); n];
+    for e in &g.ext_polys {
+        let c = (e.cell.0 - comp.cells.start) as usize;
+        tris[c].extend(e.tris.iter().copied());
+    }
+    for p in &g.patches {
+        let a = (p.cells.0 .0 - comp.cells.start) as usize;
+        let b = (p.cells.1 .0 - comp.cells.start) as usize;
+        for t in &p.tris {
+            tris[a].push(*t);
+            tris[b].push([t[0], t[2], t[1]]);
+        }
+    }
+    tris.into_par_iter()
+        .map(|t| {
+            // same mesh as TriMesh { verts: g.verts, tris }.compact()
+            let mut used: std::collections::HashMap<u32, u32> = std::collections::HashMap::with_capacity(t.len());
+            let mut verts = Vec::new();
+            let tris = t
+                .iter()
+                .map(|tri| {
+                    tri.map(|v| {
+                        *used.entry(v).or_insert_with(|| {
+                            verts.push(g.verts[v as usize]);
+                            (verts.len() - 1) as u32
+                        })
+                    })
+                })
+                .collect();
+            TriMesh { verts, tris }
+        })
+        .collect()
+}
+
+/// Point location in the cells of a component (queries built once per
+/// cell, over meshes from [`cell_meshes`]).
+pub struct CellLocator<'a> {
+    queries: Vec<MeshQuery<'a>>,
     boxes: Vec<Aabb>,
     bvh: Bvh,
 }
 
-impl CellLocator {
-    pub fn new(asset: &Asset, comp: &Component) -> Self {
-        let g = &comp.geometry;
-        let n = (comp.cells.end - comp.cells.start) as usize;
-        let mut tris: Vec<Vec<[u32; 3]>> = vec![Vec::new(); n];
-        for e in &g.ext_polys {
-            let c = (e.cell.0 - comp.cells.start) as usize;
-            tris[c].extend(e.tris.iter().copied());
-        }
-        for p in &g.patches {
-            let a = (p.cells.0 .0 - comp.cells.start) as usize;
-            let b = (p.cells.1 .0 - comp.cells.start) as usize;
-            for t in &p.tris {
-                tris[a].push(*t);
-                tris[b].push([t[0], t[2], t[1]]);
-            }
-        }
-        let meshes: Vec<TriMesh> = tris.into_iter().map(|t| TriMesh { verts: g.verts.clone(), tris: t }.compact()).collect();
+impl<'a> CellLocator<'a> {
+    pub fn new(meshes: &'a [TriMesh]) -> Self {
+        let queries: Vec<MeshQuery<'a>> = meshes.par_iter().map(MeshQuery::new).collect();
         let boxes: Vec<Aabb> = meshes.iter().map(|m| m.aabb()).collect();
         let bvh = Bvh::build(&boxes);
-        let _ = asset;
-        CellLocator { meshes, boxes, bvh }
+        CellLocator { queries, boxes, bvh }
     }
     pub fn locate(&self, p: DVec3) -> u32 {
         let q = Aabb { min: p, max: p };
         let cand = self.bvh.query_vec(&q);
         for &c in &cand {
-            if MeshQuery::new(&self.meshes[c as usize]).contains(p) {
+            if self.queries[c as usize].contains(p) {
                 return c;
             }
         }
@@ -108,7 +135,7 @@ impl CellLocator {
             if d > best.0 {
                 break;
             }
-            if let Some((_, d2, _)) = MeshQuery::new(&self.meshes[c as usize]).closest_point(p) {
+            if let Some((_, d2, _)) = self.queries[c as usize].closest_point(p) {
                 if d2 < best.0 {
                     best = (d2, c);
                 }
@@ -228,16 +255,19 @@ fn run_modes(
     if mesh.tets.is_empty() {
         return Err("empty analysis mesh".into());
     }
-    let loc = CellLocator::new(asset, comp);
+    let t_tet = t_start.elapsed().as_secs_f64();
+    let cmeshes = cell_meshes(comp);
+    let loc = CellLocator::new(&cmeshes);
     let tet_cell: Vec<u32> = mesh
         .tets
-        .iter()
+        .par_iter()
         .map(|t| {
             let c = t.iter().fold(DVec3::ZERO, |a, &v| a + DVec3::from_array(mesh.verts[v as usize])) / 4.0;
             let lc = loc.locate(c);
             info.cell_analysis[lc as usize]
         })
         .collect();
+    let t_loc = t_start.elapsed().as_secs_f64() - t_tet;
     let mat = elastic_material(lib, comp.material, comp.grain);
     let tet_material = vec![mat; mesh.tets.len()];
     let wmap: BTreeMap<(u32, u32), f64> = adj.iter().map(|&(a, b, _, w)| ((a, b), w)).collect();
@@ -298,7 +328,7 @@ fn run_modes(
     if std::env::var_os("FRAC_LOG").is_some() {
         let stages: Vec<String> = out.timings_ms.iter().map(|(k, v)| format!("{k} {:.2}", v / 1e3)).collect();
         eprintln!(
-            "    [modes] component {} '{}': {} analysis cells, {} tets, {} unknowns, {}: setup {:.2} s, modes {:.2} s ({})",
+            "    [modes] component {} '{}': {} analysis cells, {} tets, {} unknowns, {}: setup {:.2} s (tetrahedralize {t_tet:.2}, locate {t_loc:.2}), modes {:.2} s ({})",
             cfg.component,
             comp.name,
             info.n_analysis,

@@ -490,13 +490,38 @@ pub fn ray_volume(m: &TriMesh, n: usize) -> f64 {
     let bb = m.aabb();
     let ext = bb.extent();
     let (dx, dy) = (ext.x / n as f64, ext.y / n as f64);
+    // bin triangles by the rays their xy bounding box covers (ascending
+    // triangle order per ray: the same sum as testing every triangle)
+    let mut bins: Vec<Vec<u32>> = vec![Vec::new(); n * n];
+    if dx > 0.0 && dy > 0.0 {
+        for t in 0..m.tris.len() {
+            let [a, b, c] = m.tri_points(t);
+            let (x0, x1) = (a.x.min(b.x).min(c.x), a.x.max(b.x).max(c.x));
+            let (y0, y1) = (a.y.min(b.y).min(c.y), a.y.max(b.y).max(c.y));
+            let lo = |v: f64, o: f64, d: f64| (((v - o) / d - 0.5).ceil().max(0.0) as usize).min(n);
+            let hi = |v: f64, o: f64, d: f64| ((v - o) / d - 0.5).floor();
+            // one extra ray on each side guards rounding at bin boundaries
+            let (i0, j0) = (lo(x0, bb.min.x, dx).saturating_sub(1), lo(y0, bb.min.y, dy).saturating_sub(1));
+            let (i1, j1) = (hi(x1, bb.min.x, dx) + 1.0, hi(y1, bb.min.y, dy) + 1.0);
+            if i1 < 0.0 || j1 < 0.0 {
+                continue;
+            }
+            let (i1, j1) = ((i1 as usize).min(n - 1), (j1 as usize).min(n - 1));
+            for i in i0..=i1 {
+                for j in j0..=j1 {
+                    bins[i * n + j].push(t as u32);
+                }
+            }
+        }
+    }
     let mut vol = 0.0;
     for i in 0..n {
         for j in 0..n {
             let x = bb.min.x + (i as f64 + 0.5) * dx;
             let y = bb.min.y + (j as f64 + 0.5) * dy;
             let mut zs: Vec<(f64, f64)> = Vec::new(); // (z, sign of crossing)
-            for t in 0..m.tris.len() {
+            for &t in &bins[i * n + j] {
+                let t = t as usize;
                 let [a, b, c] = m.tri_points(t);
                 // barycentric in xy
                 let d = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);

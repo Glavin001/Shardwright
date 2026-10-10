@@ -8,7 +8,9 @@
 # Defaults: benchmarks/configs/bake.toml, every benchmarks/assets/*.glb.
 # HELD_OUT=1 adds benchmarks/assets/held_out/*.glb. BUDGET_S (default 300)
 # is the per-asset end-to-end budget; OUT (default out/suite) keeps the
-# outputs and logs. Exits non-zero if any asset fails a gate or the budget.
+# outputs and logs (KEEP_OUTPUTS=0 deletes each asset's payloads after its
+# row is recorded, keeping reports and logs). Exits non-zero if any asset
+# fails a gate or the budget.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 config=${1:-benchmarks/configs/bake.toml}
@@ -62,6 +64,9 @@ for a in "${assets[@]}"; do
     fi
     printf '| %s | %.1f | %s | %s | %s |\n' "$name" "$t" "$peak" "$gates" "$verdict" >> "$summary"
     tail -1 "$summary"
+    if [ "${KEEP_OUTPUTS:-1}" = 0 ]; then
+        rm -f "$out/$name.glb" "$out/$name.fracphys" "$out/$name.asset.json"
+    fi
 done
 cat "$summary"
 exit $status

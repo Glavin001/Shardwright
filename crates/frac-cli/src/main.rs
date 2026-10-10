@@ -288,18 +288,18 @@ fn bake(
                 let r = frac_io::khronos_validate(&glb);
                 (r, t.elapsed().as_secs_f64())
             });
-            let f = sc.spawn(|| {
-                let t = std::time::Instant::now();
-                let r = match frac_io::flatc_scratch_check(&phys) {
-                    Ok(()) => frac_io::flatc_validate(&phys).map(|r| r.map(|()| None)),
-                    Err(note) => Some(Ok(Some(note))),
-                };
-                (r, t.elapsed().as_secs_f64())
-            });
             let t = std::time::Instant::now();
             let w = frac_io::write_asset_json(&res.asset, &asset_path).map_err(|e| e.to_string());
             let w = (w, t.elapsed().as_secs_f64());
-            (k.join().expect("khronos validator thread"), f.join().expect("flatc thread"), w)
+            // flatc after the asset dump, so its scratch-space check sees
+            // the disk as it is (both write gigabytes on building scale)
+            let t = std::time::Instant::now();
+            let r = match frac_io::flatc_scratch_check(&phys) {
+                Ok(()) => frac_io::flatc_validate(&phys).map(|r| r.map(|()| None)),
+                Err(note) => Some(Ok(Some(note))),
+            };
+            let f = (r, t.elapsed().as_secs_f64());
+            (k.join().expect("khronos validator thread"), f, w)
         });
         if log {
             eprintln!(
