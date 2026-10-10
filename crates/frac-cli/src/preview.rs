@@ -148,9 +148,14 @@ fn level_bonds<'a>(
     asset
         .level_bonds(level)
         .filter(|b| clip_z.is_none_or(|z| b.centroid.z <= z))
-        .map(|b| (b, cap(b).max(1.0)))
+        .map(|b| (b, cap(b).max(0.0)))
         .collect()
 }
+
+/// Bonds below this capacity (Pa) carry no tension (e.g. bearing joints):
+/// drawn grey, outside the colour scale.
+const NO_TENSION: f64 = 1.0;
+const NO_TENSION_RGB: [f32; 3] = [0.55, 0.55, 0.58];
 
 fn bond_kind(b: &frac_core::Bond) -> InterfaceKind {
     if b.anchor {
@@ -186,6 +191,7 @@ fn bond_tris(
         let rgb = match mode {
             BondColour::Kind => kind_colour(bond_kind(b)),
             BondColour::Strength if b.anchor => [0.05, 0.05, 0.05],
+            BondColour::Strength if c < NO_TENSION => NO_TENSION_RGB,
             BondColour::Strength => heat(log_t(c, lo, hi)),
         };
         let shade = (0.55 + 0.45 * b.normal.dot(light).abs()) as f32;
@@ -439,8 +445,14 @@ enum Legend {
     Parts,
     /// Joint kinds present, with bond counts.
     Kind(Vec<(InterfaceKind, usize)>),
-    /// Log colour bar over [lo, hi] Pa, and the number of anchor bonds.
-    Strength { lo: f64, hi: f64, anchors: usize },
+    /// Log colour bar over [lo, hi] Pa, and the numbers of anchor bonds and
+    /// of bonds without tensile capacity.
+    Strength {
+        lo: f64,
+        hi: f64,
+        anchors: usize,
+        no_tension: usize,
+    },
 }
 
 impl Legend {
@@ -505,7 +517,12 @@ fn draw_legend(c: &mut Canvas, y0: i64, lg: &Legend) {
                 c.text(x + 32, y + 3, 2, &format!("{} ({n})", kind_label(k)), INK);
             }
         }
-        &Legend::Strength { lo, hi, anchors } => {
+        &Legend::Strength {
+            lo,
+            hi,
+            anchors,
+            no_tension,
+        } => {
             c.text(
                 x0,
                 y0 + 10,
@@ -520,18 +537,28 @@ fn draw_legend(c: &mut Canvas, y0: i64, lg: &Legend) {
                 "capacity = tensile strength of the joint (or of the weaker side's material) x the bond's Weibull strength scale",
                 DIM,
             );
-            let reserve = if anchors > 0 { 330 } else { 0 };
+            let reserve = if anchors > 0 || no_tension > 0 {
+                330
+            } else {
+                0
+            };
             let bw = (c.w as i64 - 2 * x0 - reserve - 60).clamp(200, 1400);
             let (bx, by, bh) = (x0 + 30, y0 + 52, 26i64);
             for i in 0..bw {
                 c.rect(bx + i, by, 1, bh, rgb8(heat(i as f64 / (bw - 1) as f64)));
             }
-            // ticks: the range ends plus 1-2-5 values in between
+            // ticks: the range ends plus round values in between (denser
+            // steps for narrow ranges; labels that would collide are dropped)
             let mut ticks = vec![lo];
             if hi > lo * (1.0 + 1e-9) {
+                let steps: &[f64] = match hi / lo {
+                    r if r < 3.0 => &[1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0],
+                    r if r < 30.0 => &[1.0, 1.5, 2.0, 3.0, 5.0, 7.0],
+                    _ => &[1.0, 2.0, 5.0],
+                };
                 let mut d = 10f64.powf((lo / 1e6).log10().floor()) * 1e6;
                 while d <= hi {
-                    for m in [1.0, 2.0, 5.0] {
+                    for &m in steps {
                         let v = d * m;
                         if v > lo && v < hi {
                             ticks.push(v);
@@ -546,7 +573,7 @@ fn draw_legend(c: &mut Canvas, y0: i64, lg: &Legend) {
             for (k, &v) in ticks.iter().enumerate() {
                 let x = bx + (log_t(v, lo, hi) * (bw - 1) as f64).round() as i64;
                 let label = match k {
-                    0 => format!("{} min", fmt_mpa(v)),
+                    0 => format!("min {}", fmt_mpa(v)),
                     _ if k == n - 1 => format!("max {}", fmt_mpa(v)),
                     _ => fmt_mpa(v),
                 };
@@ -569,11 +596,29 @@ fn draw_legend(c: &mut Canvas, y0: i64, lg: &Legend) {
                 c.text(lx, by + bh + 12, 2, &label, INK);
                 last_right = lx + w;
             }
+            let ax = bx + bw + 40;
+            let mut ay = by;
             if anchors > 0 {
-                let ax = bx + bw + 40;
-                c.rect(ax, by, 26, bh, [13, 13, 13]);
-                c.rect(ax, by, 26, 1, DIM);
-                c.text(ax + 36, by + 5, 2, &format!("anchor ({anchors})"), INK);
+                c.rect(ax, ay, 26, 20, [13, 13, 13]);
+                c.text(ax + 36, ay + 2, 2, &format!("anchor ({anchors})"), INK);
+                ay += 30;
+            }
+            if no_tension > 0 {
+                c.rect(ax, ay, 26, 20, rgb8(NO_TENSION_RGB));
+                c.text(
+                    ax + 36,
+                    ay + 2,
+                    2,
+                    &format!("no tension ({no_tension})"),
+                    INK,
+                );
+                c.text(
+                    ax + 36,
+                    ay + 22,
+                    1,
+                    "compression-only joint, e.g. bearing",
+                    DIM,
+                );
             }
         }
     }
@@ -648,18 +693,19 @@ pub fn preview(
             let (lo, hi) = per
                 .iter()
                 .flatten()
-                .filter(|(b, _)| !b.anchor)
+                .filter(|(b, c)| !b.anchor && *c >= NO_TENSION)
                 .fold((f64::INFINITY, 0.0f64), |(l, h), &(_, c)| {
                     (l.min(c), h.max(c))
                 });
             let (lo, hi) = if lo.is_finite() { (lo, hi) } else { (1.0, 1.0) };
             let mut kinds: std::collections::BTreeMap<u8, (InterfaceKind, usize)> =
                 Default::default();
-            let mut anchors = 0;
-            for &(b, _) in per.iter().flatten() {
+            let (mut anchors, mut no_tension) = (0, 0);
+            for &(b, c) in per.iter().flatten() {
                 let k = bond_kind(b);
                 kinds.entry(k as u8).or_insert((k, 0)).1 += 1;
                 anchors += b.anchor as usize;
+                no_tension += (!b.anchor && c < NO_TENSION) as usize;
             }
             let panels = levels
                 .iter()
@@ -677,7 +723,12 @@ pub fn preview(
                 .collect();
             let legend = match mode {
                 BondColour::Kind => Legend::Kind(kinds.into_values().collect()),
-                BondColour::Strength => Legend::Strength { lo, hi, anchors },
+                BondColour::Strength => Legend::Strength {
+                    lo,
+                    hi,
+                    anchors,
+                    no_tension,
+                },
             };
             (panels, legend)
         }
@@ -704,7 +755,7 @@ pub fn preview(
     let (w, h) = compose(&panels, &titles, o, &legend, out)?;
     let detail = match &legend {
         Legend::Strength { lo, hi, .. } => format!(
-            "\ncolour = bond tensile capacity, log scale {} MPa (dark blue) to {} MPa (yellow); anchors black",
+            "\ncolour = bond tensile capacity, log scale {} MPa (dark blue) to {} MPa (yellow); anchors black, bonds without tensile capacity grey",
             fmt_mpa(*lo),
             fmt_mpa(*hi)
         ),

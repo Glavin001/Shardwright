@@ -68,21 +68,24 @@ dump), peak RSS and gates against a per-asset budget (`BUDGET_S`, default
 
 | Asset | Config | Time (s) | Peak RSS (MB) |
 |---|---|---|---|
-| ceramic_bowl | bake.toml | 4.6 | 52 |
+| ceramic_bowl | bake.toml | 5.6 | 70 |
 | glass_annealed_pane | bake.toml | 1.0 | 18 |
-| glass_tempered_pane | bake.toml | 19.3 | 134 |
-| brick_wall_window | bake.toml | 14.3 | 439 |
-| rc_column | bake.toml | 5.1 | 135 |
-| timber_beam | bake.toml | 3.6 | 83 |
-| rc_slab_on_columns | bake.toml | 30.3 | 895 |
-| messy_scan | bake.toml | 30.2 | 796 |
-| two_storey_building (60,920 cells) | bake.toml | 255 | 7,393 |
-| held-out: concrete_pipe / drywall_door / stone_arch | bake.toml | 3.1 / 1.5 / 5.6 | ≤ 150 |
-| building_v0 (2 storeys, 132 parts) | building.toml | 46.1 | 1,181 |
-| building_v1 (5 storeys, 419 parts, 42,547 cells) | building.toml | 149.5 | 3,807 |
+| glass_tempered_pane | bake.toml | 19.3 | 126 |
+| brick_wall_window | bake.toml | 12.7 | 429 |
+| rc_column (1537 cells, `fine_per_analysis = 16`) | bake.toml | 7.1 | 194 |
+| timber_beam | bake.toml | 3.1 | 83 |
+| rc_slab_on_columns | bake.toml | 30.6 | 880 |
+| messy_scan | bake.toml | 71.7 | 946 |
+| two_storey_building (60,920 cells) | bake.toml | 240.0 | 7,452 |
+| held-out: concrete_pipe / drywall_door / stone_arch | bake.toml | 5.7 / 2.0 / 8.7 | ≤ 156 |
+| building_v0 (2 storeys, 132 parts) | building_lite.toml | 13.8 | 318 |
+| building_v0 (2 storeys, 132 parts) | building.toml | 46.6 | 1,088 |
+| building_v1 (5 storeys, 419 parts, 42,547 cells) | building.toml | 145.4 | 3,444 |
 
-Two-storey stages (bake.toml): cells 13 s, fracture modes 35 s, collision
-31 s, render 40 s, validation 47 s, glTF 17 s, external validators ~45 s.
+bake.toml and building.toml use a collision budget of 128 hulls per
+fragment (the library default is 8). Two-storey stages (bake.toml): cells
+11 s, hierarchy with fracture modes 33 s, collision 31 s, render 41 s,
+validation 55 s, glTF and external validators ~63 s.
 `FRAC_LOG=1` prints per-stage times, sub-stage breakdowns and RSS.
 
 ## Previews

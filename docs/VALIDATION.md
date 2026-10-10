@@ -21,7 +21,7 @@ reproduces PL/EA to 0.2%.
 | Kratos FEM bond fidelity (§13.3) | all L3 targets met on the rc_column benchmark as baked (authored `fine_per_analysis = 16`, 1537 L3 cells; torsion p95 0.264). With the library default of 8 fine cells per analysis cell, torsion p95 is 0.355, a first-order resolution limit of rigid-cell kinematics; the asset's authored resolution override exists for this |
 | Analytical (patch tests, pure bending, known-answer modes) | pass |
 | Rankine crack oracle (§13.4) | L3 recall 0.900 (≥ 0.8 met); L1 recall 0.242 and weak-region Spearman −0.017 below the initial targets. No load-independent field we tried exceeds Spearman 0.253 against this oracle; see below |
-| Performance (§17) | every asset end to end in ≤ 300 s on 4 cores (two-storey building 255 s, 5-storey building 149 s), peak ≤ 7.4 GB |
+| Performance (§17) | every asset end to end in ≤ 300 s on 4 cores (two-storey building 240 s, 5-storey building 145 s), peak ≤ 7.5 GB |
 
 ## Bond fidelity (spec §13.3)
 
