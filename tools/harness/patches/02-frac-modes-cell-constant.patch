@@ -1,0 +1,61 @@
+--- a/crates/frac-modes/src/lib.rs
++++ b/crates/frac-modes/src/lib.rs
+@@ -228,7 +228,7 @@
+             let t = Instant::now();
+             let r = reduce::reduce(&full, &info, d, p.omega)?;
+             timings.push(("reduce".into(), t.elapsed().as_secs_f64() * 1e3));
+-            (r, format!("cell-p{}", d.clamp(1, 2)))
++            (r, format!("cell-p{}", d.min(2)))
+         }
+     };
+     let use_clarabel = match p.solver {
+--- a/crates/frac-modes/src/reduce.rs
++++ b/crates/frac-modes/src/reduce.rs
+@@ -30,7 +30,10 @@
+ 
+ fn monomials(x: [f64; 3], degree: u8, out: &mut Vec<f64>) {
+     out.clear();
+-    out.extend_from_slice(&[1.0, x[0], x[1], x[2]]);
++    out.push(1.0);
++    if degree >= 1 {
++        out.extend_from_slice(&[x[0], x[1], x[2]]);
++    }
+     if degree >= 2 {
+         out.extend_from_slice(&[x[0] * x[0], x[1] * x[1], x[2] * x[2], x[0] * x[1], x[1] * x[2], x[2] * x[0]]);
+     }
+@@ -45,7 +48,7 @@
+ }
+ 
+ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) -> Result<Problem, String> {
+-    let degree = degree.clamp(1, 2);
++    let degree = degree.min(2);
+     let nf = full.n / 3;
+     assert_eq!(info.super_cell.len(), nf);
+     let ns = info.n_super;
+@@ -83,7 +86,7 @@
+         }
+         let scale = if r2 > 0.0 { 1.0 / r2.sqrt() } else { 1.0 };
+         let loc = |p: [f64; 3]| [(p[0] - c[0]) * scale, (p[1] - c[1]) * scale, (p[2] - c[2]) * scale];
+-        let s0 = if degree >= 2 { 10 } else { 4 };
++        let s0 = [1, 4, 10][degree as usize];
+         // null space of anchored nodal values
+         let mut nmat: Vec<f64> = (0..s0 * s0).map(|i| if i % (s0 + 1) == 0 { 1.0 } else { 0.0 }).collect();
+         let mut s1 = s0;
+@@ -254,7 +257,16 @@
+     }
+     let b_all = CsrMatrix::from_triplets(row, nr, btrip);
+     let (active, b_act, rows_act, lam_act) = active_groups(&b_all, &rows_all, &full.group_weight, omega);
+-    let rigid_rows: Vec<Vec<f64>> = full.rigid_rows.iter().map(|r| phit.mul(r)).collect();
++    // Rigid-mode rows: only rigid modes contained in the subspace constrain
++    // it (all six for degree >= 1). For degree 0 (per-cell translations, the
++    // paper's §3.6 space) the rotations are not representable and are not
++    // zero-energy there, so only the three translations are kept.
++    let rigid_rows: Vec<Vec<f64>> = full
++        .rigid_rows
++        .iter()
++        .map(|r| phit.mul(r))
++        .filter(|a| a.iter().map(|x| x * x).sum::<f64>() > 1.0 - 1e-9)
++        .collect();
+     let mut init = Vec::with_capacity(full.init.len());
+     for c in &full.init {
+         let mc: Vec<f64> = (0..full.n).map(|i| full.m[i] * c[i]).collect();

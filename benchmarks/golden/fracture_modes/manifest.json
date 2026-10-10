@@ -1,0 +1,136 @@
+{
+ "reference": {
+  "repo": "https://github.com/sgsellan/fracture-modes",
+  "commit": "bdf5051fb0d78d787f49fabbf75b54bbc6698b17",
+  "conic_solver": "clarabel (substituted for MOSEK)",
+  "d": 3,
+  "max_iter": 10,
+  "tol": 0.0001
+ },
+ "paper": "Sell\u00e1n, Luong, Mattos Da Silva, Ramakrishnan, Yang, Jacobson. Breaking Good: Fracture Modes for Realtime Destruction. ACM TOG 42(1), 2023",
+ "mesher": "frac_fem::tetrahedralize on the normalized surface (unit bounding box)",
+ "meshes": {
+  "notched_bar, l_shape, plate_hole": "known-answer solids of crates/frac-modes/tests/known_answer.rs",
+  "bunny": "bunny_oded.obj bundled with the reference repository (Stanford bunny), tetrahedralized by us"
+ },
+ "arrays": "verts, tets: the mesh both ran on; ref_modes: non-trivial reference modes as per-tet displacements (tets, 3, k), M-unit with M = tet volumes; ref_labels: the reference's per-mode pieces (tets, k)",
+ "k": 6,
+ "omega": 0.001,
+ "cases": {
+  "notched_bar": {
+   "n_tets": 1605,
+   "h": 0.085,
+   "k": 6,
+   "ref_iterations": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "ref_pieces": [
+    2,
+    2,
+    2,
+    3,
+    3,
+    3
+   ],
+   "ref_seconds": 12.92,
+   "ref_trivial_first": true
+  },
+  "l_shape": {
+   "n_tets": 1976,
+   "h": 0.11,
+   "k": 6,
+   "ref_iterations": [
+    2,
+    2,
+    2,
+    3,
+    3,
+    3
+   ],
+   "ref_pieces": [
+    2,
+    2,
+    2,
+    3,
+    3,
+    3
+   ],
+   "ref_seconds": 52.53,
+   "ref_trivial_first": true
+  },
+  "plate_hole": {
+   "n_tets": 1924,
+   "h": 0.095,
+   "k": 6,
+   "ref_iterations": [
+    2,
+    2,
+    2,
+    2,
+    10,
+    10
+   ],
+   "ref_pieces": [
+    2,
+    2,
+    2,
+    2,
+    4,
+    4
+   ],
+   "ref_seconds": 15.93,
+   "ref_trivial_first": true
+  },
+  "bunny": {
+   "n_tets": 1940,
+   "h": 0.115,
+   "k": 6,
+   "ref_iterations": [
+    2,
+    2,
+    2,
+    3,
+    3,
+    3
+   ],
+   "ref_pieces": [
+    2,
+    2,
+    2,
+    3,
+    3,
+    3
+   ],
+   "ref_seconds": 32.81,
+   "ref_trivial_first": true
+  }
+ },
+ "ours_params": {
+  "full": {
+   "k": 6,
+   "omega": 0.001,
+   "eps": 0.0001,
+   "max_iters": 50,
+   "solver": "clarabel"
+  },
+  "cell-p1": {
+   "k": 6,
+   "omega": 0.001,
+   "eps": 0.0001,
+   "max_iters": 50,
+   "solver": "auto"
+  },
+  "cell-p0": {
+   "k": 6,
+   "omega": 0.001,
+   "eps": 0.0001,
+   "max_iters": 50,
+   "solver": "clarabel"
+  }
+ }
+}
