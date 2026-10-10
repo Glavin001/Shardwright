@@ -269,6 +269,8 @@ fn cell_atoms(asset: &Asset, idx: &CellIndex, cell: CellId, p: &CollisionParams)
         merge: false,
         max_convex_hull: None,
         max_parts: (2 * p.max_hulls).clamp(2, 64),
+        merge_cost: coacd::MergeCost::CollisionAware,
+        hb: coacd::HbMode::Exact,
         ..Default::default()
     };
     let nm = mesh.transformed(|v| frame.to_norm(v));

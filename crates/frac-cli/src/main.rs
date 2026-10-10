@@ -145,6 +145,13 @@ enum Cmd {
         /// (collision-aware, against the input surface).
         #[arg(long, default_value = "upstream")]
         merge_cost: String,
+        /// Skip the merge step (cut parts only).
+        #[arg(long)]
+        no_merge: bool,
+        /// Hb estimator of the cut loop: "upstream" (10-nearest-sample
+        /// triangles, as CoACD 1.0.x) or "exact".
+        #[arg(long, default_value = "upstream")]
+        hb: String,
     },
     /// Generate the procedural benchmark suite (spec §13.8).
     GenBench {
@@ -281,8 +288,13 @@ fn bake(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn decompose_cmd(mesh: &Path, out: &Path, threshold: f64, max_ch: usize, iters: u32, depth: u32, nodes: u32, resolution: u32, seed: u64, merge_cost: &str) -> Result<bool, String> {
-    use frac_pipeline::frac_collision::coacd::MergeCost;
+fn decompose_cmd(mesh: &Path, out: &Path, threshold: f64, max_ch: usize, iters: u32, depth: u32, nodes: u32, resolution: u32, seed: u64, merge_cost: &str, merge: bool, hb: &str) -> Result<bool, String> {
+    use frac_pipeline::frac_collision::coacd::{HbMode, MergeCost};
+    let hb = match hb {
+        "upstream" => HbMode::Upstream,
+        "exact" => HbMode::Exact,
+        o => return Err(format!("unknown hb mode {o}")),
+    };
     let merge_cost = match merge_cost {
         "upstream" => MergeCost::Upstream,
         "collision" => MergeCost::CollisionAware,
@@ -312,6 +324,8 @@ fn decompose_cmd(mesh: &Path, out: &Path, threshold: f64, max_ch: usize, iters: 
         seed,
         max_convex_hull: if max_ch == 0 { None } else { Some(max_ch) },
         merge_cost,
+        merge,
+        hb,
         ..Default::default()
     };
     let t = std::time::Instant::now();
@@ -539,8 +553,8 @@ fn main() -> ExitCode {
             Ok(true)
         }),
         Cmd::Hulls { asset, config, out, coacd_threshold, max_hulls, levels } => hulls_cmd(asset, config, out, *coacd_threshold, *max_hulls, levels),
-        Cmd::Decompose { mesh, out, threshold, max_convex_hull, mcts_iterations, mcts_depth, mcts_nodes, resolution, seed, merge_cost } => {
-            decompose_cmd(mesh, out, *threshold, *max_convex_hull, *mcts_iterations, *mcts_depth, *mcts_nodes, *resolution, *seed, merge_cost)
+        Cmd::Decompose { mesh, out, threshold, max_convex_hull, mcts_iterations, mcts_depth, mcts_nodes, resolution, seed, merge_cost, no_merge, hb } => {
+            decompose_cmd(mesh, out, *threshold, *max_convex_hull, *mcts_iterations, *mcts_depth, *mcts_nodes, *resolution, *seed, merge_cost, !*no_merge, hb)
         }
         Cmd::GenBench { out, only } => bench::generate(out, only).map(|_| true),
     };

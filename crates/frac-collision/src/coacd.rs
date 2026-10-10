@@ -104,6 +104,20 @@ pub struct CoacdParams {
     /// cvx2, CH)` (faithful baseline) or the collision-aware cost measured
     /// against the original geometry.
     pub merge_cost: MergeCost,
+    /// Surface-deviation estimator of the cut loop's concavity check.
+    pub hb: HbMode,
+}
+
+/// Estimator of `Hb` (part surface vs its hull) in the cut loop.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HbMode {
+    /// Upstream `ComputeHb`: random samples (`ExtractPointSet`, small
+    /// triangles sampled every other one) and, per sample, the distance to
+    /// the triangles of its 10 nearest samples on the other surface
+    /// (`face_hausdorff_distance`). Overestimates where triangles are small.
+    Upstream,
+    /// Exact point-to-surface distances with zero-distance face skipping.
+    Exact,
 }
 
 /// Merge cost of [`decompose`].
@@ -130,6 +144,7 @@ impl Default for CoacdParams {
             max_convex_hull: None,
             max_parts: 1024,
             merge_cost: MergeCost::Upstream,
+            hb: HbMode::Upstream,
         }
     }
 }
@@ -840,7 +855,101 @@ pub fn h_cost(part: &Solid, ch: &Ch, p: &CoacdParams, cap: f64) -> f64 {
     if r > cap {
         return r;
     }
-    r.max(hb(part, ch, density_for(part.mesh.area(), p.resolution), cap))
+    match p.hb {
+        HbMode::Exact => r.max(hb(part, ch, density_for(part.mesh.area(), p.resolution), cap)),
+        HbMode::Upstream => r.max(hb_upstream(&part.mesh, &ch.poly.to_mesh(), p.resolution, p.seed)),
+    }
+}
+
+/// Upstream `Model::ExtractPointSet(resolution, base = 1)`: per-triangle
+/// sample counts `max(i % 2 == 0, ⌊R'·area/A⌋)` with `R' = max(1000, R·A)`
+/// (every `tris/R'`-th triangle when there are more triangles than `R'`),
+/// uniform barycentric samples with the sqrt warp.
+fn upstream_samples(m: &TriMesh, resolution: u32, rng: &mut ChaCha8Rng) -> (Vec<DVec3>, Vec<u32>) {
+    use rand::Rng;
+    let a_obj: f64 = (0..m.tris.len()).map(|t| {
+        let [a, b, c] = m.tri_points(t);
+        0.5 * (b - a).cross(c - a).length()
+    }).sum();
+    let r = (1000.0f64).max(resolution as f64 * a_obj);
+    let nt = m.tris.len();
+    let (mut pts, mut ids) = (Vec::new(), Vec::new());
+    for t in 0..nt {
+        let [a, b, c] = m.tri_points(t);
+        let area = 0.5 * (b - a).cross(c - a).length();
+        let every = if (nt as f64) > r { (nt as f64 / r).floor().max(1.0) as usize } else { 2 };
+        let n = ((t % every == 0) as usize).max((r / a_obj.max(1e-300) * area) as usize);
+        for _ in 0..n {
+            let (x, y): (f64, f64) = (rng.gen_range(0.0..1.0), rng.gen_range(0.0..1.0));
+            let s = x.sqrt();
+            pts.push(a * (1.0 - s) + b * (s * (1.0 - y)) + c * (y * s));
+            ids.push(t as u32);
+        }
+    }
+    (pts, ids)
+}
+
+/// The 10 nearest sample indices of `p` (Euclidean), via the BVH over the
+/// sample points.
+fn knn10(bvh: &frac_geom::bvh::Bvh, pts: &[DVec3], p: DVec3, out: &mut Vec<(f64, u32)>) {
+    out.clear();
+    let worst = std::cell::Cell::new(f64::INFINITY);
+    let found = std::cell::RefCell::new(Vec::<(f64, u32)>::with_capacity(11));
+    bvh.traverse(
+        |b| b.dist2(p) <= worst.get(),
+        |i| {
+            let d = (pts[i as usize] - p).length_squared();
+            let mut f = found.borrow_mut();
+            if f.len() < 10 || d < worst.get() {
+                let pos = f.partition_point(|x| (x.0, x.1) < (d, i));
+                f.insert(pos, (d, i));
+                if f.len() > 10 {
+                    f.pop();
+                }
+                if f.len() == 10 {
+                    worst.set(f[9].0);
+                }
+            }
+        },
+    );
+    out.extend(found.into_inner());
+}
+
+/// Upstream `ComputeHb` with `face_hausdorff_distance` (see [`HbMode`]).
+pub fn hb_upstream(a: &TriMesh, b: &TriMesh, resolution: u32, seed: u64) -> f64 {
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    let (sa, ia) = upstream_samples(a, resolution, &mut rng);
+    let (sb, ib) = upstream_samples(b, resolution, &mut rng);
+    if sa.is_empty() || sb.is_empty() {
+        return f64::INFINITY;
+    }
+    let tree = |s: &[DVec3]| frac_geom::bvh::Bvh::build(&s.iter().map(|&q| Aabb::from_points([&q])).collect::<Vec<_>>());
+    let (ta, tb) = (tree(&sa), tree(&sb));
+    let mut cmax: f64 = 0.0;
+    let mut nn = Vec::new();
+    for (from, (tree_to, samples_to, ids_to, mesh_to)) in [(&sb, (&ta, &sa, &ia, a)), (&sa, (&tb, &sb, &ib, b))] {
+        for &x in from.iter() {
+            knn10(tree_to, samples_to, x, &mut nn);
+            let mut cmin = f64::INFINITY;
+            for &(_, j) in &nn {
+                let [p, q, w] = mesh_to.tri_points(ids_to[j as usize] as usize);
+                let d = (frac_geom::inside::closest_point_triangle(x, p, q, w) - x).length();
+                if d < cmin {
+                    cmin = d;
+                    if cmin < 1e-14 {
+                        break;
+                    }
+                }
+            }
+            if cmin > 10.0 {
+                cmin = nn.first().map(|v| v.0.sqrt()).unwrap_or(cmin);
+            }
+            if cmin.is_finite() && cmin > cmax {
+                cmax = cmin;
+            }
+        }
+    }
+    cmax
 }
 
 // ---------------------------------------------------------------------------
