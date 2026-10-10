@@ -119,6 +119,14 @@ pub struct ModeSettings {
     pub target_level1_fragments: u32,
     pub max_iccm_iters: usize,
     pub iccm_tolerance: f64,
+    /// Modes problems with more unknowns than this (e.g. masonry walls with
+    /// ~1000+ analysis cells) are solved by ADMM alone, without the
+    /// interior-point confirmation solves whose cost grows superlinearly,
+    /// and ICCM stops at `max(iccm_tolerance, large_iccm_tolerance)` with
+    /// subproblems certified to a tenth of that.
+    pub large_problem_dofs: usize,
+    /// ICCM tolerance for problems above `large_problem_dofs`.
+    pub large_iccm_tolerance: f64,
     pub tet_edge_ratio: f64,
     /// Upper bound on analysis tets per component (resolution is coarsened
     /// to respect it).
@@ -139,6 +147,8 @@ impl Default for ModeSettings {
             target_level1_fragments: 12,
             max_iccm_iters: 50,
             iccm_tolerance: 1e-4,
+            large_problem_dofs: 3000,
+            large_iccm_tolerance: 1e-3,
             tet_edge_ratio: 0.33,
             max_tets: 20_000,
             solver: "auto".into(),

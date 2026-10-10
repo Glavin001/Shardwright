@@ -214,9 +214,70 @@ pub fn segment_level1_balanced(n_cells: u32, groups: &[(u32, u32)], max_jump: &[
     Level1 { labels, n_fragments: nf, sigma, cut_groups, hit_target }
 }
 
+/// Level-1 segmentation from mode jumps over an exact analysis-cell
+/// adjacency `(a < b, shared area, w_g)`: groups present in the adjacency but
+/// not in the tet staircase get zero jump (never cut first), shared areas are
+/// taken from the adjacency, then [`segment_level1_balanced`]. Returns the
+/// segmentation and the `(groups, max_jump)` it was computed from.
+pub fn segment_from_jumps(
+    n_cells: u32,
+    mode_groups: &[(u32, u32)],
+    max_jump: &[f64],
+    adjacency: &[(u32, u32, f64, f64)],
+    volume: &[f64],
+    target: u32,
+    min_volume: f64,
+) -> (Level1, Vec<(u32, u32)>, Vec<f64>) {
+    let mut groups = mode_groups.to_vec();
+    let mut mj = max_jump.to_vec();
+    let present: std::collections::BTreeSet<(u32, u32)> = groups.iter().copied().collect();
+    for &(a, b, _, _) in adjacency {
+        if !present.contains(&(a, b)) {
+            groups.push((a, b));
+            mj.push(0.0);
+        }
+    }
+    let area_of: std::collections::BTreeMap<(u32, u32), f64> = adjacency.iter().map(|&(a, b, ar, _)| ((a, b), ar)).collect();
+    let areas: Vec<f64> = groups.iter().map(|&(a, b)| *area_of.get(&(a.min(b), a.max(b))).unwrap_or(&0.0)).collect();
+    let l1 = segment_level1_balanced(n_cells, &groups, &mj, &areas, volume, target, min_volume);
+    (l1, groups, mj)
+}
+
+/// Adjusted Rand index of two labelings (1 = identical partitions).
+pub fn adjusted_rand_index(a: &[u32], b: &[u32]) -> f64 {
+    assert_eq!(a.len(), b.len());
+    let n = a.len() as f64;
+    let c2 = |x: f64| 0.5 * x * (x - 1.0);
+    let mut cont: std::collections::BTreeMap<(u32, u32), f64> = std::collections::BTreeMap::new();
+    let mut sa: std::collections::BTreeMap<u32, f64> = std::collections::BTreeMap::new();
+    let mut sb: std::collections::BTreeMap<u32, f64> = std::collections::BTreeMap::new();
+    for (&x, &y) in a.iter().zip(b) {
+        *cont.entry((x, y)).or_insert(0.0) += 1.0;
+        *sa.entry(x).or_insert(0.0) += 1.0;
+        *sb.entry(y).or_insert(0.0) += 1.0;
+    }
+    let idx: f64 = cont.values().map(|&v| c2(v)).sum();
+    let ea: f64 = sa.values().map(|&v| c2(v)).sum();
+    let eb: f64 = sb.values().map(|&v| c2(v)).sum();
+    let exp = ea * eb / c2(n).max(1.0);
+    let mx = 0.5 * (ea + eb);
+    if (mx - exp).abs() < 1e-12 {
+        1.0
+    } else {
+        (idx - exp) / (mx - exp)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ari_known_values() {
+        assert_eq!(adjusted_rand_index(&[0, 0, 1, 1], &[5, 5, 2, 2]), 1.0);
+        // sklearn: adjusted_rand_score([0,0,1,1],[0,0,1,2]) = 0.5714285714
+        assert!((adjusted_rand_index(&[0, 0, 1, 1], &[0, 0, 1, 2]) - 0.5714285714285714).abs() < 1e-12);
+    }
 
     #[test]
     fn balanced_segmentation_merges_chips() {

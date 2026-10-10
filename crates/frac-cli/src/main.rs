@@ -3,6 +3,7 @@
 mod bench;
 mod buildings;
 mod meshgen;
+mod preview;
 
 use clap::{Parser, Subcommand};
 use frac_core::input::AuthoringMeta;
@@ -154,6 +155,36 @@ enum Cmd {
         hb: String,
     },
     /// Generate the procedural benchmark suite (spec §13.8).
+    /// Render a PNG preview of a baked asset (one colour per fragment).
+    Preview {
+        /// Baked asset JSON (`<name>.asset.json`).
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        /// Hierarchy level (default: finest); `--all-levels` renders every level side by side.
+        #[arg(long)]
+        level: Option<u8>,
+        #[arg(long)]
+        all_levels: bool,
+        /// Push fragments apart from the centre by this fraction of their offset (e.g. 0.15).
+        #[arg(long, default_value_t = 0.0)]
+        explode: f64,
+        #[arg(long, default_value_t = 1200)]
+        width: u32,
+        #[arg(long, default_value_t = 900)]
+        height: u32,
+        #[arg(long, default_value_t = 35.0)]
+        azimuth: f64,
+        #[arg(long, default_value_t = 25.0)]
+        elevation: f64,
+        /// Draw bonds (contact surfaces) instead of fragments: `kind` or `strength`.
+        #[arg(long)]
+        bonds: Option<String>,
+        /// Cutaway: hide geometry whose centroid z is above this value.
+        #[arg(long)]
+        clip_z: Option<f64>,
+    },
     GenBench {
         #[arg(long, default_value = "benchmarks/assets")]
         out: PathBuf,
@@ -556,6 +587,19 @@ fn main() -> ExitCode {
             println!("wrote {} ({} bytes)", out.display(), bytes.len());
             Ok(true)
         }),
+        Cmd::Preview { input, out, level, all_levels, explode, width, height, azimuth, elevation, bonds, clip_z } => (|| -> Result<bool, String> {
+            let text = std::fs::read_to_string(input).map_err(|e| format!("{}: {e}", input.display()))?;
+            let asset: frac_core::Asset = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", input.display()))?;
+            let bonds = match bonds.as_deref() {
+                None => None,
+                Some("kind") => Some(preview::BondColour::Kind),
+                Some("strength") => Some(preview::BondColour::Strength),
+                Some(x) => return Err(format!("--bonds {x}: expected kind or strength")),
+            };
+            let o = preview::PreviewOptions { bonds, clip_z: *clip_z, level: *level, all_levels: *all_levels, width: *width, height: *height, explode: *explode, azimuth_deg: *azimuth, elevation_deg: *elevation };
+            println!("{}", preview::preview(&asset, &MaterialLibrary::builtin(), out, &o)?);
+            Ok(true)
+        })(),
         Cmd::Hulls { asset, config, out, coacd_threshold, max_hulls, levels } => hulls_cmd(asset, config, out, *coacd_threshold, *max_hulls, levels),
         Cmd::Decompose { mesh, out, threshold, max_convex_hull, mcts_iterations, mcts_depth, mcts_nodes, resolution, seed, merge_cost, no_merge, hb } => {
             decompose_cmd(mesh, out, *threshold, *max_convex_hull, *mcts_iterations, *mcts_depth, *mcts_nodes, *resolution, *seed, merge_cost, !*no_merge, hb)

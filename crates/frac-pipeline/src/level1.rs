@@ -244,35 +244,44 @@ fn run_modes(
         tet_cell: &tet_cell,
         group_weight: &weight,
         anchored_vertices: &anchored,
-        params: frac_modes::ModesParams { k: s.k, omega: s.omega, eps: s.iccm_tolerance, max_iters: s.max_iccm_iters, solver, seed: stable_hash(&[cfg.seed, cfg.component as u64, 4]) },
+        params: frac_modes::ModesParams {
+            k: s.k,
+            omega: s.omega,
+            eps: s.iccm_tolerance,
+            max_iters: s.max_iccm_iters,
+            solver,
+            seed: stable_hash(&[cfg.seed, cfg.component as u64, 4]),
+            large_dofs: s.large_problem_dofs,
+            eps_large: s.large_iccm_tolerance,
+        },
     };
-    let out = frac_modes::compute_modes(&input)?;
-    let ng = out.groups.len();
-    let mut max_jump = vec![0.0f64; ng];
-    for m in &out.jumps {
-        for (g, &j) in m.iter().enumerate() {
-            max_jump[g] = max_jump[g].max(j);
-        }
-    }
-    // Groups come from the tet staircase; analysis cells adjacent in the
-    // exact complex but not in the tet mesh get no cut information: add
-    // them with zero jump (never cut first).
-    let mut groups = out.groups.clone();
-    let mut mj = max_jump.clone();
-    let present: std::collections::BTreeSet<(u32, u32)> = groups.iter().copied().collect();
-    for &(a, b, _, _) in adj {
-        if !present.contains(&(a, b)) {
-            groups.push((a, b));
-            mj.push(0.0);
-        }
-    }
-    // size-balanced segmentation: shared areas from the exact adjacency,
-    // fragments below a quarter of the mean target size are merged
-    let area_of: BTreeMap<(u32, u32), f64> = adj.iter().map(|&(a, b, ar, _)| ((a, b), ar)).collect();
-    let areas: Vec<f64> = groups.iter().map(|&(a, b)| *area_of.get(&(a.min(b), a.max(b))).unwrap_or(&0.0)).collect();
     let volumes: Vec<f64> = asset.analysis_cells[comp.analysis_cells.start as usize..comp.analysis_cells.end as usize].iter().map(|a| a.mass.volume).collect();
+    // fragments below a quarter of the mean target size are merged
     let min_volume = 0.25 * volumes.iter().sum::<f64>() / target.max(1) as f64;
-    let l1 = frac_modes::segment_level1_balanced(info.n_analysis, &groups, &mj, &areas, &volumes, target as u32, min_volume);
+    if let Some(dir) = std::env::var_os("FRAC_MODES_DUMP") {
+        // diagnostics: exact problem dump for offline reruns (frac-modes `modes_bench` example)
+        let dump = frac_modes::dump::ModesDump {
+            mesh: mesh.clone(),
+            tet_material: tet_material.clone(),
+            tet_cell: tet_cell.clone(),
+            adjacency: adj.to_vec(),
+            anchored_vertices: anchored.clone(),
+            params: input.params,
+            n_analysis: info.n_analysis,
+            cell_volume: volumes.clone(),
+            target: target as u32,
+            min_volume,
+        };
+        let path = std::path::Path::new(&dir).join(format!("component_{}.modes.txt", cfg.component));
+        if let Err(e) = std::fs::write(&path, dump.to_text()) {
+            eprintln!("FRAC_MODES_DUMP: cannot write {}: {e}", path.display());
+        }
+    }
+    let out = frac_modes::compute_modes(&input)?;
+    let max_jump = out.max_jump();
+    // size-balanced segmentation over the exact adjacency (groups missing
+    // from the tet staircase get zero jump and are never cut first)
+    let (l1, groups, mj) = frac_modes::segment_from_jumps(info.n_analysis, &out.groups, &max_jump, adj, &volumes, target as u32, min_volume);
     let mut warnings = Vec::new();
     if !l1.hit_target {
         warnings.push(format!("component '{}': modes segmentation reached {} fragments (target {target})", comp.name, l1.n_fragments));
@@ -284,5 +293,12 @@ fn run_modes(
     let jumps = groups.iter().zip(mj.iter()).map(|(&(a, b), &j)| (a, b, j)).collect();
     // ensure labels are connected over the exact adjacency
     let labels = frac_hierarchy::connected_labels(&l1.labels, adj);
+    if let Some(dir) = std::env::var_os("FRAC_MODES_DUMP") {
+        let text: String = labels.iter().map(|l| format!("{l}\n")).collect();
+        let path = std::path::Path::new(&dir).join(format!("component_{}.labels.txt", cfg.component));
+        if let Err(e) = std::fs::write(&path, text) {
+            eprintln!("FRAC_MODES_DUMP: cannot write {}: {e}", path.display());
+        }
+    }
     Ok(Level1Result { labels, method: format!("modes({})", out.solver_used), jumps, warnings })
 }
