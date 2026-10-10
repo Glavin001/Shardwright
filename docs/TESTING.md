@@ -29,7 +29,10 @@ Tier 0 exact-answer tests:
 
 Tier 0 differential tests: Voro++ (frozen outputs in
 `crates/frac-cells/tests/golden/`; the live binary is cross-checked when
-installed).
+installed). Fracture modes against the authors' reference implementation
+(`tools/harness/test_fracture_modes_golden.py`): its dataset checks take
+seconds; scoring our modes (`FM_GOLDEN_RUN=1`) is tier 2. See
+`VALIDATION.md`.
 
 ## Golden oracle dataset
 
@@ -54,6 +57,7 @@ and needs only numpy and scipy for that.
 | scikit-fem (modal) | first 10 frequencies | rc_column |
 | Rankine crack oracle | crack surfaces per load case | rc_column |
 | Voro++ | cell volumes and vertices | 2 cases |
+| fracture-modes reference (Sellán et al.; MOSEK → Clarabel) | tet meshes, 6 modes and per-mode pieces (`benchmarks/golden/fracture_modes/`) | 4 meshes |
 | upstream CoACD | hulls on fixed fragment meshes | planned |
 | Khronos glTF validator, flatc | — (cheap; run live) | — |
 
