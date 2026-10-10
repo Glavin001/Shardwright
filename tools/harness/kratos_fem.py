@@ -86,12 +86,23 @@ def solve_static(coords, tets, E, nu, rho, fixed_mask, nodal_forces):
             n = mp.GetNode(i + 1)
             n.SetSolutionStepValue(SMA.POINT_LOAD, KM.Vector([float(f[0]), float(f[1]), float(f[2])]))
             cid += 1
-    linear_solver = KM.SkylineLUFactorizationSolver()
-    try:
-        import KratosMultiphysics.LinearSolversApplication as LSA
-        linear_solver = LSA.SparseLUSolver()
-    except Exception:
-        pass
+    # Direct sparse LU for small systems; AMG-preconditioned CG (tight
+    # tolerance, 3x3 block matrices) for large ones, where LU fill-in on
+    # P2 tets is prohibitive in time and memory.
+    ndof = 3 * len(coords)
+    if ndof > 60000:
+        linear_solver = KM.AMGCLSolver(KM.Parameters('''{
+            "solver_type": "amgcl", "smoother_type": "ilu0", "krylov_type": "cg",
+            "coarsening_type": "aggregation", "max_iteration": 5000, "tolerance": 1e-10,
+            "verbosity": 0, "gmres_krylov_space_dimension": 100,
+            "use_block_matrices_if_possible": true, "coarse_enough": 5000}'''))
+    else:
+        linear_solver = KM.SkylineLUFactorizationSolver()
+        try:
+            import KratosMultiphysics.LinearSolversApplication as LSA
+            linear_solver = LSA.SparseLUSolver()
+        except Exception:
+            pass
     scheme = KM.ResidualBasedIncrementalUpdateStaticScheme()
     builder = KM.ResidualBasedBlockBuilderAndSolver(linear_solver)
     strategy = KM.ResidualBasedLinearStrategy(mp, scheme, builder, False, False, False, False)

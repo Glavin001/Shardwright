@@ -7,6 +7,7 @@ use frac_bonds::polygon_integrals;
 use frac_core::*;
 use frac_geom::polygon::plane_basis;
 use frac_geom::{Aabb, DVec3};
+use glam::DMat3;
 use frac_material::MaterialLibrary;
 use frac_validate::network::{BondNetworkSolver, LoadCase, ReferenceSolver, StiffnessModel};
 use serde_json::{json, Value};
@@ -126,34 +127,53 @@ pub fn network_export_with(asset: &Asset, lib: &MaterialLibrary, model: Stiffnes
         }
         // load distribution: by end-face area per fragment
         let mut area: std::collections::BTreeMap<FragmentId, (f64, DVec3)> = std::collections::BTreeMap::new();
+        let mut second: std::collections::BTreeMap<FragmentId, DMat3> = std::collections::BTreeMap::new();
         for (f, p) in &load_polys {
             let ai = polygon_integrals(p);
             let e = area.entry(*f).or_insert((0.0, DVec3::ZERO));
             e.0 += ai.area;
             e.1 += ai.first;
+            *second.entry(*f).or_insert(DMat3::ZERO) += ai.second;
         }
+        // central second moment of each fragment's loaded patch
+        let central: std::collections::BTreeMap<FragmentId, DMat3> = area
+            .iter()
+            .map(|(f, v)| {
+                let c = v.1 / v.0.max(1e-300);
+                (*f, second[f] - DMat3::from_cols(c * c.x, c * c.y, c * c.z) * v.0)
+            })
+            .collect();
         let total_area: f64 = area.values().map(|v| v.0).sum::<f64>().max(1e-300);
         let face_c = area.values().fold(DVec3::ZERO, |s, v| s + v.1) / total_area;
         let mut results = Vec::new();
         for case in cases.as_array().unwrap() {
             let dir = DVec3::from_array(serde_json::from_value(case["direction"].clone()).unwrap());
             let mag = case["magnitude"].as_f64().unwrap();
+            // traction ∝ r about the face centroid (torque) or uniform: the
+            // resultant of each fragment's patch at its centroid plus, for the
+            // torque, the patch's own couple κ (tr(I_f) I − I_f) d.
+            let mut moments: Vec<(FragmentId, DVec3)> = Vec::new();
             let forces: Vec<(FragmentId, DVec3)> = if case["kind"] == "torque" {
-                // tangential forces ∝ r giving the total torque
-                let r2: f64 = area.iter().map(|(_, v)| {
+                let polar = |f: &FragmentId| {
+                    let i = central[f];
+                    (DMat3::from_diagonal(DVec3::splat(i.x_axis.x + i.y_axis.y + i.z_axis.z)) - i) * dir
+                };
+                let jt: f64 = area.iter().map(|(f, v)| {
                     let c = v.1 / v.0.max(1e-300) - face_c;
-                    (c - dir * c.dot(dir)).length_squared() * v.0
+                    (c - dir * c.dot(dir)).length_squared() * v.0 + dir.dot(polar(f))
                 }).sum::<f64>().max(1e-300);
+                let kappa = mag / jt;
+                moments = area.keys().map(|f| (*f, polar(f) * kappa)).collect();
                 area.iter().map(|(f, v)| {
                     let c = v.1 / v.0.max(1e-300) - face_c;
                     let r = c - dir * c.dot(dir);
-                    (*f, dir.cross(r) * (mag * v.0 / r2))
+                    (*f, dir.cross(r) * (kappa * v.0))
                 }).collect()
             } else {
                 area.iter().map(|(f, v)| (*f, dir * (mag * v.0 / total_area))).collect()
             };
             let points: Vec<DVec3> = forces.iter().map(|(f, _)| area[f].1 / area[f].0.max(1e-300)).collect();
-            let lc = LoadCase { name: case["name"].as_str().unwrap().into(), gravity: DVec3::ZERO, forces: forces.clone(), force_points: points, fixed: Vec::new() };
+            let lc = LoadCase { name: case["name"].as_str().unwrap().into(), gravity: DVec3::ZERO, forces: forces.clone(), force_points: points, moments, fixed: Vec::new() };
             let r = solver.static_solve(&a2, level, &lc);
             let r0 = a2.hierarchy.level_ranges[level as usize].start;
             // response at the loaded end: area-weighted displacement (rotation for torque)
@@ -177,7 +197,7 @@ pub fn network_export_with(asset: &Asset, lib: &MaterialLibrary, model: Stiffnes
             results.push(json!({"case": case["name"], "response": resp, "stiffness": if resp != 0.0 { mag / resp } else { 0.0 }, "bonds": tractions}));
         }
         // self weight with the same clamp
-        let lc = LoadCase { name: "self_weight".into(), gravity: DVec3::new(0.0, -9.81, 0.0), forces: Vec::new(), force_points: Vec::new(), fixed: Vec::new() };
+        let lc = LoadCase { name: "self_weight".into(), gravity: DVec3::new(0.0, -9.81, 0.0), forces: Vec::new(), force_points: Vec::new(), moments: Vec::new(), fixed: Vec::new() };
         let r = solver.static_solve(&a2, level, &lc);
         let sw: Vec<Value> = r
             .bond_forces

@@ -65,19 +65,32 @@ class StressField:
         co = self.C[e]
         return voigt_to_tensor(co[0] + (p - self.cent[e]) @ co[1:4])
 
-    def at(self, p):
-        _, idx = self.tree.query(p, k=12)
-        for e in np.atleast_1d(idx):
-            v = self.coords[self.tets[e]]
-            T = np.column_stack([v[1] - v[0], v[2] - v[0], v[3] - v[0]])
-            try:
-                l = np.linalg.solve(T, p - v[0])
-            except np.linalg.LinAlgError:
-                continue
-            if l.min() >= -1e-9 and l.sum() <= 1 + 1e-9:
-                return self.eval(e, p)
-        e = np.atleast_1d(idx)[0]
-        return self.eval(e, p)
+    def locate(self, P):
+        """Containing element of each point (vectorized; nearest-centroid
+        element when a point lies outside every candidate)."""
+        k = min(12, len(self.cent))
+        _, idx = self.tree.query(P, k=k)
+        idx = idx.reshape(len(P), k)
+        v = self.coords[self.tets[idx]]  # [P, k, 4, 3]
+        T = np.stack([v[:, :, 1] - v[:, :, 0], v[:, :, 2] - v[:, :, 0], v[:, :, 3] - v[:, :, 0]], axis=-1)
+        rhs = P[:, None, :] - v[:, :, 0]
+        det = np.linalg.det(T)
+        ok = np.abs(det) > 1e-300
+        T[~ok] = np.eye(3)
+        lam = np.linalg.solve(T, rhs[..., None])[..., 0]
+        inside = ok & (lam.min(axis=-1) >= -1e-9) & (lam.sum(axis=-1) <= 1 + 1e-9)
+        first = np.where(inside.any(axis=1), inside.argmax(axis=1), 0)
+        return idx[np.arange(len(P)), first]
+
+    def eval_many(self, E, P):
+        co = self.C[E]  # [P, 4, 6]
+        s = co[:, 0] + np.einsum("pi,pij->pj", P - self.cent[E], co[:, 1:4])
+        S = np.empty((len(P), 3, 3))
+        S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = s[:, 0], s[:, 1], s[:, 2]
+        S[:, 0, 1] = S[:, 1, 0] = s[:, 3]
+        S[:, 1, 2] = S[:, 2, 1] = s[:, 4]
+        S[:, 0, 2] = S[:, 2, 0] = s[:, 5]
+        return S
 
 
 def face_loads(coords, tets, axis, plane, tol, case, face_c=None):
@@ -161,9 +174,22 @@ def main():
     tol = 1e-6 * L
     fixed = np.abs(coords[:, axis] - lo) <= tol
     interfaces = asset["interfaces"]
-    # quadrature per interface (cached)
-    iq = {}
-    out = {"asset": asset["meta"]["name"], "fem_nodes": int(len(coords)), "fem_tets": int(len(tets)), "levels": []}
+    # quadrature over every interface polygon, located once in the FEM mesh
+    qp, qw, qowner = [], [], []
+    for i, itf in enumerate(interfaces):
+        for poly in itf["polygons"]:
+            pp, ww = polygon_quadrature(poly["loops"], np.array(poly["normal"], float))
+            if len(pp):
+                qp.append(pp)
+                qw.append(ww)
+                qowner.append(np.full(len(ww), i))
+    qp = np.vstack(qp) if qp else np.zeros((0, 3))
+    qw = np.concatenate(qw) if qw else np.zeros(0)
+    qowner = np.concatenate(qowner) if qowner else np.zeros(0, int)
+    iarea = np.bincount(qowner, weights=qw, minlength=len(interfaces))
+    locator = StressField(coords, tets, np.zeros((len(tets), 4, 6)))
+    qelem = locator.locate(qp)
+    out = {"asset": asset["meta"]["name"], "fem_nodes": int(len(coords)), "fem_tets": int(len(tets)), "fem_h": h, "levels": []}
     fem_cases = {}
     for case in net["load_cases"]:
         F, ftris, A, cen = face_loads(coords, tets, axis, hi, tol, case)
@@ -175,43 +201,37 @@ def main():
         else:
             disp, S, C = solve_static(coords, tets, mat["E"], mat["nu"], mat["rho"], fixed, F)
             np.savez(cpath, disp=disp, S=S, C=C)
-        fem_cases[case["name"]] = (StressField(coords, tets, S), response(disp, ftris, A, cen, case))
+        field = StressField(coords, tets, S)
+        # ∫ σ dA per interface
+        Sq = field.eval_many(qelem, qp) * qw[:, None, None]
+        isig = np.zeros((len(interfaces), 3, 3))
+        np.add.at(isig, qowner, Sq)
+        fem_cases[case["name"]] = (isig, response(disp, ftris, A, cen, case))
+    dump = {}
     for lv in net["levels"]:
         lrep = {"level": lv["level"], "fragments": lv["fragments"], "cases": []}
         for res in lv["results"]:
             name = res["case"]
             if name not in fem_cases:
                 continue
-            field, fem_resp = fem_cases[name]
+            isig, fem_resp = fem_cases[name]
             t_net, t_fem, areas = [], [], []
-            v_raw, v_rec, v_fem = [], [], []
+            v_raw, v_rec, v_fem, b_pos, b_nrm = [], [], [], [], []
             for b in res["bonds"]:
                 n = np.array(b["normal"], float)
-                num = 0.0
-                numv = np.zeros(3)
-                den = 0.0
-                for i in b["interfaces"]:
-                    if i not in iq:
-                        pts, wts = [], []
-                        for poly in interfaces[i]["polygons"]:
-                            p, w = polygon_quadrature(poly["loops"], np.array(poly["normal"], float))
-                            pts.append(p)
-                            wts.append(w)
-                        iq[i] = (np.vstack(pts) if pts else np.zeros((0, 3)), np.concatenate(wts) if wts else np.zeros(0))
-                    pts, wts = iq[i]
-                    for p, w in zip(pts, wts):
-                        Sg = field.at(p)
-                        num += w * (n @ Sg @ n)
-                        numv += w * (Sg @ n)
-                        den += w
+                ids = np.asarray(b["interfaces"], int)
+                den = iarea[ids].sum()
                 if den <= 0:
                     continue
+                Sint = isig[ids].sum(axis=0)
                 t_net.append(b["traction"])
-                t_fem.append(num / den)
+                t_fem.append(n @ Sint @ n / den)
                 areas.append(b["area"])
                 v_raw.append(b.get("traction_vec", [0, 0, 0]))
                 v_rec.append(b.get("recovered", [0, 0, 0]))
-                v_fem.append(numv / den)
+                v_fem.append(Sint @ n / den)
+                b_pos.append(b.get("centroid", [0, 0, 0]))
+                b_nrm.append(n)
             t_net, t_fem = np.array(t_net), np.array(t_fem)
             v_raw, v_rec, v_fem = np.array(v_raw), np.array(v_rec), np.array(v_fem)
             eps = 0.05 * (np.abs(t_fem).max() if len(t_fem) else 1.0)
@@ -221,6 +241,7 @@ def main():
             err_raw = np.linalg.norm(v_raw - v_fem, axis=1) / np.maximum(fem_mag, epsv) if len(v_fem) else np.array([])
             err = np.linalg.norm(v_rec - v_fem, axis=1) / np.maximum(fem_mag, epsv) if len(v_fem) else np.array([])
             stiff_err = abs(res["response"] / fem_resp - 1.0) if fem_resp else float("nan")
+            dump[f"L{lv['level']}_{name}"] = dict(pos=np.array(b_pos), normal=np.array(b_nrm), area=np.array(areas), raw=v_raw, rec=v_rec, fem=v_fem, err_raw=err_raw, err_rec=err)
             lrep["cases"].append({"case": name, "bonds": int(len(err)), "traction_err_p50": pct(err, 50), "traction_err_p95": pct(err, 95),
                                   "raw_vector_err_p50": pct(err_raw, 50), "raw_vector_err_p95": pct(err_raw, 95),
                                   "raw_normal_err_p50": pct(err_normal, 50), "raw_normal_err_p95": pct(err_normal, 95), "stiffness_err": stiff_err, "network_response": res["response"], "fem_response": fem_resp})
@@ -228,11 +249,21 @@ def main():
     # modal
     try:
         from skfem_modal import modal_frequencies
-        mkey = os.path.join(args.cache, f"modal_{hashlib.sha1(json.dumps([key, mat]).encode()).hexdigest()[:16]}.json")
+        hm = max(h, L / 40.0)
+        mkey_m = hashlib.sha1(json.dumps([solid, hm]).encode()).hexdigest()[:16]
+        mpath_m = os.path.join(args.cache, f"mesh_{mkey_m}.npz")
+        if os.path.exists(mpath_m):
+            z = np.load(mpath_m)
+            mcoords, mtets = z["coords"], z["tets"]
+        else:
+            mcoords, mtets = mesh_solid(verts, tris, hm)
+            np.savez(mpath_m, coords=mcoords, tets=mtets)
+        mfixed = np.abs(mcoords[:, axis] - lo) <= tol
+        mkey = os.path.join(args.cache, f"modal_{hashlib.sha1(json.dumps([mkey_m, mat]).encode()).hexdigest()[:16]}.json")
         if os.path.exists(mkey):
             fem_f = json.load(open(mkey))
         else:
-            fem_f = [float(x) for x in modal_frequencies(coords, tets, mat["E"], mat["nu"], mat["rho"], fixed, 10)]
+            fem_f = [float(x) for x in modal_frequencies(mcoords, mtets, mat["E"], mat["nu"], mat["rho"], mfixed, 10)]
             json.dump(fem_f, open(mkey, "w"))
         out["fem_modal_hz"] = fem_f
         for lrep, lv in zip(out["levels"], net["levels"]):
@@ -244,11 +275,12 @@ def main():
     # convergence: errors decrease from coarse to fine
     def series(key):
         return [np.nanmean([c[key] for c in l["cases"]]) for l in out["levels"]]
-    for key in ("traction_err_p95", "stiffness_err"):
+    for key in ("raw_vector_err_p95", "traction_err_p95", "stiffness_err"):
         s = series(key)
         out[f"{key}_by_level"] = s
         out[f"{key}_monotone"] = bool(all(s[i + 1] <= s[i] + 1e-12 for i in range(len(s) - 1)))
     json.dump(out, open(os.path.join(args.cache, f"{out['asset']}.bond_fidelity.json"), "w"), indent=2)
+    np.savez(os.path.join(args.cache, f"{out['asset']}.bond_errors.npz"), **{f"{k}__{f}": v for k, d in dump.items() for f, v in d.items()})
     # markdown summary
     print(f"### Bond fidelity: {out['asset']} (FEM: {out['fem_tets']} P2 tets)\n")
     print(f"Network stiffness model: {net.get('stiffness_model', '?')}. Traction error = |t_net - t_FEM| / max(|t_FEM|, 5% of max) per bond;")
@@ -262,7 +294,7 @@ def main():
         for l in out["levels"]:
             if "modal_err" in l and l["modal_err"]:
                 print(f"- L{l['level']} modal rel err (first {len(l['modal_err'])}): max {max(l['modal_err']):.3f}")
-    print(f"\nMonotone convergence: traction p95 {out['traction_err_p95_monotone']}, stiffness {out['stiffness_err_monotone']}\n")
+    print(f"\nMonotone convergence (mean over cases): raw F/A p95 {out['raw_vector_err_p95_monotone']}, recovered p95 {out['traction_err_p95_monotone']}, stiffness {out['stiffness_err_monotone']}\n")
 
 
 if __name__ == "__main__":
