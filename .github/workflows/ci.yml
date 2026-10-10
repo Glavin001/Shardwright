@@ -53,3 +53,18 @@ jobs:
         with:
           name: bond-fidelity
           path: validate.md
+  golden:
+    # minutes, no Kratos: bake the golden assets and score them against the
+    # frozen oracle solutions in benchmarks/golden (Git LFS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build --release -p frac-cli
+      - name: Python (numpy/scipy only)
+        run: python3 -m venv $HOME/py && $HOME/py/bin/pip install -q numpy==2.5.3 scipy==1.18.1
+      - name: Golden oracle regression
+        run: PREFRACTURE_PYTHON=$HOME/py/bin/python tools/ci/golden.sh

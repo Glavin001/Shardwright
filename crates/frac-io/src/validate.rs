@@ -9,8 +9,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// The FlatBuffers schema of the physics payload (`schemas/frac.fbs`).
 pub const FRAC_FBS: &str = include_str!("../../../schemas/frac.fbs");
 
+/// Directory holding `tools/`: the working directory, an ancestor of the
+/// executable (`target/<profile>/prefracture`, or an installed copy next to
+/// the repository tree), else the source tree this crate was built from.
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
+    let has_tools = |p: &Path| p.join("tools").join("gltf_validate").is_dir();
+    let mut roots: Vec<PathBuf> = vec![PathBuf::from(".")];
+    if let Ok(exe) = std::env::current_exe() {
+        roots.extend(exe.ancestors().skip(1).take(4).map(|p| p.to_path_buf()));
+    }
+    roots.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(".."));
+    roots.into_iter().find(|r| has_tools(r)).unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(".."))
 }
 
 fn runs(cmd: &Path, arg: &str) -> bool {

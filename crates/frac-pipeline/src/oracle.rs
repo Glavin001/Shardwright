@@ -101,6 +101,15 @@ fn harness_script() -> std::path::PathBuf {
     roots.iter().map(|r| r.join(rel)).find(|p| p.exists()).unwrap_or_else(|| rel.to_path_buf())
 }
 
+/// `benchmarks/golden/<asset>` next to the harness (the frozen oracle set),
+/// when the repository tree is reachable.
+pub fn golden_dir(asset_name: &str) -> Option<std::path::PathBuf> {
+    let script = harness_script();
+    let root = script.parent()?.parent()?.parent()?.to_path_buf();
+    let d = root.join("benchmarks").join("golden").join(asset_name);
+    d.is_dir().then_some(d)
+}
+
 pub fn network_export(asset: &Asset, lib: &MaterialLibrary) -> Value {
     network_export_with(asset, lib, StiffnessModel::Tensorial)
 }
@@ -248,6 +257,12 @@ pub fn network_export_with(asset: &Asset, lib: &MaterialLibrary, model: Stiffnes
 
 /// Run the Python oracle harness (Kratos FEM) if available.
 pub fn run_harness(asset_json: &std::path::Path, network_json: &std::path::Path, cache: &std::path::Path) -> String {
+    run_harness_with(asset_json, network_json, cache, &[])
+}
+
+/// [`run_harness`] with extra harness flags (e.g. `--write-golden`,
+/// `--no-golden`).
+pub fn run_harness_with(asset_json: &std::path::Path, network_json: &std::path::Path, cache: &std::path::Path, extra: &[&str]) -> String {
     // PREFRACTURE_PYTHON, else $FRACENV/bin/python (tools/setup.sh), else
     // /opt/fracenv/bin/python, else python3
     let py = std::env::var("PREFRACTURE_PYTHON").unwrap_or_else(|_| {
@@ -264,6 +279,7 @@ pub fn run_harness(asset_json: &std::path::Path, network_json: &std::path::Path,
         .arg(network_json)
         .arg("--cache")
         .arg(cache)
+        .args(extra)
         .output();
     match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),

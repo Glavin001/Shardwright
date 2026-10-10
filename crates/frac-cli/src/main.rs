@@ -61,6 +61,12 @@ enum Cmd {
         /// Network stiffness model: tensorial (default), calibrated or spec.
         #[arg(long, default_value = "tensorial")]
         stiffness_model: String,
+        /// Freeze the computed FEM oracle into benchmarks/golden/<asset>.
+        #[arg(long)]
+        write_golden: bool,
+        /// Ignore benchmarks/golden and always run the FEM oracle.
+        #[arg(long)]
+        no_golden: bool,
     },
     /// Inspect a physics payload.
     Inspect {
@@ -271,7 +277,7 @@ fn debug_dump(asset: &frac_core::Asset, out: &Path, name: &str, what: &str) -> R
     Ok(())
 }
 
-fn validate_cmd(input: &Path, materials: &Option<PathBuf>, cache: &Option<PathBuf>, report: &Option<PathBuf>, model: &str) -> Result<bool, String> {
+fn validate_cmd(input: &Path, materials: &Option<PathBuf>, cache: &Option<PathBuf>, report: &Option<PathBuf>, model: &str, write_golden: bool, no_golden: bool) -> Result<bool, String> {
     let model = match model {
         "spec" => frac_validate::network::StiffnessModel::Spec,
         "calibrated" => frac_validate::network::StiffnessModel::Calibrated,
@@ -294,8 +300,20 @@ fn validate_cmd(input: &Path, materials: &Option<PathBuf>, cache: &Option<PathBu
         let net_path = PathBuf::from(format!("{base}.network.json"));
         std::fs::write(&net_path, serde_json::to_string_pretty(&net).unwrap()).map_err(|e| e.to_string())?;
         md += &format!("## {}\n\nBond-network results written to `{}`.\n\n", asset.meta.name, net_path.display());
-        if let Some(c) = cache {
-            md += &frac_pipeline::oracle::run_harness(&f, &net_path, c);
+        // the oracle runs when a cache is given, or when a golden oracle set
+        // exists for this asset (then only numpy/scipy are needed)
+        let golden = frac_pipeline::oracle::golden_dir(&asset.meta.name).is_some_and(|d| d.join("manifest.json").exists());
+        let tmp = std::env::temp_dir().join("prefracture-oracle");
+        let c = cache.as_deref().or(if golden && !no_golden { Some(tmp.as_path()) } else { None });
+        if let Some(c) = c {
+            let mut extra = Vec::new();
+            if write_golden {
+                extra.push("--write-golden");
+            }
+            if no_golden {
+                extra.push("--no-golden");
+            }
+            md += &frac_pipeline::oracle::run_harness_with(&f, &net_path, c, &extra);
         }
     }
     if let Some(r) = report {
@@ -367,7 +385,7 @@ fn main() -> ExitCode {
         Cmd::Bake { input, materials, config, meta, out, allow_gate_failures, check_determinism, debug_dump, seed } => {
             bake(input, materials, config, meta, out, *allow_gate_failures, *check_determinism, debug_dump, *seed)
         }
-        Cmd::Validate { input, materials, oracle_cache, report, stiffness_model } => validate_cmd(input, materials, oracle_cache, report, stiffness_model),
+        Cmd::Validate { input, materials, oracle_cache, report, stiffness_model, write_golden, no_golden } => validate_cmd(input, materials, oracle_cache, report, stiffness_model, *write_golden, *no_golden),
         Cmd::Inspect { input, level, bond, fragment } => inspect(input, *level, *bond, *fragment),
         Cmd::Diff { a, b } => diff(a, b),
         Cmd::Patterns { materials, out, seed } => load_lib(materials).and_then(|lib| {

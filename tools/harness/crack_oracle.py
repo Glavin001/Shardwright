@@ -35,6 +35,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from kratos_fem import mesh_solid, solve_static  # noqa: E402
 from bond_fidelity import StressField, polygon_quadrature  # noqa: E402
+import golden  # noqa: E402
 
 TETFACES = [(0, 1, 2, 4, 5, 6), (0, 1, 3, 4, 8, 7), (1, 2, 3, 5, 9, 8), (0, 2, 3, 6, 9, 7)]
 
@@ -147,6 +148,9 @@ def main():
     ap.add_argument("--cache", required=True)
     ap.add_argument("--impacts", type=int, default=6)
     ap.add_argument("--json", default="")
+    ap.add_argument("--golden", default="", help="golden directory (default benchmarks/golden/<asset>); reused when it matches the solid")
+    ap.add_argument("--no-golden", action="store_true")
+    ap.add_argument("--write-golden", action="store_true")
     args = ap.parse_args()
     from scipy.spatial import cKDTree
     from scipy.stats import spearmanr
@@ -235,6 +239,11 @@ def main():
     cent_all = coords[tets[:, :4]].mean(axis=1)
     cracks = {}
     mag = 1e6
+    gdir = args.golden or golden.default_dir(asset["meta"]["name"])
+    frozen = None if args.no_golden else golden.load_cracks(gdir, solid)
+    source = "computed"
+    if frozen is not None:
+        cracks, cases, source = frozen, [], f"golden ({gdir})"
     for case in cases:
         F = np.zeros_like(coords)
         if case["kind"] in ("face", "torque"):
@@ -286,6 +295,8 @@ def main():
         spacing = max(0.00316, D / 400.0)
         s0 = s1m[e0] * (1.0 + (ratio - 1.0) * float(n1 @ grain) ** 2 if grain is not None else 1.0)
         cracks[case["name"]] = rankine_crack(field, x0, n1, s0, D, spacing, excl)
+    if args.write_golden and frozen is None:
+        golden.write_cracks(gdir, solid, cracks, [{k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in c.items()} for c in cases])
     # our interfaces
     cells_vol = sorted(c["mass"]["volume"] for c in asset["cells"])
     cell_d = (6 * cells_vol[len(cells_vol) // 2] / np.pi) ** (1 / 3)
@@ -306,7 +317,7 @@ def main():
     S3 = sample_interfaces(asset, ids3, ours_spacing, srng)
     S1 = sample_interfaces(asset, ids1, ours_spacing, srng)
     allcr = np.vstack([c for c in cracks.values() if len(c)]) if cracks else np.zeros((0, 3))
-    out = {"asset": asset["meta"]["name"], "strength_anisotropy": ratio, "tau": tau, "median_cell_diameter": cell_d, "cases": {k: int(len(v)) for k, v in cracks.items()}, "levels": {}}
+    out = {"asset": asset["meta"]["name"], "oracle_source": source, "strength_anisotropy": ratio, "tau": tau, "median_cell_diameter": cell_d, "cases": {k: int(len(v)) for k, v in cracks.items()}, "levels": {}}
     taus = [0.125, 0.25, 0.5, 1.0]
     for name, ours in (("L1", S1), ("L3", S3)):
         if len(ours) == 0 or len(allcr) == 0:
@@ -343,7 +354,7 @@ def main():
     if args.json:
         json.dump(out, open(args.json, "w"), indent=2)
     json.dump(out, open(os.path.join(args.cache, f"{out['asset']}.crack_oracle.json"), "w"), indent=2)
-    print(f"### Crack placement (Rankine oracle): {out['asset']}\n")
+    print(f"### Crack placement (Rankine oracle): {out['asset']} (oracle: {source})\n")
     print(f"Oracle cracks: {', '.join(f'{k} ({v} samples)' for k, v in out['cases'].items())}; τ = 0.25 × median cell diameter = {tau:.4f} m.\n")
     print("| Interfaces | Recall@τ | Precision@τ | F-score | F@τ/2 | F@2τ |\n|---|---|---|---|---|---|")
     for name, l in out["levels"].items():

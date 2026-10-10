@@ -39,8 +39,8 @@ check() {
   local ok=0
   st() { if eval "$2" > /dev/null 2>&1; then echo "  [ok]      $1"; else echo "  [missing] $1"; ok=1; fi; }
   echo "Shardwright environment:"
-  st "cargo" "have cargo"
   st "prefracture (release build)" "test -x '$ROOT/target/release/prefracture'"
+  if have cargo; then echo "  [ok]      cargo"; else echo "  [info]    cargo not installed (only needed to rebuild)"; fi
   st "node + glTF validator" "have node && test -d '$ROOT/tools/gltf_validate/node_modules/gltf-validator'"
   st "python oracle env ($FRACENV)" "'$FRACENV/bin/python' -c 'import KratosMultiphysics, KratosMultiphysics.StructuralMechanicsApplication, KratosMultiphysics.LinearSolversApplication, gmsh, skfem, coacd, manifold3d, trimesh, scipy'"
   st "flatc $FLATBUFFERS_TAG" "'$ORACLES/flatbuffers/build/flatc' --version | grep -q '${FLATBUFFERS_TAG#v}'"

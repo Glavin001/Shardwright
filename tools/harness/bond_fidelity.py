@@ -17,6 +17,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from kratos_fem import mesh_solid, solve_static  # noqa: E402
+import golden  # noqa: E402
 
 
 def polygon_quadrature(loops, normal, sub=2):
@@ -139,12 +140,37 @@ def pct(x, q):
     return float(np.percentile(np.asarray(x), q)) if len(x) else float("nan")
 
 
+def oracle_modal(cache, solid, verts, tris, h, L, axis, lo, tol, mat):
+    """First 10 natural frequencies of the clamped solid (scikit-fem P2) on
+    its own coarser mesh (global modes converge fast); cached."""
+    from skfem_modal import modal_frequencies
+    hm = max(h, L / 40.0)
+    mkey_m = hashlib.sha1(json.dumps([solid, hm]).encode()).hexdigest()[:16]
+    mpath_m = os.path.join(cache, f"mesh_{mkey_m}.npz")
+    if os.path.exists(mpath_m):
+        z = np.load(mpath_m)
+        mcoords, mtets = z["coords"], z["tets"]
+    else:
+        mcoords, mtets = mesh_solid(verts, tris, hm)
+        np.savez(mpath_m, coords=mcoords, tets=mtets)
+    mfixed = np.abs(mcoords[:, axis] - lo) <= tol
+    mkey = os.path.join(cache, f"modal_{hashlib.sha1(json.dumps([mkey_m, mat]).encode()).hexdigest()[:16]}.json")
+    if os.path.exists(mkey):
+        return json.load(open(mkey))
+    fem_f = [float(x) for x in modal_frequencies(mcoords, mtets, mat["E"], mat["nu"], mat["rho"], mfixed, 10)]
+    json.dump(fem_f, open(mkey, "w"))
+    return fem_f
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--asset", required=True)
     ap.add_argument("--network", required=True)
     ap.add_argument("--cache", required=True)
-    ap.add_argument("--h", type=float, default=0.0, help="FEM element size (default: length/40)")
+    ap.add_argument("--h", type=float, default=0.0, help="FEM element size (default: min(length/40, median cell size/2.5))")
+    ap.add_argument("--golden", default="", help="golden oracle directory (default: benchmarks/golden/<asset>); used when it matches the solid, material and load cases")
+    ap.add_argument("--no-golden", action="store_true", help="always run the FEM oracle")
+    ap.add_argument("--write-golden", action="store_true", help="freeze the computed oracle into the golden directory")
     args = ap.parse_args()
     asset = json.load(open(args.asset))
     net = json.load(open(args.network))
@@ -163,9 +189,16 @@ def main():
     vols = sorted(c["mass"]["volume"] for c in cells)
     cell_size = vols[len(vols) // 2] ** (1.0 / 3.0)
     h = args.h or min(L / 40.0, cell_size / 2.5)
+    gdir = args.golden or golden.default_dir(asset["meta"]["name"])
+    man = golden.load_manifest(gdir)
+    use_golden = not args.no_golden and golden.matches(man, solid, mat, net["load_cases"])
+    if use_golden:
+        h = man["fem"]["h"]
     key = hashlib.sha1(json.dumps([solid, h]).encode()).hexdigest()[:16]
     mpath = os.path.join(args.cache, f"mesh_{key}.npz")
-    if os.path.exists(mpath):
+    if use_golden:
+        coords, tets = golden.load_mesh(gdir)
+    elif os.path.exists(mpath):
         z = np.load(mpath)
         coords, tets = z["coords"], z["tets"]
     else:
@@ -189,24 +222,31 @@ def main():
     iarea = np.bincount(qowner, weights=qw, minlength=len(interfaces))
     locator = StressField(coords, tets, np.zeros((len(tets), 4, 6)))
     qelem = locator.locate(qp)
-    out = {"asset": asset["meta"]["name"], "fem_nodes": int(len(coords)), "fem_tets": int(len(tets)), "fem_h": h, "levels": []}
+    out = {"asset": asset["meta"]["name"], "oracle_source": f"golden ({gdir})" if use_golden else "computed", "fem_nodes": int(len(coords)), "fem_tets": int(len(tets)), "fem_h": h, "levels": []}
     fem_cases = {}
+    frozen = []
     for case in net["load_cases"]:
-        F, ftris, A, cen = face_loads(coords, tets, axis, hi, tol, case)
-        ckey = hashlib.sha1(json.dumps([key, case, mat]).encode()).hexdigest()[:16]
-        cpath = os.path.join(args.cache, f"fem2_{ckey}.npz")
-        if os.path.exists(cpath):
-            z = np.load(cpath)
-            disp, S, C = z["disp"], z["S"], z["C"]
+        if use_golden:
+            S = golden.load_fem(gdir, case["name"])
+            resp = man["fem_response"][case["name"]]
         else:
-            disp, S, C = solve_static(coords, tets, mat["E"], mat["nu"], mat["rho"], fixed, F)
-            np.savez(cpath, disp=disp, S=S, C=C)
+            F, ftris, A, cen = face_loads(coords, tets, axis, hi, tol, case)
+            ckey = hashlib.sha1(json.dumps([key, case, mat]).encode()).hexdigest()[:16]
+            cpath = os.path.join(args.cache, f"fem2_{ckey}.npz")
+            if os.path.exists(cpath):
+                z = np.load(cpath)
+                disp, S, C = z["disp"], z["S"], z["C"]
+            else:
+                disp, S, C = solve_static(coords, tets, mat["E"], mat["nu"], mat["rho"], fixed, F)
+                np.savez(cpath, disp=disp, S=S, C=C)
+            resp = response(disp, ftris, A, cen, case)
+            frozen.append((case, (S, resp)))
         field = StressField(coords, tets, S)
         # ∫ σ dA per interface
         Sq = field.eval_many(qelem, qp) * qw[:, None, None]
         isig = np.zeros((len(interfaces), 3, 3))
         np.add.at(isig, qowner, Sq)
-        fem_cases[case["name"]] = (isig, response(disp, ftris, A, cen, case))
+        fem_cases[case["name"]] = (isig, resp)
     dump = {}
     for lv in net["levels"]:
         lrep = {"level": lv["level"], "fragments": lv["fragments"], "cases": []}
@@ -248,23 +288,7 @@ def main():
         out["levels"].append(lrep)
     # modal
     try:
-        from skfem_modal import modal_frequencies
-        hm = max(h, L / 40.0)
-        mkey_m = hashlib.sha1(json.dumps([solid, hm]).encode()).hexdigest()[:16]
-        mpath_m = os.path.join(args.cache, f"mesh_{mkey_m}.npz")
-        if os.path.exists(mpath_m):
-            z = np.load(mpath_m)
-            mcoords, mtets = z["coords"], z["tets"]
-        else:
-            mcoords, mtets = mesh_solid(verts, tris, hm)
-            np.savez(mpath_m, coords=mcoords, tets=mtets)
-        mfixed = np.abs(mcoords[:, axis] - lo) <= tol
-        mkey = os.path.join(args.cache, f"modal_{hashlib.sha1(json.dumps([mkey_m, mat]).encode()).hexdigest()[:16]}.json")
-        if os.path.exists(mkey):
-            fem_f = json.load(open(mkey))
-        else:
-            fem_f = [float(x) for x in modal_frequencies(mcoords, mtets, mat["E"], mat["nu"], mat["rho"], mfixed, 10)]
-            json.dump(fem_f, open(mkey, "w"))
+        fem_f = man["modal_hz"] if use_golden and man.get("modal_hz") else oracle_modal(args.cache, solid, verts, tris, h, L, axis, lo, tol, mat)
         out["fem_modal_hz"] = fem_f
         for lrep, lv in zip(out["levels"], net["levels"]):
             nf = lv.get("modal_hz", [])
@@ -279,10 +303,13 @@ def main():
         s = series(key)
         out[f"{key}_by_level"] = s
         out[f"{key}_monotone"] = bool(all(s[i + 1] <= s[i] + 1e-12 for i in range(len(s) - 1)))
+    if args.write_golden and not use_golden and frozen:
+        golden.write_bond(gdir, out["asset"], solid, mat, axis, lo, hi, L, h, coords, tets, frozen, out.get("fem_modal_hz"))
+        out["golden_written"] = gdir
     json.dump(out, open(os.path.join(args.cache, f"{out['asset']}.bond_fidelity.json"), "w"), indent=2)
     np.savez(os.path.join(args.cache, f"{out['asset']}.bond_errors.npz"), **{f"{k}__{f}": v for k, d in dump.items() for f, v in d.items()})
     # markdown summary
-    print(f"### Bond fidelity: {out['asset']} (FEM: {out['fem_tets']} P2 tets)\n")
+    print(f"### Bond fidelity: {out['asset']} (FEM: {out['fem_tets']} P2 tets, h = {h:.4f} m; oracle: {out['oracle_source']})\n")
     print(f"Network stiffness model: {net.get('stiffness_model', '?')}. Traction error = |t_net - t_FEM| / max(|t_FEM|, 5% of max) per bond;")
     print("'recovered' uses the Love–Weber stress of the two fragments, 'raw' uses F_b/A_b (spec definition).\n")
     print("| Level | Case | Bonds | Recovered p50 | Recovered p95 | Raw F/A p50 | Raw F/A p95 | Raw normal p50 | Stiffness err |\n|---|---|---|---|---|---|---|---|---|")
