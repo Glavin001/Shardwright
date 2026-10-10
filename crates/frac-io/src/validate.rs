@@ -94,8 +94,10 @@ pub fn flatc_validate(path: &Path) -> Option<Result<(), String>> {
                 String::from_utf8_lossy(&out.stderr)
             ))
         } else {
-            match std::fs::read_to_string(&json_out) {
-                Ok(s) => serde_json::from_str::<Value>(&s)
+            // streamed syntax check (the dump reaches gigabytes on
+            // building-scale assets; no in-memory document)
+            match std::fs::File::open(&json_out) {
+                Ok(f) => serde_json::from_reader::<_, serde::de::IgnoredAny>(std::io::BufReader::with_capacity(1 << 20, f))
                     .map(|_| ())
                     .map_err(|e| format!("flatc JSON output invalid: {e}")),
                 Err(e) => Err(format!("flatc produced no JSON output: {e}")),
