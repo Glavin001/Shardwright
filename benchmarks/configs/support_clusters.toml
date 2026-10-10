@@ -49,7 +49,9 @@ tet_edge_ratio = 0.33
 size_effect = true
 # Extra bias on top of the size effect, per boundary level:
 # [L0 joints, L1 boundaries]; 1 = none, below 1 = break there sooner.
-boundary_factors = [1.0, 1.0]
+# Pronounced on purpose: the stress solver should clearly break along the
+# predefined joints and Level-1 cuts before splitting chunks elsewhere.
+boundary_factors = [0.5, 0.4]
 anchor_factor = 1.0
 
 [hierarchy]
