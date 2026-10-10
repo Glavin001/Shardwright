@@ -22,6 +22,16 @@
 //! Energies of the reduced problem are upper bounds of the full ones. The
 //! number of unknowns drops from `3 × #exploded nodes` to `≈ 3 s × #cells`,
 //! independent of the tet count.
+//!
+//! Degree 0 is the translational model of Sellán et al. (§3.6): one constant
+//! displacement per (super-)cell, whose strain energy vanishes (`Q_r = 0`).
+//! It is solved for a single displacement component (x): the objective
+//! `Σ w_g ‖u_a − u_b‖` is isotropic and the constraints (rigid translations,
+//! anchors, forbidden interfaces, mode orthogonality against single-axis
+//! modes) separate per axis, so ICCM started from `φ e_x` stays in the
+//! x component and the vector modes are exactly the scalar modes times
+//! `e_x`, `e_y`, `e_z` (degenerate direction triples). Solving one component
+//! gives `k` distinct cut patterns for `k` modes at a third of the unknowns.
 
 use crate::problem::{active_groups, NodeInfo, Problem};
 use frac_fem::dense;
@@ -30,7 +40,10 @@ use std::ops::Range;
 
 fn monomials(x: [f64; 3], degree: u8, out: &mut Vec<f64>) {
     out.clear();
-    out.extend_from_slice(&[1.0, x[0], x[1], x[2]]);
+    out.push(1.0);
+    if degree >= 1 {
+        out.extend_from_slice(&[x[0], x[1], x[2]]);
+    }
     if degree >= 2 {
         out.extend_from_slice(&[x[0] * x[0], x[1] * x[1], x[2] * x[2], x[0] * x[1], x[1] * x[2], x[2] * x[0]]);
     }
@@ -45,7 +58,10 @@ struct CellBasis {
 }
 
 pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) -> Result<Problem, String> {
-    let degree = degree.clamp(1, 2);
+    let degree = degree.min(2);
+    // displacement components carried by the reduced space: the translational
+    // model (degree 0) is solved for one component (see below), P1/P2 for 3
+    let ncomp = if degree == 0 { 1 } else { 3 };
     let nf = full.n / 3;
     assert_eq!(info.super_cell.len(), nf);
     let ns = info.n_super;
@@ -83,7 +99,7 @@ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) ->
         }
         let scale = if r2 > 0.0 { 1.0 / r2.sqrt() } else { 1.0 };
         let loc = |p: [f64; 3]| [(p[0] - c[0]) * scale, (p[1] - c[1]) * scale, (p[2] - c[2]) * scale];
-        let s0 = if degree >= 2 { 10 } else { 4 };
+        let s0 = [1, 4, 10][degree as usize];
         // null space of anchored nodal values
         let mut nmat: Vec<f64> = (0..s0 * s0).map(|i| if i % (s0 + 1) == 0 { 1.0 } else { 0.0 }).collect();
         let mut s1 = s0;
@@ -145,7 +161,7 @@ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) ->
             }
         }
         cells.push(CellBasis { nodes, s: s2, phi, offset });
-        offset += 3 * s2;
+        offset += ncomp * s2;
     }
     let nr = offset;
     if nr == 0 {
@@ -163,7 +179,7 @@ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) ->
     for f in 0..nf {
         let (sc, a) = node_loc[f];
         let cb = &cells[sc];
-        for k in 0..3 {
+        for k in 0..ncomp {
             for i in 0..cb.s {
                 trip.push((3 * f + k, cb.offset + k * cb.s + i, cb.phi[a * cb.s + i]));
             }
@@ -171,8 +187,13 @@ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) ->
     }
     let phi = CsrMatrix::from_triplets(full.n, nr, trip);
     let phit = phi.transpose();
-    let qr = phit.matmul(&full.q.matmul(&phi));
-    let qr = qr.add(0.5, &qr.transpose(), 0.5);
+    let qr = if degree == 0 {
+        // per-cell translations lie in the null space of the strain energy
+        CsrMatrix::from_triplets(nr, nr, Vec::new())
+    } else {
+        let qr = phit.matmul(&full.q.matmul(&phi));
+        qr.add(0.5, &qr.transpose(), 0.5)
+    };
 
     // compressed group operators
     let mut rows_all: Vec<Range<usize>> = Vec::with_capacity(full.groups.len());
@@ -234,10 +255,10 @@ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) ->
                 for i in 0..nc {
                     if w[i] > 1e-13 * wmax {
                         let sw = w[i].sqrt();
-                        for k in 0..3 {
+                        for k in 0..ncomp {
                             for (j, &col) in cols.iter().enumerate() {
                                 // shift component-0 column to component k of the same cell
-                                let (sc, _) = owner(&cells, col);
+                                let (sc, _) = owner(&cells, col, ncomp);
                                 let cb = &cells[sc];
                                 let v = sw * vecs[j * nc + i];
                                 if v != 0.0 {
@@ -254,7 +275,17 @@ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) ->
     }
     let b_all = CsrMatrix::from_triplets(row, nr, btrip);
     let (active, b_act, rows_act, lam_act) = active_groups(&b_all, &rows_all, &full.group_weight, omega);
-    let rigid_rows: Vec<Vec<f64>> = full.rigid_rows.iter().map(|r| phit.mul(r)).collect();
+    // Rigid-mode rows: only rigid modes contained in the subspace constrain
+    // it (all six for degree >= 1). For degree 0 (per-cell translations of
+    // one component, the paper's §3.6 space) the rotations are not
+    // representable and are not zero-energy there, so only the
+    // x translation is kept.
+    let rigid_rows: Vec<Vec<f64>> = full
+        .rigid_rows
+        .iter()
+        .map(|r| phit.mul(r))
+        .filter(|a| a.iter().map(|x| x * x).sum::<f64>() > 1.0 - 1e-9)
+        .collect();
     let mut init = Vec::with_capacity(full.init.len());
     for c in &full.init {
         let mc: Vec<f64> = (0..full.n).map(|i| full.m[i] * c[i]).collect();
@@ -281,12 +312,14 @@ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) ->
         rigid_rows,
         eigenvalues: full.eigenvalues.clone(),
         init,
+        init_cluster: full.init_cluster.clone(),
         length_scale: full.length_scale,
+        prolong: Some(phi),
     })
 }
 
 /// Cell owning a reduced column.
-fn owner(cells: &[CellBasis], col: usize) -> (usize, usize) {
+fn owner(cells: &[CellBasis], col: usize, ncomp: usize) -> (usize, usize) {
     // cells are laid out contiguously by offset; binary search on offsets
     let mut lo = 0usize;
     let mut hi = cells.len();
@@ -300,7 +333,7 @@ fn owner(cells: &[CellBasis], col: usize) -> (usize, usize) {
     }
     // skip empty cells sharing the same offset
     let mut sc = lo;
-    while cells[sc].s == 0 || col >= cells[sc].offset + 3 * cells[sc].s {
+    while cells[sc].s == 0 || col >= cells[sc].offset + ncomp * cells[sc].s {
         sc += 1;
     }
     (sc, col - cells[sc].offset)

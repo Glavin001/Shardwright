@@ -40,7 +40,13 @@ pub(crate) struct Problem {
     pub eigenvalues: Vec<f64>,
     /// Initial vectors (continuous eigenvectors mapped to free exploded DOFs).
     pub init: Vec<Vec<f64>>,
+    /// For each initial vector, the initial vectors it may be combined with
+    /// for the ICCM multi-start: those of (numerically) the same eigenvalue.
+    /// Includes itself.
+    pub init_cluster: Vec<Vec<usize>>,
     pub length_scale: f64,
+    /// Prolongation onto the full exploded free DOFs (reduced problems only).
+    pub prolong: Option<CsrMatrix>,
 }
 
 struct Dsu(Vec<u32>);
@@ -62,6 +68,13 @@ impl Dsu {
     }
 }
 
+fn tri_area(p: [[f64; 3]; 3]) -> f64 {
+    let e1 = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
+    let e2 = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
+    let cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    0.5 * (cr[0] * cr[0] + cr[1] * cr[1] + cr[2] * cr[2]).sqrt()
+}
+
 pub(crate) fn mdot(a: &[f64], b: &[f64], m: &[f64]) -> f64 {
     let mut s = 0.0;
     for i in 0..a.len() {
@@ -79,16 +92,42 @@ pub(crate) struct NodeInfo {
     /// Anchored (fixed) exploded nodes: super-cell and position.
     pub anchored_super: Vec<u32>,
     pub anchored_pos: Vec<[f64; 3]>,
+    /// All exploded `(vertex, cell)` pairs (sorted) and the first free DOF
+    /// of each pair's node (`usize::MAX` when anchored).
+    pub pairs: Vec<(u32, u32)>,
+    pub pair_dof: Vec<usize>,
 }
 
 #[cfg(test)]
 pub(crate) fn build(input: &ModesInput, timings: &mut Vec<(String, f64)>) -> Result<Problem, String> {
-    build_full(input, timings).map(|(p, _)| p)
+    build_full(input, timings, false).map(|(p, _)| p)
 }
 
+/// Relative eigenvalue gap below which initial eigenvectors are treated as
+/// one (near-)degenerate eigenspace by the ICCM multi-start.
+pub(crate) const DEGENERATE_REL_GAP: f64 = 1e-2;
+
+/// Clusters of (near-)equal eigenvalues: for each index, all indices `l`
+/// with `|λ_l − λ_j| ≤ DEGENERATE_REL_GAP · max(|λ_j|, |λ_l|)`.
+pub(crate) fn eigen_clusters(lambdas: &[f64]) -> Vec<Vec<usize>> {
+    (0..lambdas.len())
+        .map(|j| {
+            (0..lambdas.len())
+                .filter(|&l| (lambdas[l] - lambdas[j]).abs() <= DEGENERATE_REL_GAP * lambdas[j].abs().max(lambdas[l].abs()))
+                .collect()
+        })
+        .collect()
+}
+
+/// Builds the full cell-exploded problem. `translational`: the caller solves
+/// the per-cell translation model (degree-0 reduction), whose strain energy
+/// vanishes and whose initial vectors come from [`laplacian_init`], so the
+/// continuous elastic eigenproblem is skipped (no `Q̂` normalization by `λ₁`,
+/// no elastic initial vectors).
 pub(crate) fn build_full(
     input: &ModesInput,
     timings: &mut Vec<(String, f64)>,
+    translational: bool,
 ) -> Result<(Problem, NodeInfo), String> {
     let mesh = input.mesh;
     let nt = mesh.tets.len();
@@ -118,12 +157,17 @@ pub(crate) fn build_full(
 
     // ---- continuous eigenproblem (initialization), physical units ----
     let unanchored = input.anchored_vertices.is_empty();
-    let (evals, evecs) =
-        frac_fem::analysis::eigenmodes_tol(mesh, input.tet_material, input.anchored_vertices, p.k, p.seed, 1e-6)?;
-    if evals.is_empty() {
-        return Err("no non-rigid eigenmodes found on the continuous mesh".into());
-    }
-    timings.push(("eigen_init".into(), t0.elapsed().as_secs_f64() * 1e3));
+    let (evals, evecs) = if translational {
+        (Vec::new(), Vec::new())
+    } else {
+        let (evals, evecs) =
+            frac_fem::analysis::eigenmodes_tol(mesh, input.tet_material, input.anchored_vertices, p.k, p.seed, 1e-6)?;
+        if evals.is_empty() {
+            return Err("no non-rigid eigenmodes found on the continuous mesh".into());
+        }
+        timings.push(("eigen_init".into(), t0.elapsed().as_secs_f64() * 1e3));
+        (evals, evecs)
+    };
     let t1 = std::time::Instant::now();
 
     // ---- exploded nodes: one per (vertex, cell) pair ----
@@ -164,6 +208,11 @@ pub(crate) fn build_full(
     faults.sort_by(|a, b| (a.ca, a.cb, a.verts).cmp(&(b.ca, b.cb, b.verts)));
     let mut groups: Vec<(u32, u32)> = faults.iter().map(|f| (f.ca, f.cb)).collect();
     groups.dedup();
+    let group_index = |a: u32, b: u32| groups.binary_search(&(a, b)).unwrap();
+    let mut group_area = vec![0.0; groups.len()];
+    for f in &faults {
+        group_area[group_index(f.ca, f.cb)] += tri_area(f.verts.map(|v| mesh.verts[v as usize]));
+    }
     let mut group_weight = Vec::with_capacity(groups.len());
     for &(a, b) in &groups {
         let w = (input.group_weight)(a, b);
@@ -172,7 +221,18 @@ pub(crate) fn build_full(
         }
         group_weight.push(w);
     }
-    let group_index = |a: u32, b: u32| groups.binary_search(&(a, b)).unwrap();
+    if p.area_weighted && !groups.is_empty() {
+        // w_g ← w_g·√(A_g/Ā): with a constant jump over the group the penalty
+        // ω w_g ‖B̂_g u‖ becomes ∝ A_g·|jump| = ∫_g ‖D‖ dA
+        let mean = group_area.iter().sum::<f64>() / groups.len() as f64;
+        if mean > 0.0 {
+            for (w, &a) in group_weight.iter_mut().zip(&group_area) {
+                if w.is_finite() && *w > 0.0 {
+                    *w *= (a / mean).sqrt();
+                }
+            }
+        }
+    }
 
     // ---- forbidden groups: merge DOF copies (B_g u = 0 <=> equal vertex copies) ----
     let mut dsu = Dsu((0..pairs.len() as u32).collect());
@@ -230,12 +290,12 @@ pub(crate) fn build_full(
             .map(|(t, tt)| tt.map(|v| node(v, input.tet_cell[t])))
             .collect(),
     };
-    let k_full = assemble_stiffness(&ex, input.tet_material);
     let m_full = assemble_lumped_mass(&ex, input.tet_material);
     let m_tot: f64 = m_full.iter().sum::<f64>() / 3.0;
     let volume = mesh.volume().abs();
     let length_scale = libm::cbrt(volume);
-    let lambda1 = evals[0];
+    // translational model: Q̂ is projected out exactly (see `reduce`)
+    let lambda1 = evals.first().copied().unwrap_or(1.0);
 
     // anchored: all copies of anchored vertices
     let mut anchored = vec![false; nv];
@@ -248,9 +308,15 @@ pub(crate) fn build_full(
     if n == 0 {
         return Err("all DOFs are anchored".into());
     }
-    let qs = 1.0 / (lambda1 * m_tot);
-    let mut q = k_full.restrict(&map, n, &map, n);
-    q.vals.iter_mut().for_each(|v| *v *= qs);
+    let q = if translational {
+        // the strain energy of per-cell translations is zero: no stiffness
+        CsrMatrix::from_triplets(n, n, Vec::new())
+    } else {
+        let qs = 1.0 / (lambda1 * m_tot);
+        let mut q = assemble_stiffness(&ex, input.tet_material).restrict(&map, n, &map, n);
+        q.vals.iter_mut().for_each(|v| *v *= qs);
+        q
+    };
     let mut m = vec![0.0; n];
     for d in 0..3 * n_nodes {
         if map[d] != usize::MAX {
@@ -261,19 +327,13 @@ pub(crate) fn build_full(
     // ---- jump operator ----
     let mut trip: Vec<(usize, usize, f64)> = Vec::with_capacity(faults.len() * 36);
     let mut rows_all: Vec<Range<usize>> = vec![0..0; groups.len()];
-    let mut group_area = vec![0.0; groups.len()];
     let mut row = 0usize;
     let mut fi = 0;
     for (g, &(a, b)) in groups.iter().enumerate() {
         let start = row;
         while fi < faults.len() && (faults[fi].ca, faults[fi].cb) == (a, b) {
             let f = &faults[fi];
-            let p: Vec<[f64; 3]> = f.verts.iter().map(|&v| mesh.verts[v as usize]).collect();
-            let e1 = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
-            let e2 = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
-            let cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
-            let area = 0.5 * (cr[0] * cr[0] + cr[1] * cr[1] + cr[2] * cr[2]).sqrt();
-            group_area[g] += area;
+            let area = tri_area(f.verts.map(|v| mesh.verts[v as usize]));
             // edge-midpoint rule (exact for quadratics), weights area/3
             let s = 0.5 * (area / 3.0).sqrt() / length_scale;
             for e in 0..3 {
@@ -352,6 +412,8 @@ pub(crate) fn build_full(
         n_super: n_super as usize,
         anchored_super: Vec::new(),
         anchored_pos: Vec::new(),
+        pair_dof: (0..pairs.len()).map(|k| map[3 * node_id[k] as usize]).collect(),
+        pairs: pairs.clone(),
     };
     for nd in 0..n_nodes {
         let sc = super_id[node_cell[nd] as usize];
@@ -379,9 +441,11 @@ pub(crate) fn build_full(
         rows_act,
         lam_act,
         rigid_rows,
+        init_cluster: eigen_clusters(&evals[..init.len().min(evals.len())]),
         eigenvalues: evals,
         init,
         length_scale,
+        prolong: None,
     }, info))
 }
 
@@ -455,4 +519,85 @@ impl Problem {
         let bu = self.b_all.mul(u);
         self.rows_all.iter().map(|r| bu[r.clone()].iter().map(|x| x * x).sum::<f64>().sqrt()).collect()
     }
+}
+
+/// ICCM initial vectors for the translational (per-cell constant) model.
+/// The paper initializes ICCM with eigenvectors of the strain Hessian `Q`;
+/// for the translational strain energy `‖∇u‖²` that is the vector Laplacian
+/// `I₃ ⊗ L`, whose eigenvectors are `φ_j e_x, φ_j e_y, φ_j e_z` for the
+/// scalar P1 Laplacian eigenvectors `φ_j` (lumped mass; constants deflated
+/// for a free body, anchored vertices fixed). The translational model is
+/// solved for one displacement component (see `reduce`), so these are the
+/// `n` lowest `φ_j e_x`, on the free exploded DOFs and M̂-normalized, with
+/// their eigenvalues and multi-start clusters (numerically equal
+/// eigenvalues; see [`Problem::init_cluster`]).
+pub(crate) struct LaplacianInit {
+    pub init: Vec<Vec<f64>>,
+    pub eigenvalues: Vec<f64>,
+    pub cluster: Vec<Vec<usize>>,
+}
+
+pub(crate) fn laplacian_init(input: &ModesInput, info: &NodeInfo, m: &[f64], n: usize) -> Result<LaplacianInit, String> {
+    let mesh = input.mesh;
+    let nv = mesh.verts.len();
+    let mut fixed = vec![false; nv];
+    for &a in input.anchored_vertices {
+        fixed[a as usize] = true;
+    }
+    let mut map = vec![usize::MAX; nv];
+    let mut nf = 0;
+    for v in 0..nv {
+        if !fixed[v] {
+            map[v] = nf;
+            nf += 1;
+        }
+    }
+    let mut trip = Vec::with_capacity(16 * mesh.tets.len());
+    let mut mass = vec![0.0; nf];
+    for t in 0..mesh.tets.len() {
+        let tt = mesh.tets[t];
+        let Some((g, vol)) = frac_fem::element::tet_gradients(&mesh.tet_points(t)) else { continue };
+        let vol = vol.abs();
+        for a in 0..4 {
+            let ia = map[tt[a] as usize];
+            if ia == usize::MAX {
+                continue;
+            }
+            mass[ia] += vol / 4.0;
+            for b in 0..4 {
+                let ib = map[tt[b] as usize];
+                if ib != usize::MAX {
+                    trip.push((ia, ib, vol * (g[a][0] * g[b][0] + g[a][1] * g[b][1] + g[a][2] * g[b][2])));
+                }
+            }
+        }
+    }
+    if mass.iter().any(|&x| !(x > 0.0)) {
+        return Err("vertex without volume in the Laplacian initialization".into());
+    }
+    let lap = CsrMatrix::from_triplets(nf, nf, trip);
+    let defl = if input.anchored_vertices.is_empty() { vec![vec![1.0; nf]] } else { Vec::new() };
+    let opts = frac_fem::eigen::EigenOptions { n, seed: input.params.seed, tol: 1e-6, ..Default::default() };
+    let res = frac_fem::eigen::smallest_eigenpairs(&lap, &mass, &defl, &opts)?;
+    let mut init = Vec::with_capacity(res.vectors.len());
+    let mut origin = Vec::with_capacity(res.vectors.len()); // scalar eigenvector index
+    for (si, phi) in res.vectors.iter().enumerate() {
+        let mut u = vec![0.0; m.len()];
+        for (k, &(v, _)) in info.pairs.iter().enumerate() {
+            let (d, iv) = (info.pair_dof[k], map[v as usize]);
+            if d != usize::MAX && iv != usize::MAX {
+                u[d] = phi[iv];
+            }
+        }
+        let nn = mdot(&u, &u, m).sqrt();
+        if nn > 0.0 {
+            u.iter_mut().for_each(|x| *x /= nn);
+            init.push(u);
+            origin.push(si);
+        }
+    }
+    let scalar_cluster = eigen_clusters(&res.values);
+    let cluster = origin.iter().map(|&si| (0..origin.len()).filter(|&j| scalar_cluster[si].contains(&origin[j])).collect()).collect();
+    let eigenvalues = origin.iter().map(|&si| res.values[si]).collect();
+    Ok(LaplacianInit { init, eigenvalues, cluster })
 }

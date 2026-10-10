@@ -1,74 +1,106 @@
-//! Weak-region analysis (spec Stage 4): a clean-room reimplementation of
-//! "Breaking Good: Fracture Modes for Realtime Destruction" (Sellán et al.,
-//! ACM TOG 2022) on a cell-exploded tetrahedral mesh, with material-aware
-//! interface weights.
+//! Weak-region analysis (spec Stage 4): our implementation of the fracture
+//! modes of S. Sellán, J. Luong, L. Mattos Da Silva, A. Ramakrishnan,
+//! Y. Yang, A. Jacobson, "Breaking Good: Fracture Modes for Realtime
+//! Destruction", ACM Transactions on Graphics 42(1), 2023 (the "paper"),
+//! on a cell-exploded tetrahedral mesh with material-aware interface weights.
+//!
+//! # Models
+//! * **Translational (default, [`Discretization::CellPolynomial`]`(0)`)**:
+//!   the model the paper uses for all its examples (§3.6). Every analysis
+//!   cell (or super-cell, see forbidden groups) moves by one constant
+//!   displacement. The strain energy `‖∇u‖²` (Hessian `I₃ ⊗ L`) vanishes on
+//!   that space, so each ICCM subproblem is the pure second-order-cone
+//!   program `min Σ_g ω w_g ‖B_g u‖`, and ICCM starts from the eigenvectors
+//!   of `I₃ ⊗ L` on the unexploded mesh (scalar cotangent Laplacian, lumped
+//!   mass). The objective is isotropic and the constraints separate per
+//!   axis, so the vector modes are exactly scalar modes times `e_x, e_y,
+//!   e_z`. We solve one component: `k` modes are `k` distinct cut patterns,
+//!   with one unknown per cell (see `reduce`). On identical meshes this
+//!   reproduces the authors' reference implementation (docs/VALIDATION.md).
+//! * **Linear-elastic P1** (`ModesParams::discretization = None`, or
+//!   `Full` / `CellPolynomial(1|2)`): the paper's general Eq. (15) with `Q`
+//!   the linear-elastic stiffness (spec §4.1). Its null space contains
+//!   rotations, so fragments may hinge relative to each other (the effect
+//!   that made the paper switch to the translational model).
 //!
 //! # Discretization (§4.1)
 //! One displacement node per (mesh vertex, analysis cell) pair: DOFs are
 //! shared inside a cell and duplicated across *fault faces* (faces between
-//! tets of different cells). `Q` is the P1 linear-elastic stiffness of this
-//! exploded mesh with per-tet materials, `M̃` its lumped mass. Faces are
-//! grouped by analysis-cell pair; `B_g` evaluates the displacement jump
-//! `u_a − u_b` at the three edge midpoints of every face of group `g`
-//! (weights `area/3`, exact for the quadratic `‖D‖²`), scaled so that
-//! `‖B_g u‖² = ∫_g ‖D(u,x)‖² dA` exactly.
+//! tets of different cells). `Q` is the P1 stiffness of this exploded mesh
+//! with per-tet materials (zero for the translational model), `M̃` its lumped
+//! mass. Faces are grouped by analysis-cell pair; `B_g` evaluates the
+//! displacement jump `u_a − u_b` at the three edge midpoints of every face of
+//! group `g` (weights `area/3`, exact for the quadratic `‖D‖²`), scaled so
+//! that `‖B_g u‖² = ∫_g ‖D(u,x)‖² dA` exactly (the paper's patch norm,
+//! Eq. 5).
 //!
 //! # Energy and constraints (§4.2)
-//! `E(u) = ½ uᵀQu + ω Σ_g w_g ‖B_g u‖`. Forbidden groups (`w_g = ∞`) impose
-//! `B_g u = 0`; since jumps are linear on each face this is *equivalent* to
-//! equal DOF copies at every vertex of the group's faces, so those copies are
-//! merged exactly (forbidden jumps are then identically zero). Groups with
-//! `w_g = 0` are unpenalized. Anchored vertices: all copies are fixed (Dirichlet,
-//! eliminated). Unanchored: `u ⟂_M̃` the six rigid modes of the exploded mesh.
+//! `E(u) = ½ uᵀQu + ω Σ_g w_g ‖B_g u‖`. With [`ModesParams::area_weighted`]
+//! (default) every finite positive `w_g` is multiplied by `√(A_g/Ā)`, so for
+//! a constant jump the penalty is `∝ ∫_g ‖D‖ dA`: the discontinuity measure
+//! of the reference implementation. Material-aware weights multiply it.
+//! Forbidden groups (`w_g = ∞`) impose `B_g u = 0`; since jumps are linear
+//! on each face this is *equivalent* to equal DOF copies at every vertex of
+//! the group's faces, so those copies are merged exactly (forbidden jumps
+//! are then identically zero). Groups with `w_g = 0` are unpenalized.
+//! Anchored vertices: all copies are fixed (Dirichlet, eliminated).
+//! Unanchored: `u ⟂_M̃` the rigid modes contained in the solution space (6
+//! for P1; the translation for the translational model).
 //!
 //! # Normalization
 //! With `m_tot` the total mass, `λ₁` the first non-rigid eigenvalue of the
-//! continuous `(K, M)` pair (same anchors) and `L = V^{1/3}` (V = mesh volume):
-//! `M̂ = M/m_tot` (total mass 1), `Q̂ = Q/(λ₁ m_tot)` (first continuous
-//! eigenvalue 1), `B̂_g = B_g / L` (areas measured in units of `L²`). So `ω`
-//! is dimensionless: for an M̂-unit displacement the elastic term is `O(1)`
-//! and the sparsity term is `ω Σ w_g √(A_g/L²)·rms_jump`. Reported jumps are
-//! `‖B̂_g U_i‖ / √(A_g/L²)` = RMS jump over the interface for a mode with
-//! `U_iᵀM̂U_i = 1`, i.e. comparable across groups, modes and meshes.
-//! Both solvers minimize `½uᵀ(Q̂+δM̂)u + …` with `δ = 1e-8` (see
-//! [`problem::DELTA`]).
+//! continuous `(K, M)` pair (same anchors; P1 only) and `L = V^{1/3}`
+//! (V = mesh volume): `M̂ = M/m_tot` (total mass 1), `Q̂ = Q/(λ₁ m_tot)`
+//! (first continuous eigenvalue 1), `B̂_g = B_g / L` (areas measured in units
+//! of `L²`). So `ω` is dimensionless: for an M̂-unit displacement the elastic
+//! term is `O(1)` and the sparsity term is `ω Σ w_g √(A_g/L²)·rms_jump`
+//! (the translational objective is 1-homogeneous, so there `ω` only scales
+//! the energies). Reported jumps are `‖B̂_g U_i‖ / √(A_g/L²)` = RMS jump over
+//! the interface for a mode with `U_iᵀM̂U_i = 1`, i.e. comparable across
+//! groups, modes and meshes. Both solvers minimize `½uᵀ(Q̂+δM̂)u + …` with
+//! `δ = 1e-8` (see [`problem::DELTA`]).
 //!
 //! # Solve (§4.3, adapted ICCM)
-//! For mode i: `c` = i-th continuous eigenvector (rigid modes skipped)
-//! mapped to exploded DOFs. Repeat: solve the convex subproblem with
+//! For mode i: `c` = i-th initial eigenvector (rigid modes skipped) mapped
+//! to exploded DOFs. Repeat: solve the convex subproblem with
 //! `[U_1 … U_{i−1}, c]ᵀM̂u = [0 … 0, 1]ᵀ` (plus rigid-mode rows when
 //! unanchored), `c ← u/‖u‖_M̂`, stop when `‖u − c_old‖_M̂ ≤ ε` (relative,
 //! since `‖c_old‖_M̂ = 1`) or after `max_iters`. `U_i = u/‖u‖_M̂`.
 //! Before each solve, `c` is M̂-orthogonalized against the previous modes
 //! and rigid modes, which leaves the feasible set unchanged but keeps the
-//! constraint rows well conditioned.
+//! constraint rows well conditioned. ICCM is a local method: with
+//! [`ModesParams::multi_start`] (default), a mode whose initial eigenvector
+//! lies in a (near-)degenerate eigenspace (symmetric parts) is also started
+//! from the other members and their `(a ± b)/√2` combinations, and the
+//! lowest-energy result is kept.
 //!
 //! Solvers: [`Solver::Clarabel`] (interior-point conic reference) and
 //! [`Solver::Admm`] (Anderson-accelerated group-lasso ADMM with a single
 //! sparse Cholesky factor shared across modes and ICCM iterations, warm
 //! starts, and an inexact-ICCM tolerance schedule; for ≤ 3000 unknowns the
-//! tight confirmation solves are delegated to Clarabel).
+//! tight confirmation solves are delegated to Clarabel). [`Solver::Auto`]
+//! uses Clarabel for the translational model (below
+//! [`AUTO_CLARABEL_MAX_DOFS_TRANSLATIONAL`] unknowns) and for full P1
+//! problems below [`AUTO_CLARABEL_MAX_DOFS`], hybrid ADMM otherwise.
 //!
-//! Large problems (more than [`ModesParams::large_dofs`] unknowns, e.g. a
-//! brick wall with ~1300 analysis cells → 16k unknowns) run ADMM only: an
-//! interior-point confirmation costs ~35 s there and a tight ADMM tail
-//! thousands of iterations. ICCM then stops at
+//! Large P1 problems (more than [`ModesParams::large_dofs`] unknowns) run
+//! ADMM only: an interior-point confirmation costs ~35 s there and a tight
+//! ADMM tail thousands of iterations. ICCM then stops at
 //! `max(eps, ModesParams::eps_large)` with subproblems certified to a tenth
-//! of it; on the benchmark wall this reproduces the Level-1 segmentation of
-//! the tight schedule exactly (ARI 1.0) at ~1/20 of the cost.
+//! of it.
 //!
-//! # Performance: cell-polynomial reduction
-//! The full exploded problem has `3 × #(vertex, cell) pairs` unknowns
-//! (~30k for a 20k-tet mesh) and costs minutes. [`Solver::Auto`] therefore
-//! solves the full problem (with Clarabel) only below 3000 unknowns and
-//! otherwise switches to [`Discretization::CellPolynomial`]`(1)`: a Galerkin
-//! subspace in which every analysis cell displaces as the nodal interpolant
-//! of an affine field (12 DOFs per cell, containing the 6 rigid modes). Group
-//! norms, anchors, forbidden interfaces, rigid-mode and orthogonality
-//! constraints are all represented exactly in that subspace (see `reduce`);
-//! the unknown count becomes `12 × #cells` independent of the tet count.
-//! The known-answer tests pass for both discretizations. Use
-//! [`compute_modes_with`] to force a discretization (e.g. `Full` + `Admm`).
+//! # P1 performance: cell-polynomial reduction
+//! The full exploded P1 problem has `3 × #(vertex, cell) pairs` unknowns
+//! (~30k for a 20k-tet mesh) and costs minutes. With
+//! `discretization = None` it is solved (with Clarabel) only below 3000
+//! unknowns and otherwise replaced by
+//! [`Discretization::CellPolynomial`]`(1)`: a Galerkin subspace in which
+//! every analysis cell displaces as the nodal interpolant of an affine field
+//! (12 DOFs per cell, containing the 6 rigid modes). Group norms, anchors,
+//! forbidden interfaces, rigid-mode and orthogonality constraints are all
+//! represented exactly in that subspace (see `reduce`). Use
+//! [`compute_modes_with`] to force a discretization.
+
 
 mod admm;
 mod clarabel_solver;
@@ -84,6 +116,10 @@ use std::time::Instant;
 
 /// Free-DOF threshold below which [`Solver::Auto`] uses Clarabel.
 pub const AUTO_CLARABEL_MAX_DOFS: usize = 3000;
+
+/// Unknown-count threshold below which [`Solver::Auto`] uses Clarabel for the
+/// translational model (one unknown per analysis cell).
+pub const AUTO_CLARABEL_MAX_DOFS_TRANSLATIONAL: usize = 100_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Solver {
@@ -109,6 +145,22 @@ pub struct ModesParams {
     /// `max(eps, eps_large)`; see [`iccm`] for the schedule.
     pub large_dofs: usize,
     pub eps_large: f64,
+    /// Discretization used by [`compute_modes`]. Default: the paper's
+    /// translational model, [`Discretization::CellPolynomial`]`(0)`.
+    /// `None` selects the linear-elastic P1 model by size (full exploded
+    /// space with Clarabel below [`AUTO_CLARABEL_MAX_DOFS`] unknowns,
+    /// [`Discretization::CellPolynomial`]`(1)` above).
+    pub discretization: Option<Discretization>,
+    /// Multiply every finite positive `w_g` by `√(A_g/Ā)` (`A_g` the group's
+    /// fault area, `Ā` the mean over groups). With a constant jump over the
+    /// group this makes the penalty proportional to `∫_g ‖D‖ dA`, the
+    /// discontinuity measure of the authors' reference implementation.
+    pub area_weighted: bool,
+    /// ICCM multi-start: when a mode's initial eigenvector belongs to a
+    /// (near-)degenerate eigenspace, also start from the other members and
+    /// their pairwise `(a ± b)/√2` combinations and keep the lowest-energy
+    /// result (deterministic order, ties keep the first).
+    pub multi_start: bool,
 }
 
 impl Default for ModesParams {
@@ -122,6 +174,9 @@ impl Default for ModesParams {
             seed: 0x5eed_f2ac,
             large_dofs: 3000,
             eps_large: 1e-3,
+            discretization: Some(Discretization::CellPolynomial(0)),
+            area_weighted: true,
+            multi_start: true,
         }
     }
 }
@@ -147,7 +202,8 @@ pub struct ModesOutput {
     pub jumps: Vec<Vec<f64>>,
     /// Normalized energy `E(U_i)` of each (M̂-unit) mode.
     pub energies: Vec<f64>,
-    /// Continuous-mesh eigenvalues (physical, `ω²` in rad²/s²) used for init.
+    /// Continuous-mesh eigenvalues of the initial vectors: elastic (`ω²` in
+    /// rad²/s²) for P1, scalar Laplacian (1/m²) for the translational model.
     pub eigenvalues: Vec<f64>,
     /// ICCM iterations per mode.
     pub iterations: Vec<usize>,
@@ -156,12 +212,58 @@ pub struct ModesOutput {
     /// merging forbidden interfaces and removing anchored copies) for the full
     /// discretization, reduced coefficients for the cell-polynomial one.
     pub n_dofs: usize,
+    /// Exploded nodes `(vertex, cell)` (sorted) at which `mode_fields` are given.
+    pub nodes: Vec<(u32, u32)>,
+    /// `mode_fields[i][j]`: displacement of mode `i` (M̂-unit) at `nodes[j]`
+    /// (zero on anchored nodes; prolongated for reduced discretizations).
+    pub mode_fields: Vec<Vec<[f64; 3]>>,
+    /// Discretization that was solved.
+    pub discretization: Discretization,
     pub solver_used: String,
     /// Wall-clock timings (not deterministic; excluded from comparisons).
     pub timings_ms: Vec<(String, f64)>,
 }
 
 impl ModesOutput {
+    /// Translational model only: `max_i ‖U_i(a) − U_i(b)‖` for arbitrary
+    /// cell pairs, from the per-cell displacements. For a per-cell constant
+    /// mode this is exactly the RMS jump of [`ModesOutput::jumps`], and it is
+    /// also defined for adjacent cells that share no tet face in the analysis
+    /// mesh (coarse meshes). Pairs involving a cell without DOFs (no tets)
+    /// fall back to the group's jump, or 0. `None` for the P1 models.
+    pub fn pair_max_jump(&self, pairs: &[(u32, u32)]) -> Option<Vec<f64>> {
+        if self.discretization != Discretization::CellPolynomial(0) {
+            return None;
+        }
+        let n_cells = self.nodes.iter().map(|&(_, c)| c as usize + 1).max().unwrap_or(0);
+        let mut first = vec![usize::MAX; n_cells];
+        for (j, &(_, c)) in self.nodes.iter().enumerate() {
+            if first[c as usize] == usize::MAX {
+                first[c as usize] = j;
+            }
+        }
+        let group_max = self.max_jump();
+        Some(
+            pairs
+                .iter()
+                .map(|&(a, b)| {
+                    let (ja, jb) = (first.get(a as usize).copied(), first.get(b as usize).copied());
+                    match (ja, jb) {
+                        (Some(ja), Some(jb)) if ja != usize::MAX && jb != usize::MAX => self
+                            .mode_fields
+                            .iter()
+                            .map(|f| {
+                                let (u, v) = (f[ja], f[jb]);
+                                ((u[0] - v[0]).powi(2) + (u[1] - v[1]).powi(2) + (u[2] - v[2]).powi(2)).sqrt()
+                            })
+                            .fold(0.0, f64::max),
+                        _ => self.groups.binary_search(&(a.min(b), a.max(b))).map(|g| group_max[g]).unwrap_or(0.0),
+                    }
+                })
+                .collect(),
+        )
+    }
+
     /// `max_i jumps[i][g]` per group.
     pub fn max_jump(&self) -> Vec<f64> {
         let mut m = vec![0.0f64; self.groups.len()];
@@ -199,34 +301,37 @@ enum Backend {
 /// Discretization of the exploded displacement field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Discretization {
-    /// Full cell-exploded P1 space (spec §4.1).
+    /// Full cell-exploded P1 space (spec §4.1), linear-elastic `Q`.
     Full,
     /// Galerkin subspace of the full space: per (super-)cell nodal
-    /// interpolant of a vector polynomial of the given degree (1 or 2); see
-    /// the `reduce` module docs. Unknowns ≈ 3·s·#cells (s = 4 or 10)
-    /// regardless of the tet count.
+    /// interpolant of a vector polynomial of the given degree; see the
+    /// `reduce` module docs. Degree 0 is the paper's translational model
+    /// (default; one unknown per cell, see the crate docs); degrees 1 and 2
+    /// reduce the linear-elastic P1 problem (unknowns ≈ 3·s·#cells, s = 4 or
+    /// 10) regardless of the tet count.
     CellPolynomial(u8),
 }
 
-/// Polynomial degree used by [`Solver::Auto`] for large problems.
+/// Polynomial degree used by the size-based (linear-elastic) choice for
+/// large problems.
 pub const AUTO_REDUCED_DEGREE: u8 = 1;
 
-/// Computes `k` fracture modes (spec §4.3) and their per-interface jumps.
-///
-/// Discretization/solver choice: [`Solver::Clarabel`] and [`Solver::Admm`]
-/// solve the full exploded problem. [`Solver::Auto`] solves the full problem
-/// with Clarabel when it has fewer than [`AUTO_CLARABEL_MAX_DOFS`] free DOFs;
-/// otherwise it switches to the [`Discretization::CellPolynomial`] subspace
-/// (degree [`AUTO_REDUCED_DEGREE`]) and solves that with hybrid ADMM (tight
-/// ICCM confirmation solves by Clarabel). Use [`compute_modes_with`] to force
-/// a discretization.
+/// Maximum number of ICCM starts per mode in the multi-start.
+const MAX_STARTS: usize = 8;
+
+/// Computes `k` fracture modes (spec §4.3) and their per-interface jumps,
+/// with the discretization of [`ModesParams::discretization`] (default: the
+/// translational model). With `None` (linear-elastic P1, chosen by size) the
+/// full problem is solved when it has fewer than [`AUTO_CLARABEL_MAX_DOFS`]
+/// free DOFs, otherwise the [`Discretization::CellPolynomial`] subspace of
+/// degree [`AUTO_REDUCED_DEGREE`]. Use [`compute_modes_with`] to force a
+/// discretization.
 pub fn compute_modes(input: &ModesInput) -> Result<ModesOutput, String> {
-    compute_modes_impl(input, None)
+    compute_modes_impl(input, input.params.discretization)
 }
 
 /// [`compute_modes`] with an explicit discretization. The solver is taken
-/// from `params.solver` (`Auto` = Clarabel for a full problem below
-/// [`AUTO_CLARABEL_MAX_DOFS`] unknowns, hybrid ADMM otherwise).
+/// from `params.solver` (see [`Solver::Auto`] in the crate docs).
 pub fn compute_modes_with(input: &ModesInput, disc: Discretization) -> Result<ModesOutput, String> {
     compute_modes_impl(input, Some(disc))
 }
@@ -235,7 +340,8 @@ fn compute_modes_impl(input: &ModesInput, disc: Option<Discretization>) -> Resul
     let mut timings = Vec::new();
     let t_all = Instant::now();
     let p = input.params;
-    let (full, info) = problem::build_full(input, &mut timings)?;
+    let translational = disc == Some(Discretization::CellPolynomial(0));
+    let (mut full, info) = problem::build_full(input, &mut timings, translational)?;
     let disc = disc.unwrap_or(match p.solver {
         Solver::Auto if full.n >= AUTO_CLARABEL_MAX_DOFS => Discretization::CellPolynomial(AUTO_REDUCED_DEGREE),
         _ => Discretization::Full,
@@ -243,18 +349,37 @@ fn compute_modes_impl(input: &ModesInput, disc: Option<Discretization>) -> Resul
     let (pb, disc_name) = match disc {
         Discretization::Full => (full, "full".to_string()),
         Discretization::CellPolynomial(d) => {
+            if d == 0 {
+                // translational model: initialize with the eigenvectors of its
+                // own strain Hessian (vector Laplacian), as the paper does
+                let t = Instant::now();
+                let li = problem::laplacian_init(input, &info, &full.m, p.k + 2)?;
+                full.init = li.init;
+                full.init_cluster = li.cluster;
+                full.eigenvalues = li.eigenvalues;
+                timings.push(("laplacian_init".into(), t.elapsed().as_secs_f64() * 1e3));
+            }
             let t = Instant::now();
             let r = reduce::reduce(&full, &info, d, p.omega)?;
             timings.push(("reduce".into(), t.elapsed().as_secs_f64() * 1e3));
-            (r, format!("cell-p{}", d.clamp(1, 2)))
+            (r, format!("cell-p{}", d.min(2)))
         }
     };
     let use_clarabel = match p.solver {
         Solver::Clarabel => true,
         Solver::Admm => false,
-        // full: Clarabel for small problems; reduced: hybrid ADMM (loose ADMM
-        // ICCM iterations + Clarabel confirmation solves) is much faster
-        Solver::Auto => disc == Discretization::Full && pb.n < AUTO_CLARABEL_MAX_DOFS,
+        // full and translational: Clarabel for small problems; reduced P1:
+        // hybrid ADMM (loose ADMM ICCM iterations + Clarabel confirmation
+        // solves) is much faster
+        Solver::Auto => match disc {
+            Discretization::Full => pb.n < AUTO_CLARABEL_MAX_DOFS,
+            // translational: one unknown per cell and two cells per group, so
+            // the interior-point solve stays cheap and is more accurate (and
+            // on the benchmark wall 6x faster) than ADMM on this pure
+            // second-order-cone objective
+            Discretization::CellPolynomial(0) => pb.n < AUTO_CLARABEL_MAX_DOFS_TRANSLATIONAL,
+            Discretization::CellPolynomial(_) => false,
+        },
     };
     let t_f = Instant::now();
     let mut backend = if use_clarabel || pb.active.is_empty() {
@@ -279,7 +404,18 @@ fn compute_modes_impl(input: &ModesInput, disc: Option<Discretization>) -> Resul
     let l2 = pb.length_scale * pb.length_scale;
     let mut jumps = Vec::new();
     let mut energies = Vec::new();
+    let mut mode_fields = Vec::with_capacity(res.modes.len());
     for u in &res.modes {
+        let uf = match &pb.prolong {
+            Some(phi) => phi.mul(u),
+            None => u.clone(),
+        };
+        mode_fields.push(
+            info.pair_dof
+                .iter()
+                .map(|&d| if d == usize::MAX { [0.0; 3] } else { [uf[d], uf[d + 1], uf[d + 2]] })
+                .collect(),
+        );
         let gn = pb.group_norms(u);
         jumps.push(
             gn.iter()
@@ -299,6 +435,9 @@ fn compute_modes_impl(input: &ModesInput, disc: Option<Discretization>) -> Resul
         iterations: res.iterations,
         converged: res.converged,
         n_dofs: pb.n,
+        nodes: info.pairs.clone(),
+        mode_fields,
+        discretization: disc,
         solver_used,
         timings_ms: timings,
     })
@@ -351,6 +490,36 @@ impl Schedule {
     }
 }
 
+/// Candidate ICCM starting vectors for mode `i`: its own initial vector
+/// first, then (multi-start) the other members of its degenerate cluster and
+/// pairwise `(a ± b)/√2` combinations, at most [`MAX_STARTS`] in total.
+fn starts(pb: &Problem, i: usize, multi_start: bool) -> Vec<Vec<f64>> {
+    let mut out = vec![pb.init[i].clone()];
+    if !multi_start {
+        return out;
+    }
+    let cl: &[usize] = pb.init_cluster.get(i).map(|c| c.as_slice()).unwrap_or(&[]);
+    if cl.len() < 2 {
+        return out;
+    }
+    for &j in cl {
+        if j != i && out.len() < MAX_STARTS {
+            out.push(pb.init[j].clone());
+        }
+    }
+    let s = std::f64::consts::FRAC_1_SQRT_2;
+    for (x, &a) in cl.iter().enumerate() {
+        for &b in &cl[x + 1..] {
+            for sign in [1.0, -1.0] {
+                if out.len() < MAX_STARTS {
+                    out.push(pb.init[a].iter().zip(&pb.init[b]).map(|(u, v)| s * (u + sign * v)).collect());
+                }
+            }
+        }
+    }
+    out
+}
+
 fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> Result<IccmResult, String> {
     let n = pb.n;
     let sched = Schedule::new(p, n, backend, hybrid);
@@ -365,121 +534,173 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> R
     for i in 0..kk {
         let mut basis = rigid_basis.clone();
         basis.extend(modes.iter().cloned());
-        let mut c = pb.init[i].clone();
-        orthogonalize(&mut c, &basis, m);
-        let mut nc = mdot(&c, &c, m).sqrt();
-        if !(nc > 1e-8) {
-            // initial vector lies in the span of previous modes: use the
-            // first remaining eigenvector that does not
-            for j in kk..pb.init.len() {
-                c = pb.init[j].clone();
-                orthogonalize(&mut c, &basis, m);
-                nc = mdot(&c, &c, m).sqrt();
-                if nc > 1e-8 {
-                    break;
-                }
-            }
-            if !(nc > 1e-8) {
-                return Err(format!("mode {i}: no admissible initial vector"));
-            }
-        }
-        c.iter_mut().for_each(|x| *x /= nc);
-        if let Backend::Admm(a) = backend {
-            a.warm_from(pb, &c);
-        }
         let mut persistent: Vec<&[f64]> = pb.rigid_rows.iter().map(|r| r.as_slice()).collect();
         persistent.extend(mode_rows.iter().map(|r| r.as_slice()));
-        let mut rhs = vec![0.0; persistent.len() + 1];
-        *rhs.last_mut().unwrap() = 1.0;
-        let mut u = c.clone();
-        let mut its = 0;
-        let mut conv = false;
-        let mut tol = ADMM_TOL_MAX.max(sched.tol_min);
-        let mut tol_sched = tol;
-        let mut last_diff = f64::INFINITY;
-        let mut confirm = false;
-        let mut inner_total = 0usize;
-        for it in 0..p.max_iters.max(1) {
-            its = it + 1;
-            let cur: Vec<f64> = (0..n).map(|q| m[q] * c[q]).collect();
-            let sub = match backend {
-                Backend::Clarabel => {
-                    let mut rows = persistent.clone();
-                    rows.push(&cur);
-                    clarabel_solver::solve(pb, &rows, &rhs)?
-                }
-                Backend::Admm(a) => {
-                    // inexact ICCM: the inner tolerance follows the outer progress
-                    // (never loosening); convergence is only accepted after a
-                    // solve to `tol_min`. A failed confirmation does not pin the
-                    // schedule to `tol_min`.
-                    if confirm {
-                        tol = sched.tol_min;
-                    } else {
-                        tol_sched = (0.1 * last_diff).clamp(sched.tol_min, tol_sched);
-                        tol = tol_sched;
-                    }
-                    if confirm && sched.clarabel_confirm {
-                        // ADMM's tail is slow; for small (e.g. reduced) problems the
-                        // tight confirmation solve is done by the interior-point
-                        // reference solver, then ADMM is re-warmed from it
-                        let mut rows = persistent.clone();
-                        rows.push(&cur);
-                        let tc = Instant::now();
-                        let r = clarabel_solver::solve(pb, &rows, &rhs)?;
-                        if admm::debug_enabled() {
-                            eprintln!("[clarabel] confirm {} iterations ok {} time {:.3}s", r.iterations, r.ok, tc.elapsed().as_secs_f64());
-                        }
-                        a.warm_from(pb, &r.u);
-                        r
-                    } else {
-                        a.solve(pb, &persistent, &cur, &rhs, tol)?
-                    }
-                }
-            };
-            inner_total += sub.iterations;
-            let sub_ok = sub.ok;
-            u = sub.u;
-            let mut d2 = 0.0;
-            for q in 0..n {
-                let d = u[q] - c[q];
-                d2 += d * d * m[q];
-            }
-            let nu = mdot(&u, &u, m).sqrt();
-            if !(nu > 0.0) || !nu.is_finite() {
-                return Err(format!("mode {i}: degenerate subproblem solution"));
-            }
-            c = u.iter().map(|x| x / nu).collect();
-            last_diff = d2.sqrt();
-            if admm::debug_enabled() {
-                eprintln!("[iccm] mode {i} it {it} diff {last_diff:.3e} obj {:.6e}", pb.objective(&u));
-            }
-            if last_diff <= sched.eps {
-                if matches!(backend, Backend::Clarabel) || tol <= sched.tol_min {
-                    // only a subproblem solved to tolerance certifies convergence
-                    conv = sub_ok;
-                    break;
-                }
-                confirm = true;
-            } else {
-                confirm = false;
-            }
-            // keep c exactly admissible (orthogonal to previous modes / rigid)
+        // admissible, M̂-unit starts (extra starts inside the span of the
+        // previous modes are dropped; the first start falls back to the
+        // next admissible initial vector)
+        let mut cands: Vec<Vec<f64>> = Vec::new();
+        for (si, c0) in starts(pb, i, p.multi_start).into_iter().enumerate() {
+            let mut c = c0;
             orthogonalize(&mut c, &basis, m);
-            let nc = mdot(&c, &c, m).sqrt();
+            let mut nc = mdot(&c, &c, m).sqrt();
+            if !(nc > 1e-8) {
+                if si > 0 {
+                    continue;
+                }
+                for j in kk..pb.init.len() {
+                    c = pb.init[j].clone();
+                    orthogonalize(&mut c, &basis, m);
+                    nc = mdot(&c, &c, m).sqrt();
+                    if nc > 1e-8 {
+                        break;
+                    }
+                }
+                if !(nc > 1e-8) {
+                    return Err(format!("mode {i}: no admissible initial vector"));
+                }
+            }
             c.iter_mut().for_each(|x| *x /= nc);
+            cands.push(c);
         }
-        if admm::debug_enabled() {
-            eprintln!("[iccm] mode {i}: {its} iterations, {inner_total} inner iterations, converged {conv}");
+        // ICCM from every start; the interior-point backend is stateless, so
+        // starts run in parallel (results are combined in start order, so
+        // the outcome does not depend on the thread count)
+        let results: Vec<Result<(Vec<f64>, usize, bool), String>> = match backend {
+            Backend::Clarabel if cands.len() > 1 => {
+                use rayon::prelude::*;
+                cands
+                    .into_par_iter()
+                    .map(|c| iccm_mode(pb, p, &sched, &mut Backend::Clarabel, &persistent, &basis, c, i))
+                    .collect()
+            }
+            _ => cands.into_iter().map(|c| iccm_mode(pb, p, &sched, backend, &persistent, &basis, c, i)).collect(),
+        };
+        // best (lowest-energy) result over the starts: (energy, u, its, conv)
+        let mut best: Option<(f64, Vec<f64>, usize, bool)> = None;
+        for (si, r) in results.into_iter().enumerate() {
+            let (u, its, conv) = r?;
+            let e = pb.objective(&u);
+            if admm::debug_enabled() {
+                eprintln!("[iccm] mode {i} start {si}: energy {e:.6e} iterations {its} converged {conv}");
+            }
+            // strictly lower energy (relative margin) replaces: ties keep the first start
+            if best.as_ref().is_none_or(|b| e < b.0 * (1.0 - 1e-9)) {
+                best = Some((e, u, its, conv));
+            }
         }
-        let nu = mdot(&u, &u, m).sqrt();
-        let ui: Vec<f64> = u.iter().map(|x| x / nu).collect();
-        mode_rows.push((0..n).map(|q| m[q] * ui[q]).collect());
-        modes.push(ui);
+        let (_, u, its, conv) = best.ok_or_else(|| format!("mode {i}: no admissible initial vector"))?;
+        mode_rows.push((0..n).map(|q| m[q] * u[q]).collect());
+        modes.push(u);
         iterations.push(its);
         converged.push(conv);
     }
     Ok(IccmResult { modes, iterations, converged })
+}
+
+/// ICCM for one mode from the admissible, M̂-unit start `c`. Returns the
+/// M̂-unit mode, the number of ICCM iterations and whether it converged.
+#[allow(clippy::too_many_arguments)]
+fn iccm_mode(
+    pb: &Problem,
+    p: &ModesParams,
+    sched: &Schedule,
+    backend: &mut Backend,
+    persistent: &[&[f64]],
+    basis: &[Vec<f64>],
+    mut c: Vec<f64>,
+    i: usize,
+) -> Result<(Vec<f64>, usize, bool), String> {
+    let n = pb.n;
+    let m = &pb.m;
+    if let Backend::Admm(a) = backend {
+        a.warm_from(pb, &c);
+    }
+    let mut rhs = vec![0.0; persistent.len() + 1];
+    *rhs.last_mut().unwrap() = 1.0;
+    let mut u = c.clone();
+    let mut its = 0;
+    let mut conv = false;
+    let mut tol = ADMM_TOL_MAX.max(sched.tol_min);
+    let mut tol_sched = tol;
+    let mut last_diff = f64::INFINITY;
+    let mut confirm = false;
+    let mut inner_total = 0usize;
+    for it in 0..p.max_iters.max(1) {
+        its = it + 1;
+        let cur: Vec<f64> = (0..n).map(|q| m[q] * c[q]).collect();
+        let sub = match backend {
+            Backend::Clarabel => {
+                let mut rows = persistent.to_vec();
+                rows.push(&cur);
+                clarabel_solver::solve(pb, &rows, &rhs)?
+            }
+            Backend::Admm(a) => {
+                // inexact ICCM: the inner tolerance follows the outer progress
+                // (never loosening); convergence is only accepted after a
+                // solve to `tol_min`. A failed confirmation does not pin the
+                // schedule to `tol_min`.
+                if confirm {
+                    tol = sched.tol_min;
+                } else {
+                    tol_sched = (0.1 * last_diff).clamp(sched.tol_min, tol_sched);
+                    tol = tol_sched;
+                }
+                if confirm && sched.clarabel_confirm {
+                    // ADMM's tail is slow; for small (e.g. reduced) problems the
+                    // tight confirmation solve is done by the interior-point
+                    // reference solver, then ADMM is re-warmed from it
+                    let mut rows = persistent.to_vec();
+                    rows.push(&cur);
+                    let tc = Instant::now();
+                    let r = clarabel_solver::solve(pb, &rows, &rhs)?;
+                    if admm::debug_enabled() {
+                        eprintln!("[clarabel] confirm {} iterations ok {} time {:.3}s", r.iterations, r.ok, tc.elapsed().as_secs_f64());
+                    }
+                    a.warm_from(pb, &r.u);
+                    r
+                } else {
+                    a.solve(pb, persistent, &cur, &rhs, tol)?
+                }
+            }
+        };
+        inner_total += sub.iterations;
+        let sub_ok = sub.ok;
+        u = sub.u;
+        let mut d2 = 0.0;
+        for q in 0..n {
+            let d = u[q] - c[q];
+            d2 += d * d * m[q];
+        }
+        let nu = mdot(&u, &u, m).sqrt();
+        if !(nu > 0.0) || !nu.is_finite() {
+            return Err(format!("mode {i}: degenerate subproblem solution"));
+        }
+        c = u.iter().map(|x| x / nu).collect();
+        last_diff = d2.sqrt();
+        if admm::debug_enabled() {
+            eprintln!("[iccm] mode {i} it {it} diff {last_diff:.3e} obj {:.6e}", pb.objective(&u));
+        }
+        if last_diff <= sched.eps {
+            if matches!(backend, Backend::Clarabel) || tol <= sched.tol_min {
+                // only a subproblem solved to tolerance certifies convergence
+                conv = sub_ok;
+                break;
+            }
+            confirm = true;
+        } else {
+            confirm = false;
+        }
+        // keep c exactly admissible (orthogonal to previous modes / rigid)
+        orthogonalize(&mut c, basis, m);
+        let nc = mdot(&c, &c, m).sqrt();
+        c.iter_mut().for_each(|x| *x /= nc);
+    }
+    if admm::debug_enabled() {
+        eprintln!("[iccm] mode {i}: {its} iterations, {inner_total} inner iterations, converged {conv}");
+    }
+    let nu = mdot(&u, &u, m).sqrt();
+    Ok((u.iter().map(|x| x / nu).collect(), its, conv))
 }
 
 #[cfg(test)]

@@ -5,6 +5,8 @@
 #   tools/setup.sh            # everything
 #   tools/setup.sh --check    # only report what is installed
 #   tools/setup.sh --no-oracles   # Rust build + glTF validator only
+#   tools/setup.sh --with-fracture-modes-ref   # also the fracture-modes
+#                                 # reference oracle (off by default, below)
 #
 # Installs (paths overridable through the environment):
 #   * system packages (Ubuntu/Debian, when run as root or with sudo):
@@ -16,19 +18,31 @@
 #     $ORACLES/flatbuffers/build/flatc (default ORACLES=/opt/oracles)
 #   * Voro++ (pinned commit) and the test oracle $ORACLES/voro_oracle
 #   * Node dependencies of tools/gltf_validate (Khronos glTF Validator)
+#   * only with --with-fracture-modes-ref: the authors' reference
+#     implementation of "Breaking Good: Fracture Modes for Realtime
+#     Destruction" (academic/non-commercial licence; used with permission as
+#     a test-only oracle, never copied into this repository), cloned at a
+#     pinned commit to $ORACLES/fracture-modes, and its Python env
+#     $ORACLES/fmref-venv (numpy, scipy, libigl, clarabel; MOSEK, polyscope,
+#     gpytoolbox and scikit-sparse are not needed, see
+#     tools/harness/fracture_modes_ref.py)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FRACENV="${FRACENV:-/opt/fracenv}"
 ORACLES="${ORACLES:-/opt/oracles}"
 FLATBUFFERS_TAG="v24.3.25"
 VORO_COMMIT="b0dac575a47af0f90b5b100e6dc199a493c7cb83"
+FMREF_COMMIT="bdf5051fb0d78d787f49fabbf75b54bbc6698b17"
 MODE="all"
-case "${1:-}" in
-  --check) MODE="check" ;;
-  --no-oracles) MODE="core" ;;
-  "") ;;
-  *) echo "usage: $0 [--check|--no-oracles]"; exit 2 ;;
-esac
+WITH_FMREF=0
+for arg in "$@"; do
+  case "$arg" in
+    --check) MODE="check" ;;
+    --no-oracles) MODE="core" ;;
+    --with-fracture-modes-ref) WITH_FMREF=1 ;;
+    *) echo "usage: $0 [--check|--no-oracles] [--with-fracture-modes-ref]"; exit 2 ;;
+  esac
+done
 
 say() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 have() { command -v "$1" > /dev/null 2>&1; }
@@ -45,6 +59,9 @@ check() {
   st "python oracle env ($FRACENV)" "'$FRACENV/bin/python' -c 'import KratosMultiphysics, KratosMultiphysics.StructuralMechanicsApplication, KratosMultiphysics.LinearSolversApplication, gmsh, skfem, coacd, manifold3d, trimesh, scipy'"
   st "flatc $FLATBUFFERS_TAG" "'$ORACLES/flatbuffers/build/flatc' --version | grep -q '${FLATBUFFERS_TAG#v}'"
   st "voro_oracle" "test -x '$ORACLES/voro_oracle'"
+  if [ -d "$ORACLES/fracture-modes" ] || [ "$WITH_FMREF" = 1 ]; then
+    st "fracture-modes reference (optional)" "'$ORACLES/fmref-venv/bin/python' -c 'import igl, clarabel, scipy' && test -d '$ORACLES/fracture-modes/fracture_utility'"
+  fi
   return $ok
 }
 
@@ -121,6 +138,23 @@ if [ ! -x "$ORACLES/voro_oracle" ]; then
     git -C "$ORACLES/voro" checkout -q "$VORO_COMMIT"
   fi
   g++ -O2 -I"$ORACLES/voro/src" "$ROOT/tools/oracles/voro_oracle.cc" "$ORACLES/voro/src/voro++.cc" -o "$ORACLES/voro_oracle"
+fi
+
+# ---- fracture-modes reference oracle (optional, off by default) ------------
+if [ "$WITH_FMREF" = 1 ]; then
+  if [ "$(git -C "$ORACLES/fracture-modes" rev-parse HEAD 2>/dev/null)" != "$FMREF_COMMIT" ]; then
+    say "cloning the fracture-modes reference ($FMREF_COMMIT; test-only oracle, academic licence)"
+    rm -rf "$ORACLES/fracture-modes"
+    git clone -q https://github.com/sgsellan/fracture-modes.git "$ORACLES/fracture-modes"
+    git -C "$ORACLES/fracture-modes" checkout -q "$FMREF_COMMIT"
+  fi
+  if ! "$ORACLES/fmref-venv/bin/python" -c "import igl, clarabel, scipy" > /dev/null 2>&1; then
+    say "python venv $ORACLES/fmref-venv"
+    py=python3.11; have "$py" || py=python3
+    "$py" -m venv "$ORACLES/fmref-venv"
+    "$ORACLES/fmref-venv/bin/pip" install -q --upgrade pip
+    "$ORACLES/fmref-venv/bin/pip" install -q "numpy<2" "scipy>=1.10" "clarabel==0.11.1" "libigl==2.5.1"
+  fi
 fi
 
 say "done"
