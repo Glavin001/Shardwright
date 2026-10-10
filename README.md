@@ -54,6 +54,20 @@ Configs: `benchmarks/configs/bake.toml` is the spec defaults with fracture
 modes enabled. `fast.toml` disables modes and uses agglomeration for Level 1.
 `ablation_geometric.toml` and `ablation_fallback.toml` are the M3 ablations.
 
+## Previews
+
+`prefracture preview --input out/X.asset.json --out X.png [--level N | --all-levels] [--explode 0.1]`
+renders each fragment's exact boundary in its own colour (software
+rasterizer, deterministic). The images below are levels L0 → L3, left to
+right.
+
+![building_v0, levels L0–L3](docs/previews/building_v0_levels.png)
+![building_v0, L1 exploded](docs/previews/building_v0_L1_exploded.png)
+![brick wall with window, levels L0–L3](docs/previews/brick_wall_window_levels.png)
+![rc column, levels L0–L3](docs/previews/rc_column_levels.png)
+
+More in [`docs/previews/`](docs/previews/).
+
 ## Layout
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the crate map, algorithms and
