@@ -71,6 +71,7 @@ def load_obj(path):
             m.invert()
         return np.asarray(m.vertices, float), np.asarray(m.faces, int), False
     import manifold3d as m3
+    from scipy.spatial import cKDTree
     L = float((m.bounds[1] - m.bounds[0]).max())
     pts, _ = trimesh.sample.sample_surface(m, 200000, seed=1)
     tree = cKDTree(np.vstack([pts, m.vertices]))
