@@ -378,6 +378,7 @@ pub fn collision_params(settings: &Settings) -> frac_collision::CollisionParams 
             mcts_nodes: settings.collision.mcts_nodes,
             resolution: settings.collision.resolution,
         },
+        max_hull_vertices: settings.collision.max_hull_vertices as usize,
         seed: settings.seed,
         ..Default::default()
     }

@@ -32,6 +32,10 @@ use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering as AO};
 
+/// Relative volume tolerance of the convexity test (a solid is treated as
+/// convex when its hull volume exceeds its volume by at most this fraction).
+pub const CONVEX_TOL: f64 = 1e-6;
+
 static T_ATOMS: AtomicU64 = AtomicU64::new(0);
 static T_MERGE: AtomicU64 = AtomicU64::new(0);
 static T_MESH: AtomicU64 = AtomicU64::new(0);
@@ -77,6 +81,8 @@ pub struct CollisionParams {
     /// a merged hull inside bonded neighbours, which non-overlap
     /// enforcement would later remove), like CoACD's `rv_k`.
     pub intrusion_k: f64,
+    /// Maximum vertices per output hull (0: unlimited).
+    pub max_hull_vertices: usize,
 }
 
 impl Default for CollisionParams {
@@ -92,6 +98,7 @@ impl Default for CollisionParams {
             seed: 1,
             carry_cap: 16,
             intrusion_k: 0.6,
+            max_hull_vertices: 64,
         }
     }
 }
@@ -246,7 +253,7 @@ fn cell_atoms(asset: &Asset, idx: &CellIndex, cell: CellId, p: &CollisionParams)
     let pts = idx.cell_points(asset, cell);
     let Some(ch) = coacd::hull(&pts) else { return Vec::new() };
     let vol = mesh.signed_volume();
-    if ch.volume - vol <= 1e-9 * ch.volume {
+    if ch.volume - vol <= CONVEX_TOL * vol {
         return vec![Atom { cell, poly: ch.poly, pts: ch.pts, vol, own: 0.0 }];
     }
     let bbox = mesh.aabb();
@@ -347,8 +354,8 @@ struct FragOut {
 
 /// Compact a merge result for storage: surface samples are reassigned at
 /// every level, so they are dropped.
-fn frag_out(hulls: Vec<Piece>, carry: Vec<Piece>) -> FragOut {
-    let hulls = hulls.into_iter().map(|pc| HullRec { poly: pc.poly, atoms: pc.tags }).collect();
+fn frag_out(hulls: Vec<Piece>, carry: Vec<Piece>, max_v: usize) -> FragOut {
+    let hulls = hulls.into_iter().map(|pc| HullRec { poly: coacd::limit_vertices(&pc.poly, max_v), atoms: pc.tags }).collect();
     let carry = carry
         .into_iter()
         .map(|mut pc| {
@@ -378,10 +385,13 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
     }
     tadd(&T_ATOMS, ta);
     if profile {
+        let cut = atoms_of_cell.iter().filter(|r| r.len() > 1 || (r.len() == 1 && atoms[r.start as usize].own > 0.0)).count();
         eprintln!(
-            "collision atoms: {} from {} cells in {:?} (cpu: {} clips {:.1}s, hull volumes {:.1}s)",
+            "collision atoms: {} from {} cells ({} convex, {} decomposed) in {:?} (cpu: {} clips {:.1}s, hull volumes {:.1}s)",
             atoms.len(),
             asset.cells.len(),
+            asset.cells.len() - cut,
+            cut,
             ta.elapsed(),
             coacd::N_CLIP.load(AO::Relaxed),
             coacd::T_CLIP.load(AO::Relaxed) as f64 * 1e-9,
@@ -407,6 +417,7 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
     for level in (coarsest..nl).rev() {
         let tl = std::time::Instant::now();
         let r = h.level_ranges[level].clone();
+        let (n_convex, n_particle, n_decomp) = (AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0));
         // bonded neighbours at this level (hulls must not overlap theirs)
         let mut nbr_frags: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
         for b in asset.level_bonds(level as u8) {
@@ -420,15 +431,37 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
             .map(|fi| {
                 let f = &h.fragments[fi as usize];
                 let cells = asset.fragment_cells(f);
+                // fast path: particle candidates and convex fragments get the
+                // single hull of their points (convexity test: hull volume
+                // within a relative 1e-6 of the exact fragment volume)
+                let single = |kind: &AtomicU64| -> Option<FragOut> {
+                    let pts: Vec<DVec3> = cells.iter().flat_map(|&c| cidx.cell_points(asset, c)).collect();
+                    let ch = coacd::hull(&pts)?;
+                    let convex = ch.volume - f.mass.volume <= CONVEX_TOL * f.mass.volume;
+                    if !(f.particle_candidate || convex) {
+                        return None;
+                    }
+                    kind.fetch_add(1, AO::Relaxed);
+                    let tags: Vec<u32> = cells.iter().flat_map(|&c| atoms_of_cell[c.idx()].clone()).collect();
+                    let hull = vec![Piece::new(ch, f.mass.volume, Vec::new(), tags)];
+                    Some(frag_out(hull.clone(), hull, p.max_hull_vertices))
+                };
+                let is_leaf = level == nl - 1 || f.children.is_empty();
+                // (leaf fragments of convex cells are handled exactly by
+                // their atoms; the test matters for unions of cells)
+                if f.particle_candidate || !is_leaf || cells.len() > 1 {
+                    if let Some(o) = single(if f.particle_candidate { &n_particle } else { &n_convex }) {
+                        return (fi, o);
+                    }
+                }
+                let convex_cell = is_leaf && cells.len() == 1 && {
+                    let r = atoms_of_cell[cells[0].idx()].clone();
+                    r.len() == 1 && atoms[r.start as usize].own == 0.0
+                };
+                if convex_cell { &n_convex } else { &n_decomp }.fetch_add(1, AO::Relaxed);
                 let tm = std::time::Instant::now();
                 let g = frag_geom(asset, &cidx, f, p);
                 tadd(&T_MESH, tm);
-                if f.particle_candidate {
-                    let pts: Vec<DVec3> = cells.iter().flat_map(|&c| cidx.cell_points(asset, c)).collect();
-                    let tags: Vec<u32> = cells.iter().flat_map(|&c| atoms_of_cell[c.idx()].clone()).collect();
-                    let hull = coacd::hull(&pts).map(|ch| vec![Piece::new(ch, f.mass.volume, Vec::new(), tags)]).unwrap_or_default();
-                    return (fi, frag_out(hull.clone(), hull));
-                }
                 let mut pieces: Vec<Piece> = if level == nl - 1 || f.children.is_empty() {
                     cells.iter().flat_map(|&c| atoms_of_cell[c.idx()].clone()).map(|a| atom_piece(&atoms[a as usize], a)).collect()
                 } else {
@@ -473,13 +506,19 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                 let pieces = if pieces.len() > limit { coacd::coarsen(pieces, limit, &adjacent) } else { pieces };
                 let res = coacd::greedy_merge(pieces, &ctx, g.thresh, budget, p.carry_cap.max(budget), &adjacent);
                 tadd(&T_MERGE, tmg);
-                (fi, frag_out(res.pieces, res.carry))
+                (fi, frag_out(res.pieces, res.carry, p.max_hull_vertices))
             })
             .collect();
         if profile {
             let (nh, nc) = results.iter().fold((0, 0), |a, (_, o)| (a.0 + o.hulls.len(), a.1 + o.carry.len()));
             let maxv = results.iter().flat_map(|(_, o)| o.carry.iter().map(|p| p.pts.len())).max().unwrap_or(0);
-            eprintln!("  level {level}: {} fragments -> {nh} hulls, {nc} carried (max {maxv} hull vertices)", results.len());
+            eprintln!(
+                "  level {level}: {} fragments ({} convex fast path, {} particles, {} decomposed) -> {nh} hulls, {nc} carried (max {maxv} hull vertices)",
+                results.len(),
+                n_convex.load(AO::Relaxed),
+                n_particle.load(AO::Relaxed),
+                n_decomp.load(AO::Relaxed)
+            );
         }
         for (fi, o) in results {
             outs[fi as usize] = Some(o);
@@ -537,6 +576,9 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
             }
             let s = rec.poly.shrunk(p.margin);
             let s = if s.is_empty() { rec.poly.clone() } else { s };
+            // clipping and shrinking can add vertices: re-apply the cap
+            // (inner approximation, keeps the separation)
+            let s = coacd::limit_vertices(&s, p.max_hull_vertices);
             hulls.push(to_hull(FragmentId(fi as u32), &s));
         }
         ranges[fi] = start..hulls.len() as u32;

@@ -510,6 +510,82 @@ pub fn hull(points: &[DVec3]) -> Option<Ch> {
     Some(Ch { pts: m.verts, poly, volume })
 }
 
+/// Like [`hull`] but with one face per hull triangle (no coplanar-face
+/// merging): the same solid, much cheaper to build; used for candidate
+/// merges, which are rebuilt with [`hull`] only when accepted.
+pub fn hull_tri(points: &[DVec3]) -> Option<Ch> {
+    let m = convex_hull_fast(points)?;
+    let volume = m.signed_volume().max(0.0);
+    let mut faces = Vec::with_capacity(m.tris.len());
+    for t in 0..m.tris.len() {
+        let [a, b, c] = m.tri_points(t);
+        let n = (b - a).cross(c - a);
+        let l = n.length();
+        if l > 0.0 {
+            let n = n / l;
+            faces.push((HalfSpace { n, d: n.dot(a) }, vec![a, b, c]));
+        }
+    }
+    let poly = ConvexPolytope { faces };
+    if poly.is_empty() {
+        return None;
+    }
+    Some(Ch { pts: m.verts, poly, volume })
+}
+
+/// Convex polytope with at most `max_v` vertices inside `poly`: the hull of
+/// a vertex subset grown greedily from the axis-extreme vertices by always
+/// adding the vertex farthest outside the current hull (a budgeted
+/// Quickhull, which keeps the most volume per vertex). Being an inner
+/// approximation it never adds overshoot and keeps any separation from
+/// neighbouring hulls. Deterministic (ties by vertex order).
+pub fn limit_vertices(poly: &ConvexPolytope, max_v: usize) -> ConvexPolytope {
+    let vs = poly.vertices();
+    if max_v == 0 || vs.len() <= max_v || poly.is_empty() {
+        return poly.clone();
+    }
+    let max_v = max_v.max(4);
+    let mut chosen: Vec<usize> = Vec::new();
+    for k in 0..3 {
+        let lo = (0..vs.len()).min_by(|&a, &b| vs[a][k].total_cmp(&vs[b][k]).then(a.cmp(&b))).unwrap();
+        let hi = (0..vs.len()).max_by(|&a, &b| vs[a][k].total_cmp(&vs[b][k]).then(b.cmp(&a))).unwrap();
+        for i in [lo, hi] {
+            if !chosen.contains(&i) {
+                chosen.push(i);
+            }
+        }
+    }
+    let mut cur: Option<Ch> = None;
+    loop {
+        let pts: Vec<DVec3> = chosen.iter().map(|&i| vs[i]).collect();
+        let h = hull(&pts);
+        // farthest vertex outside the current hull (or from the chosen set
+        // while it is still degenerate)
+        let far = match &h {
+            Some(h) => (0..vs.len())
+                .filter(|i| !chosen.contains(i))
+                .map(|i| (i, h.poly.faces.iter().map(|(f, _)| f.dist(vs[i])).fold(f64::NEG_INFINITY, f64::max)))
+                .filter(|x| x.1 > 0.0)
+                .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0))),
+            None => (0..vs.len())
+                .filter(|i| !chosen.contains(i))
+                .map(|i| (i, chosen.iter().map(|&c| (vs[i] - vs[c]).length()).fold(f64::INFINITY, f64::min)))
+                .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0))),
+        };
+        if let Some(h) = h {
+            if h.pts.len() > max_v {
+                break;
+            }
+            cur = Some(h);
+        }
+        match far {
+            Some((i, _)) if chosen.len() < 4 * max_v => chosen.push(i),
+            _ => break,
+        }
+    }
+    cur.map(|c| c.poly).unwrap_or_else(|| poly.clone())
+}
+
 /// Hull volume only (MCTS rewards need nothing else).
 fn hull_volume(points: &[DVec3]) -> f64 {
     let t0 = std::time::Instant::now();
@@ -1226,7 +1302,7 @@ impl MergeCtx<'_> {
         // (upper bound, triangle), explored best first
         let mut heap: std::collections::BinaryHeap<BbTri> = std::collections::BinaryHeap::new();
         let evals = std::cell::Cell::new(0usize);
-        let max_evals = self.max_tri_samples * 16;
+        let max_evals = self.max_tri_samples * 4;
         let visit = |tri: [DVec3; 3], worst: &mut f64, heap: &mut std::collections::BinaryHeap<BbTri>| {
             let [a, b, c] = tri;
             if skip.iter().any(|s| in_poly(s, a, tol) && in_poly(s, b, tol) && in_poly(s, c, tol)) {
@@ -1340,7 +1416,7 @@ impl MergeCtx<'_> {
         let t0 = std::time::Instant::now();
         let mut pts = a.pts.clone();
         pts.extend_from_slice(&b.pts);
-        let ch = hull(&pts)?;
+        let ch = hull_tri(&pts)?;
         T_HULLC.fetch_add(t0.elapsed().as_nanos() as u64, AO::Relaxed);
         let base = a.own.max(b.own);
         let r = rv(a.vol + b.vol, ch.volume, self.rv_k);
@@ -1380,6 +1456,8 @@ fn merged_piece(a: &Piece, b: &Piece, ch: Ch, cost: f64) -> Piece {
     let mut tags = a.tags.clone();
     tags.extend_from_slice(&b.tags);
     tags.sort_unstable();
+    // candidate hulls have triangle faces: rebuild with merged faces
+    let ch = hull(&ch.pts).unwrap_or(ch);
     let bbox = Aabb::from_points(ch.pts.iter());
     Piece { poly: ch.poly, pts: ch.pts, bbox, vol: a.vol + b.vol, own: cost, samples, tags }
 }

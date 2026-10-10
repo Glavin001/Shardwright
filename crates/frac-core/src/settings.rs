@@ -200,6 +200,9 @@ pub struct CollisionSettings {
     pub mcts_depth: u32,
     pub mcts_nodes: u32,
     pub resolution: u32,
+    /// Maximum vertices per convex hull (physics-engine limit); larger hulls
+    /// are reduced (inner approximation by a volume-greedy vertex subset).
+    pub max_hull_vertices: u32,
 }
 
 impl Default for CollisionSettings {
@@ -215,6 +218,7 @@ impl Default for CollisionSettings {
             mcts_depth: 1,
             mcts_nodes: 20,
             resolution: 2000,
+            max_hull_vertices: 64,
         }
     }
 }
