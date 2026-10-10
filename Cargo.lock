@@ -818,6 +818,7 @@ dependencies = [
  "glam",
  "gltf",
  "gltf-json",
+ "libc",
  "meshopt",
  "serde",
  "serde_json",
