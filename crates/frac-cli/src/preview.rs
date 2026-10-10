@@ -22,6 +22,8 @@ pub enum BondColour {
 }
 
 pub struct PreviewOptions {
+    /// Draw the cosmetic debris pieces instead of fragments.
+    pub debris: bool,
     /// Draw the level's bonds (their contact surfaces) instead of fragments.
     pub bonds: Option<BondColour>,
     /// Cutaway: drop geometry whose centroid has z above this value.
@@ -259,6 +261,40 @@ fn level_tris(
         .collect()
 }
 
+/// Triangles of the cosmetic debris pieces (fan-triangulated hull faces),
+/// exploded from the volume-weighted centre of the pieces.
+fn debris_tris(asset: &Asset, explode: f64, clip_z: Option<f64>, light: DVec3) -> Vec<Tri> {
+    let cent = |h: &frac_core::Hull| {
+        h.vertices.iter().copied().sum::<DVec3>() / h.vertices.len().max(1) as f64
+    };
+    let centre = asset.debris.iter().map(cent).sum::<DVec3>() / asset.debris.len().max(1) as f64;
+    let mut tris = Vec::new();
+    for (k, h) in asset.debris.iter().enumerate() {
+        let c = cent(h);
+        if clip_z.is_some_and(|z| c.z > z) {
+            continue;
+        }
+        let off = (c - centre) * explode;
+        for f in &h.faces {
+            for t in 1..f.len().saturating_sub(1) {
+                let p = [f[0], f[t], f[t + 1]].map(|i| h.vertices[i as usize] + off);
+                let n = (p[1] - p[0]).cross(p[2] - p[0]);
+                if n.length_squared() == 0.0 {
+                    continue;
+                }
+                let lam = n.normalize().dot(light).abs();
+                tris.push(Tri {
+                    p,
+                    frag: k as u32,
+                    shade: (0.35 + 0.65 * lam) as f32,
+                    rgb: None,
+                });
+            }
+        }
+    }
+    tris
+}
+
 /// Render one panel into an RGB buffer (supersampled ×2, then box-filtered).
 fn render_panel(tris: &[Tri], w: u32, h: u32, view: DVec3, up: DVec3) -> Vec<[u8; 3]> {
     let ss = 2u32;
@@ -443,6 +479,8 @@ enum Legend {
     Fragments,
     /// One arbitrary colour per input part.
     Parts,
+    /// One arbitrary colour per cosmetic debris piece.
+    Debris,
     /// Joint kinds present, with bond counts.
     Kind(Vec<(InterfaceKind, usize)>),
     /// Log colour bar over [lo, hi] Pa, and the numbers of anchor bonds and
@@ -458,7 +496,7 @@ enum Legend {
 impl Legend {
     fn height(&self) -> u32 {
         match self {
-            Legend::Fragments | Legend::Parts => 44,
+            Legend::Fragments | Legend::Parts | Legend::Debris => 44,
             Legend::Kind(k) => 52 + 30 * k.len().div_ceil(3) as u32,
             Legend::Strength { .. } => 130,
         }
@@ -488,6 +526,15 @@ fn draw_legend(c: &mut Canvas, y0: i64, lg: &Legend) {
                 y0 + 14,
                 2,
                 "Colour = fragment identity (arbitrary, no scale)",
+                INK,
+            );
+        }
+        Legend::Debris => {
+            c.text(
+                x0,
+                y0 + 14,
+                2,
+                "Cosmetic debris (no bonds). Colour = piece (arbitrary, no scale)",
                 INK,
             );
         }
@@ -683,6 +730,19 @@ pub fn preview(
         vec![o.level.unwrap_or(leaf).min(leaf)]
     };
     let mut titles = Vec::new();
+    if o.debris {
+        let tris = debris_tris(asset, o.explode, o.clip_z, light);
+        let chunks: std::collections::BTreeSet<u32> =
+            asset.debris.iter().map(|h| h.fragment.0).collect();
+        titles.push(format!(
+            "debris: {} pieces from {} chunks",
+            asset.debris.len(),
+            chunks.len()
+        ));
+        let panel = render_panel(&tris, o.width, o.height, view, DVec3::Y);
+        let (w, h) = compose(&[panel], &titles, o, &Legend::Debris, out)?;
+        return Ok(format!("wrote {} ({w}x{h}; {})", out.display(), titles[0]));
+    }
     let (panels, legend): (Vec<Vec<[u8; 3]>>, Legend) = match o.bonds {
         Some(mode) => {
             let per: Vec<Vec<(&frac_core::Bond, f64)>> = levels

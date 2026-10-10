@@ -56,7 +56,12 @@ noise, chipping, 3 LODs, CoACD hulls) with cells sized for multi-storey
 buildings (~29 cm analysis / ~18 cm fine cells; bake.toml's 8.5 cm fine
 cells give ~450k cells on a 5-storey frame). `building_lite.toml` is a quick
 starter (no modes, no noise, one LOD). `fast.toml` disables modes and uses
-agglomeration for Level 1. `ablation_geometric.toml` and
+agglomeration for Level 1. `support_graph.toml` is the stress-solver layout:
+three levels (components, structural fragments, chunks), one fine cell per
+analysis cell so every chunk is an exact convex Voronoi cell (one hull,
+planar bonds), plus `[debris] pieces` cosmetic convex pieces per chunk with
+no bonds (`prefracture preview --debris`). On the two-storey building:
+11,270 chunks at 1.01 hulls each and 90,193 debris pieces, 64 s, 1.2 GB. `ablation_geometric.toml` and
 `ablation_fallback.toml` are the M3 ablations.
 
 ## Performance

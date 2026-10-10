@@ -193,6 +193,9 @@ enum Cmd {
         /// Cutaway: hide geometry whose centroid z is above this value.
         #[arg(long)]
         clip_z: Option<f64>,
+        /// Draw the cosmetic debris pieces (`[debris] pieces > 0`).
+        #[arg(long)]
+        debris: bool,
     },
     GenBench {
         #[arg(long, default_value = "benchmarks/assets")]
@@ -1105,6 +1108,7 @@ fn main() -> ExitCode {
             elevation,
             bonds,
             clip_z,
+            debris,
         } => (|| -> Result<bool, String> {
             // never overwrite an earlier preview: number the new file instead
             let out = &free_path(out);
@@ -1115,6 +1119,7 @@ fn main() -> ExitCode {
                 Some(x) => return Err(format!("--bonds {x}: expected kind or strength")),
             };
             let o = preview::PreviewOptions {
+                debris: *debris,
                 bonds,
                 clip_z: *clip_z,
                 level: *level,

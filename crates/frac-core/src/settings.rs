@@ -21,6 +21,7 @@ pub struct Settings {
     pub collision: CollisionSettings,
     pub render: RenderSettings,
     pub validation: ValidationSettings,
+    pub debris: DebrisSettings,
 }
 
 impl Default for Settings {
@@ -38,6 +39,7 @@ impl Default for Settings {
             collision: CollisionSettings::default(),
             render: RenderSettings::default(),
             validation: ValidationSettings::default(),
+            debris: DebrisSettings::default(),
         }
     }
 }
@@ -308,6 +310,16 @@ impl Default for RenderSettings {
             rebar_stubs: true,
         }
     }
+}
+
+/// Cosmetic debris (support-graph layout): every leaf fragment (the stress
+/// solver's chunk) is split into about `pieces` convex pieces that a runtime
+/// spawns when the chunk is crushed. They carry no bonds and are not part
+/// of the hierarchy. 0 disables debris.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct DebrisSettings {
+    pub pieces: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

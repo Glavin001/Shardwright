@@ -1383,6 +1383,89 @@ fn separate_level(asset: &Asset, level: u8, recs: &mut [Vec<HullRec>], atoms: &[
     }
 }
 
+/// Cosmetic debris for the support-graph layout: each leaf fragment's hulls
+/// are split into about `pieces` convex pieces in total (per hull in
+/// proportion to its volume) by a Voronoi partition of seeded points inside
+/// the hull. The pieces tile the hulls exactly, carry the leaf fragment's id
+/// and are deterministic for a given seed.
+pub fn debris(asset: &Asset, pieces: u32, seed: u64) -> Vec<Hull> {
+    let leaf = asset.hierarchy.levels.saturating_sub(1);
+    let frs = asset.level_fragments(leaf);
+    let per: Vec<Vec<Hull>> = frs
+        .par_iter()
+        .map(|f| {
+            let polys: Vec<ConvexPolytope> = asset.hulls
+                [f.hulls.start as usize..f.hulls.end as usize]
+                .iter()
+                .map(hull_polytope)
+                .filter(|p| !p.is_empty())
+                .collect();
+            let vols: Vec<f64> = polys.iter().map(|p| p.volume()).collect();
+            let total: f64 = vols.iter().sum::<f64>().max(1e-300);
+            let mut out = Vec::new();
+            for (hi, (poly, v)) in polys.iter().zip(&vols).enumerate() {
+                let k = ((pieces as f64 * v / total).round() as usize).max(1);
+                if k == 1 {
+                    out.push(to_hull(f.id, poly));
+                    continue;
+                }
+                let verts = poly.vertices();
+                let bb = Aabb::from_points(verts.iter());
+                let hs = poly.halfspaces();
+                let inside = |x: DVec3| hs.iter().all(|h| h.dist(x) < 0.0);
+                // seeded rejection sampling inside the hull
+                let mut seeds: Vec<DVec3> = Vec::with_capacity(k);
+                let mut n = 0u64;
+                while seeds.len() < k && n < 64 * k as u64 {
+                    let r = |axis: u64| {
+                        unit_f64(stable_hash(&[
+                            seed,
+                            f.id.0 as u64,
+                            hi as u64,
+                            n,
+                            axis,
+                            0xdeb,
+                        ]))
+                    };
+                    let x = bb.min + (bb.max - bb.min) * DVec3::new(r(0), r(1), r(2));
+                    n += 1;
+                    if inside(x) {
+                        seeds.push(x);
+                    }
+                }
+                if seeds.len() < 2 {
+                    out.push(to_hull(f.id, poly));
+                    continue;
+                }
+                for (i, &si) in seeds.iter().enumerate() {
+                    let cuts: Vec<HalfSpace> = seeds
+                        .iter()
+                        .enumerate()
+                        .filter(|&(j, _)| j != i)
+                        .filter_map(|(_, &sj)| {
+                            let d = sj - si;
+                            let len = d.length();
+                            (len > 0.0).then(|| {
+                                let nn = d / len;
+                                HalfSpace {
+                                    n: nn,
+                                    d: nn.dot(0.5 * (si + sj)),
+                                }
+                            })
+                        })
+                        .collect();
+                    let piece = poly.clip_all(&cuts);
+                    if !piece.is_empty() && piece.volume() > 1e-12 * v.max(1e-300) {
+                        out.push(to_hull(f.id, &piece));
+                    }
+                }
+            }
+            out
+        })
+        .collect();
+    per.into_iter().flatten().collect()
+}
+
 pub fn to_hull(f: FragmentId, p: &ConvexPolytope) -> Hull {
     let mut verts: Vec<DVec3> = Vec::new();
     let mut index: BTreeMap<[u64; 3], u32> = BTreeMap::new();

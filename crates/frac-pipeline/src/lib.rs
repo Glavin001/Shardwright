@@ -419,6 +419,9 @@ pub fn run_with(
     for (i, r) in ranges.into_iter().enumerate() {
         asset.hierarchy.fragments[i].hulls = r;
     }
+    if settings.debris.pieces > 0 {
+        asset.debris = frac_collision::debris(&asset, settings.debris.pieces, settings.seed);
+    }
     tick("collision", &mut t, &mut timings);
     // debugging aid: the asset before render, for replaying stages 9-12
     // (examples/render_bench.rs) without re-running cells and collision

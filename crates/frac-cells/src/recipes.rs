@@ -406,7 +406,14 @@ pub fn build_cells(solid: &TriMesh, p: &CellParams) -> Result<CellBuild, String>
                     } else {
                         fine.clone()
                     };
-                    let an = seeding::eliminate(&an_cand, &spacing_local, n_a, &mut rng);
+                    // one fine cell per analysis cell: the fine cells are the
+                    // analysis cells (same seeds), so analysis cells are exact
+                    // convex Voronoi cells (support-graph layout)
+                    let an = if p.fine_per_analysis == 1 {
+                        fine.clone()
+                    } else {
+                        seeding::eliminate(&an_cand, &spacing_local, n_a, &mut rng)
+                    };
                     (fine, an)
                 }
             };

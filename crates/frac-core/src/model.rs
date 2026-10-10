@@ -358,6 +358,10 @@ pub struct Asset {
     pub bond_children: Vec<BondId>,
     pub loops: Vec<Vec<DVec3>>,
     pub spawn: Vec<SpawnPoint>,
+    /// Cosmetic debris pieces (convex; `Hull::fragment` = the leaf fragment
+    /// they come from). Empty unless `[debris] pieces > 0`.
+    #[serde(default)]
+    pub debris: Vec<Hull>,
     /// Per-level structural (L1) cut-interface diagnostics.
     pub diagnostics: AssetDiagnostics,
 }
