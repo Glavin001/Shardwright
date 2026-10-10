@@ -96,6 +96,27 @@ enum Cmd {
         #[arg(long, default_value_t = 1337)]
         seed: u64,
     },
+    /// Recompute the collision hulls of a baked asset (`.asset.json`) and
+    /// write the asset with the new hulls (for decomposition experiments and
+    /// the CoACD differential harness).
+    Hulls {
+        #[arg(long)]
+        asset: PathBuf,
+        /// Bake settings TOML (collision section used).
+        #[arg(long)]
+        config: Option<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+        /// Concavity threshold in CoACD's normalized units (overrides `concavity`).
+        #[arg(long)]
+        coacd_threshold: Option<f64>,
+        /// Hull budget per fragment (0 = unlimited).
+        #[arg(long)]
+        max_hulls: Option<usize>,
+        /// Levels to compute (comma separated; default: settings).
+        #[arg(long)]
+        levels: Option<String>,
+    },
     /// Generate the procedural benchmark suite (spec §13.8).
     GenBench {
         #[arg(long, default_value = "benchmarks/assets")]
@@ -228,6 +249,46 @@ fn bake(
         all_ok &= ok;
     }
     Ok(all_ok || allow)
+}
+
+fn hulls_cmd(asset: &Path, config: &Option<PathBuf>, out: &Path, coacd_threshold: Option<f64>, max_hulls: Option<usize>, levels: &Option<String>) -> Result<bool, String> {
+    let settings = match config {
+        Some(c) => Settings::from_toml(&std::fs::read_to_string(c).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?,
+        None => Settings::default(),
+    };
+    let text = std::fs::read_to_string(asset).map_err(|e| format!("{}: {e}", asset.display()))?;
+    let mut a: frac_core::Asset = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", asset.display()))?;
+    let mut cp = frac_pipeline::collision_params(&settings);
+    cp.coacd_threshold = coacd_threshold;
+    if let Some(m) = max_hulls {
+        cp.max_hulls = if m == 0 { usize::MAX } else { m };
+    }
+    if let Some(l) = levels {
+        cp.levels = l.split(',').filter(|s| !s.trim().is_empty()).map(|s| s.trim().parse::<u8>().map_err(|e| e.to_string())).collect::<Result<_, _>>()?;
+    }
+    let t = std::time::Instant::now();
+    let (hulls, ranges) = frac_pipeline::build_hulls(&a, &cp);
+    let secs = t.elapsed().as_secs_f64();
+    a.hulls = hulls;
+    for (i, r) in ranges.into_iter().enumerate() {
+        a.hierarchy.fragments[i].hulls = r;
+    }
+    // non-overlap check (as the hard gate)
+    let polys: Vec<_> = a.hulls.iter().map(frac_pipeline::hull_polytope).collect();
+    let mut worst: f64 = 0.0;
+    let mut pairs = 0usize;
+    for b in &a.bonds {
+        let frac_core::FragmentOrWorld::Fragment(fb) = b.b else { continue };
+        for x in a.hierarchy.fragments[b.a.idx()].hulls.clone() {
+            for y in a.hierarchy.fragments[fb.idx()].hulls.clone() {
+                pairs += 1;
+                worst = worst.max(polys[x as usize].intersection_volume(&polys[y as usize]));
+            }
+        }
+    }
+    std::fs::write(out, frac_io::asset_to_json(&a)).map_err(|e| e.to_string())?;
+    println!("{}: {} hulls in {secs:.2} s; max neighbour hull overlap {worst:.3e} m3 over {pairs} pairs ({})", out.display(), a.hulls.len(), if worst <= 1e-9 { "PASS" } else { "FAIL" });
+    Ok(worst <= 1e-9)
 }
 
 fn debug_dump(asset: &frac_core::Asset, out: &Path, name: &str, what: &str) -> Result<(), String> {
@@ -398,6 +459,7 @@ fn main() -> ExitCode {
             println!("wrote {} ({} bytes)", out.display(), bytes.len());
             Ok(true)
         }),
+        Cmd::Hulls { asset, config, out, coacd_threshold, max_hulls, levels } => hulls_cmd(asset, config, out, *coacd_threshold, *max_hulls, levels),
         Cmd::GenBench { out, only } => bench::generate(out, only).map(|_| true),
     };
     match res {

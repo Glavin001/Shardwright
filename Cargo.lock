@@ -728,9 +728,14 @@ dependencies = [
 name = "frac-collision"
 version = "0.1.0"
 dependencies = [
+ "frac-cells",
  "frac-core",
  "frac-geom",
  "glam",
+ "libm",
+ "proptest",
+ "rand 0.8.8",
+ "rand_chacha 0.3.1",
  "rayon",
 ]
 

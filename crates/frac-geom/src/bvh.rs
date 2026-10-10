@@ -118,6 +118,50 @@ impl Bvh {
         }
     }
 
+    /// Nearest item only if every item is farther than `r2` (squared):
+    /// returns `None` as soon as an item with `item_d2 <= r2` is found
+    /// (early exit for Hausdorff-style maxima), else the nearest item.
+    pub fn nearest_beyond(&self, p: DVec3, r2: f64, mut item_d2: impl FnMut(u32) -> f64) -> Option<(u32, f64)> {
+        if self.nodes.is_empty() {
+            return None;
+        }
+        let mut best: Option<(u32, f64)> = None;
+        let mut stack: Vec<(f64, u32)> = vec![(self.nodes[0].bbox.dist2(p), 0)];
+        while let Some((d, ni)) = stack.pop() {
+            if let Some((_, bd)) = best {
+                if d > bd {
+                    continue;
+                }
+            }
+            let n = &self.nodes[ni as usize];
+            if n.count > 0 {
+                for &i in &self.order[n.start as usize..(n.start + n.count) as usize] {
+                    let di = item_d2(i);
+                    if di <= r2 {
+                        return None;
+                    }
+                    match best {
+                        Some((bi, bd)) if di > bd || (di == bd && i > bi) => {}
+                        _ => best = Some((i, di)),
+                    }
+                }
+            } else {
+                let l = n.start;
+                let r = n.start + 1;
+                let dl = self.nodes[l as usize].bbox.dist2(p);
+                let dr = self.nodes[r as usize].bbox.dist2(p);
+                if dl <= dr {
+                    stack.push((dr, r));
+                    stack.push((dl, l));
+                } else {
+                    stack.push((dl, l));
+                    stack.push((dr, r));
+                }
+            }
+        }
+        best
+    }
+
     /// Best-first nearest search with a user distance (squared) function.
     /// Returns (item, d2) minimizing `item_d2`.
     pub fn nearest(&self, p: DVec3, mut item_d2: impl FnMut(u32) -> f64) -> Option<(u32, f64)> {
