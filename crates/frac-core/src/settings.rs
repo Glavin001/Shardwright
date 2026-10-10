@@ -84,6 +84,11 @@ pub struct CellSettings {
     pub target_analysis_cells_per_m3: f64,
     /// Fine cells per analysis cell.
     pub fine_per_analysis: u32,
+    /// Extent-based analysis-cell count (metres; 0 = off, use the density):
+    /// `max(A / (2e²), V / e³)` cells per part (surface area `A`, volume `V`),
+    /// so no cell's footprint on a thin, wide part (a floor) exceeds about
+    /// `e × e`. In the support-graph layout this is the chunk size.
+    pub max_chunk_extent: f64,
     /// Use `fine_per_analysis` for every part, ignoring per-part and
     /// per-material overrides (the support-graph layout needs exactly 1).
     pub fixed_fine_per_analysis: bool,
@@ -105,6 +110,7 @@ impl Default for CellSettings {
             target_analysis_cells_per_m3: 200.0,
             fine_per_analysis: 8,
             fixed_fine_per_analysis: false,
+            max_chunk_extent: 0.0,
             min_analysis_cells: 4,
             max_analysis_cells: 2000,
             max_fine_cells: 200_000,
@@ -148,6 +154,10 @@ pub struct ModeSettings {
     /// jump over modes.
     pub energy_weighted_segmentation: bool,
     pub target_level1_fragments: u32,
+    /// Extent bound on Level-1 fragments (metres; 0 = off): a part gets at
+    /// least `max(A / (2E²), V / E³)` Level-1 fragments, so large, thin parts
+    /// (floors) are not left with pieces metres across.
+    pub max_fragment_extent: f64,
     pub max_iccm_iters: usize,
     pub iccm_tolerance: f64,
     /// Modes problems with more unknowns than this (e.g. masonry walls with
@@ -180,6 +190,7 @@ impl Default for ModeSettings {
             multi_start: true,
             energy_weighted_segmentation: true,
             target_level1_fragments: 12,
+            max_fragment_extent: 0.0,
             max_iccm_iters: 50,
             iccm_tolerance: 1e-4,
             large_problem_dofs: 3000,

@@ -14,6 +14,10 @@ target_analysis_cells_per_m3 = 200
 fine_per_analysis = 1
 # ignore per-part / per-material overrides: chunks must be single cells
 fixed_fine_per_analysis = true
+# chunk size by extent (m): max(A/(2e^2), V/e^3) chunks per part, so thin,
+# wide parts (floors) get chunks with footprints of about e x e; replaces the
+# volume density above
+max_chunk_extent = 0.3
 min_cell_volume = 1.0e-7
 min_thickness_ratio = 0.05
 
@@ -23,6 +27,8 @@ k = 10
 omega = 1.0e-3
 material_aware = true
 target_level1_fragments = 12
+# Level-1 pieces at most ~1.5 m across: large parts (floors) get more than 12
+max_fragment_extent = 1.5
 max_iccm_iters = 50
 tet_edge_ratio = 0.33
 

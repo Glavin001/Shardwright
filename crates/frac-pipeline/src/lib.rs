@@ -155,7 +155,12 @@ pub fn run_with(
                 .analysis_cells_per_m3
                 .or(mat.analysis_cells_per_m3)
                 .unwrap_or(settings.cells.target_analysis_cells_per_m3);
-            let na = ((p.volume * density).round() as usize).clamp(
+            let target = if settings.cells.max_chunk_extent > 0.0 {
+                extent_count(p.solid.area(), p.volume, settings.cells.max_chunk_extent)
+            } else {
+                p.volume * density
+            };
+            let na = (target.round() as usize).clamp(
                 settings.cells.min_analysis_cells as usize,
                 settings.cells.max_analysis_cells as usize,
             );
@@ -321,7 +326,13 @@ pub fn run_with(
             let anchor_h = asset.interfaces.iter().filter(|it| it.cells.1 == CellOrWorld::World && comp.cells.contains(&it.cells.0 .0)).flat_map(|it| it.polygons.iter().flat_map(|p| p.loops[0].iter().map(|v| v.y))).fold(None, |a: Option<f64>, y| Some(a.map_or(y, |a| a.max(y))));
             let r = if has_structural {
                 let cfg = level1::ModesConfig { settings: &settings.modes, seed: settings.seed, component: ci as u32, anchor_height: anchor_h };
-                let mut r = level1::level1(&asset, comp, info, &adj, lib, &metas[ci], &cfg, settings.modes.target_level1_fragments as usize, settings.hierarchy.compactness);
+                let mut target = settings.modes.target_level1_fragments as usize;
+                if settings.modes.max_fragment_extent > 0.0 {
+                    let e = extent_count(comp.solid.area(), comp.solid.signed_volume().abs(), settings.modes.max_fragment_extent);
+                    // keep at least ~2 analysis cells per Level-1 fragment
+                    target = target.max(e.ceil() as usize).min((info.n_analysis as usize / 2).max(target));
+                }
+                let mut r = level1::level1(&asset, comp, info, &adj, lib, &metas[ci], &cfg, target, settings.hierarchy.compactness);
                 let (moves, left) = manifold::repair_labels(comp, info, &adj, &mut r.labels, None);
                 if left > 0 {
                     r.warnings.push(format!("component '{}': level 1 manifold repair moved {moves} analysis cells, {left} defects left", comp.name));
@@ -576,4 +587,11 @@ pub fn collision_params(settings: &Settings) -> frac_collision::CollisionParams 
         seed: settings.seed,
         ..Default::default()
     }
+}
+
+/// Number of pieces of extent `e` (metres) a part needs: `max(A / (2e²),
+/// V / e³)`. The surface term bounds the footprint of pieces on thin, wide
+/// parts; the volume term covers chunky ones.
+fn extent_count(area: f64, volume: f64, e: f64) -> f64 {
+    (area / (2.0 * e * e)).max(volume / (e * e * e))
 }
