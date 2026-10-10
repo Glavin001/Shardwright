@@ -98,30 +98,26 @@ pub fn compute(asset: &Asset, render: &RenderOut, _lib: &MaterialLibrary) -> Val
             "strength_scale": quantiles(asset.level_bonds(l).map(|b| b.strength_scale as f64).collect()),
         }));
     }
-    // hull fit: collision-aware concavity / diameter on the finest level
+    // hull fit (spec §13.6): symmetric surface deviation between a fragment
+    // and its hulls / diameter, per level (≤ 100 sampled fragments): hull
+    // vertices outside the fragment (overshoot) and fragment-surface points
+    // (vertices and triangle centroids) not covered by any hull (gaps, which
+    // include the collision margin and the non-overlap clipping).
+    let mut fit_by_level = Vec::new();
+    let mut fit_all = Vec::new();
+    for l in 1..h.levels {
+        let frs = asset.level_fragments(l);
+        let fit: Vec<f64> = frs
+            .par_iter()
+            .step_by((frs.len() / 100).max(1))
+            .filter(|f| !f.hulls.is_empty())
+            .map(|f| hull_fit(asset, f))
+            .collect();
+        fit_all.extend(fit.iter().copied());
+        fit_by_level.push(json!({"level": l, "fit": quantiles(fit)}));
+    }
+    let fit = fit_all;
     let leaf = h.levels.saturating_sub(1);
-    let fit: Vec<f64> = asset
-        .level_fragments(leaf)
-        .par_iter()
-        .step_by((asset.level_fragments(leaf).len() / 200).max(1))
-        .filter(|f| !f.hulls.is_empty())
-        .map(|f| {
-            let m = cells_boundary_mesh(asset, asset.fragment_cells(f));
-            let q = MeshQuery::new(&m);
-            let diam = m.aabb().diagonal().max(1e-300);
-            let mut worst: f64 = 0.0;
-            for hh in &asset.hulls[f.hulls.start as usize..f.hulls.end as usize] {
-                for v in &hh.vertices {
-                    if !q.contains(*v) {
-                        if let Some((_, d2, _)) = q.closest_point(*v) {
-                            worst = worst.max(d2.sqrt());
-                        }
-                    }
-                }
-            }
-            worst / diam
-        })
-        .collect();
     // grain alignment for anisotropic components (finest level)
     let mut grain = Vec::new();
     for c in &asset.components {
@@ -146,6 +142,7 @@ pub fn compute(asset: &Asset, render: &RenderOut, _lib: &MaterialLibrary) -> Val
     json!({
         "levels": levels,
         "hull_fit_concavity_over_diameter": quantiles(fit),
+        "hull_fit_by_level": fit_by_level,
         "grain_alignment": grain,
         "interface_area_by_kind": kinds,
         "render_volume_deviation": quantiles(dev),
@@ -193,4 +190,59 @@ fn roughness(asset: &Asset, render: &RenderOut) -> Value {
     }
     let _ = DVec3::ZERO;
     json!({"rms_height": quantiles(rms)})
+}
+
+/// Exact distance from `x` to a convex polytope (0 inside).
+fn polytope_distance(x: DVec3, p: &ConvexPolytope) -> f64 {
+    let tol = 1e-12 * p.scale().max(1e-300);
+    if p.faces.iter().all(|(h, _)| h.dist(x) <= tol) {
+        return 0.0;
+    }
+    let mut best = f64::INFINITY;
+    for (h, poly) in &p.faces {
+        let dn = h.dist(x);
+        if dn <= 0.0 || poly.len() < 3 {
+            continue;
+        }
+        let q = x - h.n * dn;
+        // inside the face polygon (CCW about n)?
+        let inside = (0..poly.len()).all(|i| (poly[(i + 1) % poly.len()] - poly[i]).cross(q - poly[i]).dot(h.n) >= -tol);
+        if inside {
+            best = best.min(dn);
+            continue;
+        }
+        for i in 0..poly.len() {
+            let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);
+            let ab = b - a;
+            let t = ((x - a).dot(ab) / ab.length_squared().max(1e-300)).clamp(0.0, 1.0);
+            best = best.min((a + ab * t - x).length());
+        }
+    }
+    if best.is_finite() { best } else { 0.0 }
+}
+
+/// Symmetric hull-fit deviation of a fragment / its diameter.
+fn hull_fit(asset: &Asset, f: &Fragment) -> f64 {
+    let m = cells_boundary_mesh(asset, asset.fragment_cells(f));
+    let q = MeshQuery::new(&m);
+    let diam = m.aabb().diagonal().max(1e-300);
+    let hulls: Vec<ConvexPolytope> = asset.hulls[f.hulls.start as usize..f.hulls.end as usize].iter().map(hull_polytope).collect();
+    let mut worst: f64 = 0.0;
+    for hh in &asset.hulls[f.hulls.start as usize..f.hulls.end as usize] {
+        for v in &hh.vertices {
+            if !q.contains(*v) {
+                if let Some((_, d2, _)) = q.closest_point(*v) {
+                    worst = worst.max(d2.sqrt());
+                }
+            }
+        }
+    }
+    let samples = m.verts.iter().copied().chain(m.tris.iter().map(|t| (m.verts[t[0] as usize] + m.verts[t[1] as usize] + m.verts[t[2] as usize]) / 3.0));
+    for x in samples {
+        let d = hulls.iter().map(|p| polytope_distance(x, p)).fold(f64::INFINITY, f64::min);
+        if d.is_finite() {
+            worst = worst.max(d);
+        }
+    }
+    worst / diam
 }

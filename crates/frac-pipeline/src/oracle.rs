@@ -88,6 +88,19 @@ fn support_bonds(asset: &Asset, level: u8, polys: &[(FragmentId, Polygon3)]) -> 
 }
 
 /// Export network results for all levels >= 1.
+/// Locate `tools/harness/bond_fidelity.py`: next to the working directory,
+/// above the executable (`target/<profile>/prefracture`), or in the source
+/// tree this crate was built from.
+fn harness_script() -> std::path::PathBuf {
+    let rel = std::path::Path::new("tools/harness/bond_fidelity.py");
+    let mut roots: Vec<std::path::PathBuf> = vec![std::path::PathBuf::from(".")];
+    if let Ok(exe) = std::env::current_exe() {
+        roots.extend(exe.ancestors().skip(1).take(4).map(|p| p.to_path_buf()));
+    }
+    roots.push(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."));
+    roots.iter().map(|r| r.join(rel)).find(|p| p.exists()).unwrap_or_else(|| rel.to_path_buf())
+}
+
 pub fn network_export(asset: &Asset, lib: &MaterialLibrary) -> Value {
     network_export_with(asset, lib, StiffnessModel::Tensorial)
 }
@@ -238,7 +251,7 @@ pub fn run_harness(asset_json: &std::path::Path, network_json: &std::path::Path,
     let py = std::env::var("PREFRACTURE_PYTHON").unwrap_or_else(|_| {
         if std::path::Path::new("/opt/fracenv/bin/python").exists() { "/opt/fracenv/bin/python".into() } else { "python3".into() }
     });
-    let script = std::env::var("PREFRACTURE_HARNESS").unwrap_or_else(|_| "tools/harness/bond_fidelity.py".into());
+    let script = std::env::var("PREFRACTURE_HARNESS").unwrap_or_else(|_| harness_script().to_string_lossy().into_owned());
     let out = std::process::Command::new(&py)
         .arg(&script)
         .arg("--asset")
