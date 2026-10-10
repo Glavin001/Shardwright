@@ -74,7 +74,9 @@
       "masonry_layout": null,
       "recipe": null,
       "group": null,
-      "impact_center": null
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": 16
     }
   },
   "connections": [],

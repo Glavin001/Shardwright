@@ -88,6 +88,10 @@ pub struct PartMeta {
     pub group: Option<String>,
     /// Annealed glass impact center.
     pub impact_center: Option<[f64; 3]>,
+    /// Per-part resolution overrides (else the material's, else the bake
+    /// settings'): analysis cells per m³ and fine cells per analysis cell.
+    pub analysis_cells_per_m3: Option<f64>,
+    pub fine_per_analysis: Option<u32>,
 }
 
 /// Authoring sidecar (spec §5.3): per-part metadata plus connections.
@@ -140,6 +144,8 @@ fn merge(mut a: PartMeta, b: PartMeta) -> PartMeta {
     take!(recipe);
     take!(group);
     take!(impact_center);
+    take!(analysis_cells_per_m3);
+    take!(fine_per_analysis);
     a.anchor |= b.anchor;
     a.material_map.extend(b.material_map);
     a.density_boxes.extend(b.density_boxes);

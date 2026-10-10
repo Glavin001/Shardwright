@@ -144,6 +144,11 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
         for (x, z) in [(-0.15, -0.15), (0.15, -0.15), (0.15, 0.15), (-0.15, 0.15)] {
             p.meta.rebar.push(RebarSpec { points: vec![[x, -0.1, z], [x, 3.1, z]], diameter: 0.02 });
         }
+        // spec §17 sizes the RC column at ~5k fine cells; 16 fine cells per
+        // analysis cell (~1.5k) is as fine as the dense reference bond
+        // network solves comfortably, and resolves the bond-fidelity
+        // targets (§13.3) that are first order in cell size
+        p.meta.fine_per_analysis = Some(16);
         write_asset(dir, "rc_column", vec![p], vec![], Some(0.0))?;
     }
     // 5. timber beam

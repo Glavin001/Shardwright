@@ -114,9 +114,9 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
             let mat = lib.material(p.material);
             let mut w = Vec::new();
             let recipe = recipe_for(lib, p.material, &p.meta);
-            let density = mat.analysis_cells_per_m3.unwrap_or(settings.cells.target_analysis_cells_per_m3);
+            let density = p.meta.analysis_cells_per_m3.or(mat.analysis_cells_per_m3).unwrap_or(settings.cells.target_analysis_cells_per_m3);
             let na = ((p.volume * density).round() as usize).clamp(settings.cells.min_analysis_cells as usize, settings.cells.max_analysis_cells as usize);
-            let fpa = mat.fine_per_analysis.unwrap_or(settings.cells.fine_per_analysis) as usize;
+            let fpa = p.meta.fine_per_analysis.or(mat.fine_per_analysis).unwrap_or(settings.cells.fine_per_analysis) as usize;
             let grain = p.meta.grain.map(DVec3::from_array).or_else(|| {
                 if mat.anisotropy.is_some() || matches!(recipe, Recipe::Wood { .. }) {
                     let (_, axes, _) = frac_cells::recipes::principal_axes(&p.solid);
