@@ -84,7 +84,11 @@ pub fn revolve(profile: &[[f64; 2]], segs: usize) -> TriMesh {
         }
     }
     let m = TriMesh { verts, tris };
-    if m.signed_volume() < 0.0 { m.flipped() } else { m }
+    if m.signed_volume() < 0.0 {
+        m.flipped()
+    } else {
+        m
+    }
 }
 
 pub fn box_at(lo: DVec3, hi: DVec3) -> TriMesh {

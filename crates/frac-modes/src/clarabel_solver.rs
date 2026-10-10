@@ -11,8 +11,8 @@
 //! Anchors are eliminated (free DOFs only) and forbidden groups are merged
 //! into continuous DOFs beforehand, so they need no constraints here.
 
-use crate::problem::{Problem, DELTA};
 use crate::SubResult;
+use crate::problem::{DELTA, Problem};
 use clarabel::algebra::CscMatrix;
 use clarabel::solver::{DefaultSettings, DefaultSolver, IPSolver, SolverStatus, SupportedConeT};
 use frac_fem::sparse::CsrMatrix;
@@ -83,10 +83,18 @@ pub(crate) fn solve(pb: &Problem, rows: &[&[f64]], rhs: &[f64]) -> Result<SubRes
     solver.solve();
     let st = solver.solution.status;
     let ok = matches!(st, SolverStatus::Solved | SolverStatus::AlmostSolved);
-    let usable = ok || matches!(st, SolverStatus::MaxIterations | SolverStatus::InsufficientProgress);
+    let usable = ok
+        || matches!(
+            st,
+            SolverStatus::MaxIterations | SolverStatus::InsufficientProgress
+        );
     let x = &solver.solution.x;
     if !usable || x.iter().take(n).any(|v| !v.is_finite()) {
         return Err(format!("clarabel failed: {st:?}"));
     }
-    Ok(SubResult { u: x[..n].to_vec(), iterations: solver.solution.iterations as usize, ok })
+    Ok(SubResult {
+        u: x[..n].to_vec(),
+        iterations: solver.solution.iterations as usize,
+        ok,
+    })
 }

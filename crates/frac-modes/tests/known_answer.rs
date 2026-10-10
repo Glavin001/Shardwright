@@ -25,7 +25,10 @@ fn dump(out: &ModesOutput, cen: &[[f64; 3]], n: usize) {
             cen[g][2],
             out.group_area[g],
             mj[g],
-            out.jumps.iter().map(|j| (j[g] * 1e3).round() / 1e3).collect::<Vec<_>>()
+            out.jumps
+                .iter()
+                .map(|j| (j[g] * 1e3).round() / 1e3)
+                .collect::<Vec<_>>()
         );
     }
     eprintln!("  energies {:?}", out.energies);
@@ -42,11 +45,7 @@ fn translational(disc: Discretization) -> bool {
 /// weakest cut is the first mode alone and later, smaller pieces would
 /// dominate the max-over-modes jumps.
 fn k_for(disc: Discretization, k_p1: usize) -> usize {
-    if translational(disc) {
-        1
-    } else {
-        k_p1
-    }
+    if translational(disc) { 1 } else { k_p1 }
 }
 
 fn admm(k: usize) -> ModesParams {
@@ -93,7 +92,11 @@ fn notched_bar_cuts_at_notch_impl(disc: Discretization) {
     assert!(l1.hit_target);
     assert_eq!(l1.n_fragments, 2);
     for cell in 0..32u32 {
-        assert_eq!(l1.labels[cell as usize], u32::from(ix_of(cell) >= 4), "cell {cell}");
+        assert_eq!(
+            l1.labels[cell as usize],
+            u32::from(ix_of(cell) >= 4),
+            "cell {cell}"
+        );
     }
     // cut groups are exactly at the notch
     for (g, &(a, b)) in out.groups.iter().enumerate() {
@@ -140,7 +143,9 @@ fn l_shape_weak_at_reentrant_corner_impl(disc: Discretization) {
     dump(&out, &cen, 8);
     // the weakest interfaces are the arm roots: the sections through the
     // re-entrant corner (x = 1, y < 1) and (y = 1, x < 1)
-    let on_root = |p: [f64; 3]| ((p[0] - 1.0).abs() < 0.1 && p[1] < 1.05) || ((p[1] - 1.0).abs() < 0.1 && p[0] < 1.05);
+    let on_root = |p: [f64; 3]| {
+        ((p[0] - 1.0).abs() < 0.1 && p[1] < 1.05) || ((p[1] - 1.0).abs() < 0.1 && p[0] < 1.05)
+    };
     let mj = out.max_jump();
     let g = top_groups(&out, 1)[0];
     assert!(
@@ -208,7 +213,10 @@ fn plate_with_hole_ring_is_weak_impl(disc: Discretization) {
     let (ring_mean, far_mean) = (ring_s / ring_n as f64, far_s / far_n as f64);
     eprintln!("  ring mean {ring_mean} ({ring_n}) far mean {far_mean} ({far_n})");
     assert_eq!(ring_n, 4);
-    assert!(ring_mean > 1.5 * far_mean, "ring {ring_mean} vs far {far_mean}");
+    assert!(
+        ring_mean > 1.5 * far_mean,
+        "ring {ring_mean} vs far {far_mean}"
+    );
     // the single weakest interface crosses a hole ligament. Per-cell
     // translations open a straight cut across the plate through the hole with
     // the same jump on every interface of the cut, so there a ligament
@@ -217,7 +225,9 @@ fn plate_with_hole_ring_is_weak_impl(disc: Discretization) {
     if translational(disc) {
         let top = mj[g];
         assert!(
-            (0..out.groups.len()).any(|h| ring(out.groups[h].0) && ring(out.groups[h].1) && mj[h] >= top * (1.0 - 1e-6)),
+            (0..out.groups.len()).any(|h| ring(out.groups[h].0)
+                && ring(out.groups[h].1)
+                && mj[h] >= top * (1.0 - 1e-6)),
             "no ligament interface attains the max jump {top}"
         );
     } else {
@@ -258,12 +268,20 @@ fn material_weight_moves_cut_and_forbidden_never_cut_impl(disc: Discretization) 
     dump(&out, &cen, 4);
     for g in top_groups(&out, 4) {
         let (a, b) = out.groups[g];
-        assert!(at_one(a, b), "weak-section group expected, got {:?}", (a, b));
+        assert!(
+            at_one(a, b),
+            "weak-section group expected, got {:?}",
+            (a, b)
+        );
     }
     let l1 = segment_level1(c.n_cells, &out.groups, &out.max_jump(), 2);
     assert_eq!(l1.n_fragments, 2);
     for cell in 0..32u32 {
-        assert_eq!(l1.labels[cell as usize], u32::from(ix_of(cell) >= 2), "cell {cell}");
+        assert_eq!(
+            l1.labels[cell as usize],
+            u32::from(ix_of(cell) >= 2),
+            "cell {cell}"
+        );
     }
 
     // forbidden interfaces at the natural break (x = 2) never open
@@ -275,7 +293,12 @@ fn material_weight_moves_cut_and_forbidden_never_cut_impl(disc: Discretization) 
         if at_center(a, b) {
             n_forb += 1;
             for j in &out.jumps {
-                assert!(j[g].abs() < 1e-12, "forbidden group {:?} has jump {}", (a, b), j[g]);
+                assert!(
+                    j[g].abs() < 1e-12,
+                    "forbidden group {:?} has jump {}",
+                    (a, b),
+                    j[g]
+                );
             }
         }
     }

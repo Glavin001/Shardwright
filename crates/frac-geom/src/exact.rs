@@ -194,7 +194,11 @@ impl Expansion {
         Expansion(h)
     }
     pub fn mul(&self, o: &Expansion) -> Expansion {
-        let (a, b) = if self.0.len() <= o.0.len() { (self, o) } else { (o, self) };
+        let (a, b) = if self.0.len() <= o.0.len() {
+            (self, o)
+        } else {
+            (o, self)
+        };
         let mut acc = Expansion::zero();
         for &c in a.0.iter() {
             acc = acc.add(&b.scale(c));
@@ -258,12 +262,18 @@ impl Field for F64E {
     #[inline(always)]
     fn add(&self, o: &Self) -> Self {
         let v = self.v + o.v;
-        F64E { v, e: self.e + o.e + v.abs() * U }
+        F64E {
+            v,
+            e: self.e + o.e + v.abs() * U,
+        }
     }
     #[inline(always)]
     fn sub(&self, o: &Self) -> Self {
         let v = self.v - o.v;
-        F64E { v, e: self.e + o.e + v.abs() * U }
+        F64E {
+            v,
+            e: self.e + o.e + v.abs() * U,
+        }
     }
     #[inline(always)]
     fn mul(&self, o: &Self) -> Self {
@@ -275,7 +285,10 @@ impl Field for F64E {
     }
     #[inline(always)]
     fn neg(&self) -> Self {
-        F64E { v: -self.v, e: self.e }
+        F64E {
+            v: -self.v,
+            e: self.e,
+        }
     }
     #[inline(always)]
     fn approx(&self) -> f64 {
@@ -376,7 +389,10 @@ pub fn det3<F: Field>(m: &[[F; 3]; 3]) -> F {
     let c0 = det2(&m[1][1], &m[1][2], &m[2][1], &m[2][2]);
     let c1 = det2(&m[1][0], &m[1][2], &m[2][0], &m[2][2]);
     let c2 = det2(&m[1][0], &m[1][1], &m[2][0], &m[2][1]);
-    m[0][0].mul(&c0).sub(&m[0][1].mul(&c1)).add(&m[0][2].mul(&c2))
+    m[0][0]
+        .mul(&c0)
+        .sub(&m[0][1].mul(&c1))
+        .add(&m[0][2].mul(&c2))
 }
 
 #[cfg(test)]

@@ -1,9 +1,9 @@
 //! Differential tests: Clarabel (reference) vs ADMM on identical subproblems.
 
 use super::*;
-use frac_fem::{tetrahedralize, ElasticMaterial};
-use frac_geom::mesh::box_mesh;
+use frac_fem::{ElasticMaterial, tetrahedralize};
 use frac_geom::DVec3;
+use frac_geom::mesh::box_mesh;
 
 struct Fixture {
     mesh: frac_fem::TetMesh,
@@ -20,7 +20,8 @@ fn fixture(h: f64, dims: [usize; 3]) -> Fixture {
             let c = mesh.tet_centroid(t);
             let mut id = [0usize; 3];
             for k in 0..3 {
-                id[k] = ((c[k] / ext[k] * dims[k] as f64).floor().max(0.0) as usize).min(dims[k] - 1);
+                id[k] =
+                    ((c[k] / ext[k] * dims[k] as f64).floor().max(0.0) as usize).min(dims[k] - 1);
             }
             (id[0] + dims[0] * (id[1] + dims[1] * id[2])) as u32
         })
@@ -29,20 +30,32 @@ fn fixture(h: f64, dims: [usize; 3]) -> Fixture {
     Fixture { mesh, cells, mats }
 }
 
-fn compare_subproblem(f: &Fixture, anchors: &[u32], w: &(dyn Fn(u32, u32) -> f64 + Sync), mode: usize) {
+fn compare_subproblem(
+    f: &Fixture,
+    anchors: &[u32],
+    w: &(dyn Fn(u32, u32) -> f64 + Sync),
+    mode: usize,
+) {
     let input = ModesInput {
         mesh: &f.mesh,
         tet_material: &f.mats,
         tet_cell: &f.cells,
         group_weight: w,
         anchored_vertices: anchors,
-        params: ModesParams { k: mode + 1, ..Default::default() },
+        params: ModesParams {
+            k: mode + 1,
+            ..Default::default()
+        },
     };
     let mut t = Vec::new();
     let pb = problem::build(&input, &mut t).unwrap();
     let n = pb.n;
     let mut c = pb.init[mode].clone();
-    let rigid: Vec<Vec<f64>> = pb.rigid_rows.iter().map(|r| (0..n).map(|i| r[i] / pb.m[i]).collect()).collect();
+    let rigid: Vec<Vec<f64>> = pb
+        .rigid_rows
+        .iter()
+        .map(|r| (0..n).map(|i| r[i] / pb.m[i]).collect())
+        .collect();
     orthogonalize(&mut c, &rigid, &pb.m);
     let nc = mdot(&c, &c, &pb.m).sqrt();
     c.iter_mut().for_each(|x| *x /= nc);
@@ -56,7 +69,9 @@ fn compare_subproblem(f: &Fixture, anchors: &[u32], w: &(dyn Fn(u32, u32) -> f64
     assert!(ref_sol.ok);
     let mut admm = admm::Admm::new(&pb).unwrap();
     admm.warm_from(&pb, &c);
-    let fast = admm.solve(&pb, &persistent, &cur, &rhs, ADMM_TOL_MIN).unwrap();
+    let fast = admm
+        .solve(&pb, &persistent, &cur, &rhs, ADMM_TOL_MIN)
+        .unwrap();
     assert!(fast.ok, "ADMM did not converge");
     let e_ref = pb.objective(&ref_sol.u);
     let e_fast = pb.objective(&fast.u);
@@ -65,12 +80,19 @@ fn compare_subproblem(f: &Fixture, anchors: &[u32], w: &(dyn Fn(u32, u32) -> f64
     for (k, r) in rows.iter().enumerate() {
         let a: f64 = r.iter().zip(&fast.u).map(|(x, y)| x * y).sum();
         let b: f64 = r.iter().zip(&ref_sol.u).map(|(x, y)| x * y).sum();
-        assert!((a - rhs[k]).abs() < 1e-8 && (b - rhs[k]).abs() < 1e-6, "constraint {k}: {a} {b}");
+        assert!(
+            (a - rhs[k]).abs() < 1e-8 && (b - rhs[k]).abs() < 1e-6,
+            "constraint {k}: {a} {b}"
+        );
     }
     let j_ref = pb.group_norms(&ref_sol.u);
     let j_fast = pb.group_norms(&fast.u);
     let jmax = j_ref.iter().cloned().fold(0.0, f64::max);
-    let jerr = j_ref.iter().zip(&j_fast).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+    let jerr = j_ref
+        .iter()
+        .zip(&j_fast)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0, f64::max);
     let du = {
         let mut d = 0.0;
         for i in 0..n {
@@ -86,7 +108,10 @@ fn compare_subproblem(f: &Fixture, anchors: &[u32], w: &(dyn Fn(u32, u32) -> f64
         ref_sol.iterations
     );
     assert!(rel < 1e-3, "objective mismatch {rel}");
-    assert!(jerr < 1e-2 * jmax.max(1e-12), "jump mismatch {jerr} vs {jmax}");
+    assert!(
+        jerr < 1e-2 * jmax.max(1e-12),
+        "jump mismatch {jerr} vs {jmax}"
+    );
 }
 
 #[test]
@@ -99,7 +124,9 @@ fn clarabel_vs_admm_unanchored() {
 #[test]
 fn clarabel_vs_admm_anchored_weighted() {
     let f = fixture(0.25, [4, 2, 2]);
-    let anchors: Vec<u32> = (0..f.mesh.verts.len() as u32).filter(|&v| f.mesh.verts[v as usize][0] < 1e-9).collect();
+    let anchors: Vec<u32> = (0..f.mesh.verts.len() as u32)
+        .filter(|&v| f.mesh.verts[v as usize][0] < 1e-9)
+        .collect();
     // heterogeneous weights incl. a free (0) and a forbidden (inf) interface
     let w = |a: u32, b: u32| match (a, b) {
         (0, 1) => f64::INFINITY,
@@ -119,14 +146,23 @@ fn modes_clarabel_vs_admm(disc: Option<Discretization>, prefix: &str) {
             tet_cell: &f.cells,
             group_weight: &|_, _| 1.0,
             anchored_vertices: &[],
-            params: ModesParams { k: 3, solver, discretization: disc, ..Default::default() },
+            params: ModesParams {
+                k: 3,
+                solver,
+                discretization: disc,
+                ..Default::default()
+            },
         };
         compute_modes(&input).unwrap()
     };
     let a = run(Solver::Clarabel);
     let b = run(Solver::Admm);
     assert_eq!(a.solver_used, format!("{prefix}clarabel"));
-    assert!(b.solver_used.starts_with(&format!("{prefix}admm")), "{}", b.solver_used);
+    assert!(
+        b.solver_used.starts_with(&format!("{prefix}admm")),
+        "{}",
+        b.solver_used
+    );
     eprintln!("energies clarabel {:?} admm {:?}", a.energies, b.energies);
     eprintln!("iters clarabel {:?} admm {:?}", a.iterations, b.iterations);
     for i in 0..3 {
@@ -134,7 +170,10 @@ fn modes_clarabel_vs_admm(disc: Option<Discretization>, prefix: &str) {
         assert!(rel < 5e-3, "mode {i}: energy rel diff {rel}");
         let jmax = a.jumps[i].iter().cloned().fold(0.0, f64::max);
         for g in 0..a.groups.len() {
-            assert!((a.jumps[i][g] - b.jumps[i][g]).abs() < 0.05 * jmax, "mode {i} group {g}");
+            assert!(
+                (a.jumps[i][g] - b.jumps[i][g]).abs() < 0.05 * jmax,
+                "mode {i} group {g}"
+            );
         }
     }
 }
@@ -161,13 +200,20 @@ fn rho_sweep() {
         tet_cell: &f.cells,
         group_weight: &|_, _| 1.0,
         anchored_vertices: &[],
-        params: ModesParams { k: 1, ..Default::default() },
+        params: ModesParams {
+            k: 1,
+            ..Default::default()
+        },
     };
     let mut t = Vec::new();
     let pb = problem::build(&input, &mut t).unwrap();
     let n = pb.n;
     let mut c = pb.init[0].clone();
-    let rigid: Vec<Vec<f64>> = pb.rigid_rows.iter().map(|r| (0..n).map(|i| r[i] / pb.m[i]).collect()).collect();
+    let rigid: Vec<Vec<f64>> = pb
+        .rigid_rows
+        .iter()
+        .map(|r| (0..n).map(|i| r[i] / pb.m[i]).collect())
+        .collect();
     orthogonalize(&mut c, &rigid, &pb.m);
     let nc = mdot(&c, &c, &pb.m).sqrt();
     c.iter_mut().for_each(|x| *x /= nc);
@@ -183,7 +229,12 @@ fn rho_sweep() {
             a.settings.alpha = alpha;
             a.warm_from(&pb, &c);
             let r = a.solve(&pb, &persistent, &cur, &rhs, 1e-6).unwrap();
-            eprintln!("alpha {alpha} rho {:.3e} (x{f}) iters {} obj {:.8e}", base * f, r.iterations, pb.objective(&r.u));
+            eprintln!(
+                "alpha {alpha} rho {:.3e} (x{f}) iters {} obj {:.8e}",
+                base * f,
+                r.iterations,
+                pb.objective(&r.u)
+            );
         }
     }
 }
@@ -192,7 +243,13 @@ fn rho_sweep() {
 fn jump_operator_integrates_exactly() {
     // two tets sharing the face (1,2,3), in different cells
     let mut mesh = frac_fem::TetMesh {
-        verts: vec![[0.0, 0.0, -1.0], [0.0, 0.0, 0.0], [1.3, 0.1, 0.0], [0.2, 0.9, 0.05], [0.4, 0.3, 1.0]],
+        verts: vec![
+            [0.0, 0.0, -1.0],
+            [0.0, 0.0, 0.0],
+            [1.3, 0.1, 0.0],
+            [0.2, 0.9, 0.05],
+            [0.4, 0.3, 1.0],
+        ],
         tets: vec![[0, 1, 3, 2], [4, 1, 2, 3]],
     };
     mesh.fix_orientation();
@@ -204,15 +261,29 @@ fn jump_operator_integrates_exactly() {
         tet_cell: &[0, 1],
         group_weight: &|_, _| 1.0,
         anchored_vertices: &[],
-        params: ModesParams { k: 1, ..Default::default() },
+        params: ModesParams {
+            k: 1,
+            ..Default::default()
+        },
     };
     let mut t = Vec::new();
     let pb = problem::build(&input, &mut t).unwrap();
     assert_eq!(pb.groups, vec![(0, 1)]);
     // nodes sorted by (vertex, cell): (0,0) (1,0) (1,1) (2,0) (2,1) (3,0) (3,1) (4,1)
-    let nodes = [(0, 0), (1, 0), (1, 1), (2, 0), (2, 1), (3, 0), (3, 1), (4, 1)];
+    let nodes = [
+        (0, 0),
+        (1, 0),
+        (1, 1),
+        (2, 0),
+        (2, 1),
+        (3, 0),
+        (3, 1),
+        (4, 1),
+    ];
     assert_eq!(pb.n, 3 * nodes.len());
-    let f = |v: usize, c: usize, k: usize| ((v * 7 + c * 3 + k * 5) % 11) as f64 * 0.1 - 0.4 + c as f64 * 0.05 * k as f64;
+    let f = |v: usize, c: usize, k: usize| {
+        ((v * 7 + c * 3 + k * 5) % 11) as f64 * 0.1 - 0.4 + c as f64 * 0.05 * k as f64
+    };
     let mut u = vec![0.0; pb.n];
     for (i, &(v, c)) in nodes.iter().enumerate() {
         for k in 0..3 {
@@ -225,14 +296,22 @@ fn jump_operator_integrates_exactly() {
     let p = [mesh.verts[1], mesh.verts[2], mesh.verts[3]];
     let e1 = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
     let e2 = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
-    let cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    let cr = [
+        e1[1] * e2[2] - e1[2] * e2[1],
+        e1[2] * e2[0] - e1[0] * e2[2],
+        e1[0] * e2[1] - e1[1] * e2[0],
+    ];
     let area = 0.5 * (cr[0] * cr[0] + cr[1] * cr[1] + cr[2] * cr[2]).sqrt();
     let mut exact = 0.0;
     for k in 0..3 {
         let j: Vec<f64> = [1, 2, 3].iter().map(|&v| f(v, 0, k) - f(v, 1, k)).collect();
-        exact += area / 6.0 * (j[0] * j[0] + j[1] * j[1] + j[2] * j[2] + j[0] * j[1] + j[1] * j[2] + j[2] * j[0]);
+        exact += area / 6.0
+            * (j[0] * j[0] + j[1] * j[1] + j[2] * j[2] + j[0] * j[1] + j[1] * j[2] + j[2] * j[0]);
     }
-    assert!((got - exact).abs() < 1e-12 * exact.max(1e-30), "{got} vs {exact}");
+    assert!(
+        (got - exact).abs() < 1e-12 * exact.max(1e-30),
+        "{got} vs {exact}"
+    );
     assert!((pb.group_area[0] - area).abs() < 1e-14);
     // normalization: total mass 1
     let mt: f64 = pb.m.iter().sum::<f64>() / 3.0;
@@ -248,7 +327,10 @@ fn clarabel_vs_admm_reduced_subproblem() {
         tet_cell: &f.cells,
         group_weight: &|_, _| 1.0,
         anchored_vertices: &[],
-        params: ModesParams { k: 2, ..Default::default() },
+        params: ModesParams {
+            k: 2,
+            ..Default::default()
+        },
     };
     let mut t = Vec::new();
     let (full, info) = problem::build_full(&input, &mut t, false).unwrap();
@@ -275,7 +357,11 @@ fn clarabel_vs_admm_reduced_subproblem() {
         // uses the normalized projection of c, so energies are not ordered)
         let rf = {
             let mut cf = full.init[0].clone();
-            let rig: Vec<Vec<f64>> = full.rigid_rows.iter().map(|r| (0..full.n).map(|i| r[i] / full.m[i]).collect()).collect();
+            let rig: Vec<Vec<f64>> = full
+                .rigid_rows
+                .iter()
+                .map(|r| (0..full.n).map(|i| r[i] / full.m[i]).collect())
+                .collect();
             orthogonalize(&mut cf, &rig, &full.m);
             let nc = mdot(&cf, &cf, &full.m).sqrt();
             cf.iter_mut().for_each(|x| *x /= nc);
@@ -286,6 +372,9 @@ fn clarabel_vs_admm_reduced_subproblem() {
         };
         let ef = full.objective(&rf.u);
         eprintln!("   full {ef:.8e}");
-        assert!(e1 < 3.0 * ef && e1 > 0.3 * ef, "reduced energy far from full: {e1} vs {ef}");
+        assert!(
+            e1 < 3.0 * ef && e1 > 0.3 * ef,
+            "reduced energy far from full: {e1} vs {ef}"
+        );
     }
 }

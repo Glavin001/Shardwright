@@ -28,7 +28,7 @@ fn cell_tris(comp: &Component, info: &ComponentCells) -> CellTris {
         out[c].extend(e.tris.iter().map(|&t| (t, None)));
     }
     for p in &g.patches {
-        let (a, b) = (p.cells.0 .0 - base, p.cells.1 .0 - base);
+        let (a, b) = (p.cells.0.0 - base, p.cells.1.0 - base);
         if a == b {
             continue;
         }
@@ -56,7 +56,12 @@ struct Ctx<'a> {
 
 impl Ctx<'_> {
     /// Boundary triangles of group `g`: (tri, inside analysis cell, outside analysis cell).
-    fn boundary(&self, labels: &[u32], members: &[u32], g: u32) -> Vec<([u32; 3], u32, Option<u32>)> {
+    fn boundary(
+        &self,
+        labels: &[u32],
+        members: &[u32],
+        g: u32,
+    ) -> Vec<([u32; 3], u32, Option<u32>)> {
         let mut out = Vec::new();
         for &a in members {
             for &c in &self.fine[a as usize] {
@@ -88,10 +93,16 @@ impl Ctx<'_> {
                 } else {
                     e.1 += 1;
                 }
-                link.entry(t[k]).or_default().push((t[(k + 1) % 3], t[(k + 2) % 3]));
+                link.entry(t[k])
+                    .or_default()
+                    .push((t[(k + 1) % 3], t[(k + 2) % 3]));
             }
         }
-        let mut out: Vec<Defect> = edges.iter().filter(|(_, fr)| fr.0 != 1 || fr.1 != 1).map(|(&(a, b), _)| Defect::Edge(a, b)).collect();
+        let mut out: Vec<Defect> = edges
+            .iter()
+            .filter(|(_, fr)| fr.0 != 1 || fr.1 != 1)
+            .map(|(&(a, b), _)| Defect::Edge(a, b))
+            .collect();
         for (&v, l) in &link {
             // the link of a manifold vertex is one cycle
             let mut ids: Vec<u32> = l.iter().flat_map(|&(a, b)| [a, b]).collect();
@@ -111,7 +122,9 @@ impl Ctx<'_> {
                 let (ra, rb) = (find(&mut parent, idx(a)), find(&mut parent, idx(b)));
                 parent[ra.max(rb)] = ra.min(rb);
             }
-            let roots = (0..ids.len()).filter(|&i| find(&mut parent, i) == i).count();
+            let roots = (0..ids.len())
+                .filter(|&i| find(&mut parent, i) == i)
+                .count();
             if roots > 1 {
                 out.push(Defect::Vertex(v));
             }
@@ -169,8 +182,17 @@ pub fn repair_labels(
         l.sort_unstable();
         l.dedup();
     }
-    let ctx = Ctx { tris: &tris, fine, analysis: &info.cell_analysis, nbr };
-    let members_of = |labels: &[u32], g: u32| -> Vec<u32> { (0..na as u32).filter(|&a| labels[a as usize] == g).collect() };
+    let ctx = Ctx {
+        tris: &tris,
+        fine,
+        analysis: &info.cell_analysis,
+        nbr,
+    };
+    let members_of = |labels: &[u32], g: u32| -> Vec<u32> {
+        (0..na as u32)
+            .filter(|&a| labels[a as usize] == g)
+            .collect()
+    };
     let count = |labels: &[u32], g: u32| -> (usize, bool) {
         let m = members_of(labels, g);
         if m.is_empty() {
@@ -192,7 +214,9 @@ pub fn repair_labels(
     let mut moves = 0usize;
     let budget = 8 * defects.values().sum::<usize>() + 8;
     'outer: while moves < budget {
-        let Some((&g, _)) = defects.iter().next() else { break };
+        let Some((&g, _)) = defects.iter().next() else {
+            break;
+        };
         let m = members_of(labels, g);
         let bd = ctx.boundary(labels, &m, g);
         let list = Ctx::defects(&bd);
@@ -259,6 +283,10 @@ pub fn repair_labels(
         // no improving move for this group: leave it
         defects.remove(&g);
     }
-    let left = groups.iter().map(|&g| count(labels, g).0).filter(|&n| n != usize::MAX).sum();
+    let left = groups
+        .iter()
+        .map(|&g| count(labels, g).0)
+        .filter(|&n| n != usize::MAX)
+        .sum();
     (moves, left)
 }

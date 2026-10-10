@@ -1,7 +1,7 @@
 //! Global assembly and small analysis drivers (static solve, natural
 //! frequencies) used for validation sanity checks.
 
-use crate::eigen::{smallest_eigenpairs, EigenOptions};
+use crate::eigen::{EigenOptions, smallest_eigenpairs};
 use crate::element::tet_stiffness;
 use crate::material::ElasticMaterial;
 use crate::mesh::TetMesh;
@@ -74,7 +74,13 @@ pub fn assemble_stiffness(mesh: &TetMesh, materials: &[ElasticMaterial]) -> CsrM
             }
         }
     }
-    CsrMatrix { n_rows: n, n_cols: n, row_ptr, col_idx, vals }
+    CsrMatrix {
+        n_rows: n,
+        n_cols: n,
+        row_ptr,
+        col_idx,
+        vals,
+    }
 }
 
 /// Lumped (row-sum) mass: each tet contributes `ρ|V|/4` to each of its
@@ -192,7 +198,14 @@ pub fn eigenmodes(
     n: usize,
     seed: u64,
 ) -> Result<(Vec<f64>, Vec<Vec<f64>>), String> {
-    eigenmodes_tol(mesh, materials, fixed_vertices, n, seed, EigenOptions::default().tol)
+    eigenmodes_tol(
+        mesh,
+        materials,
+        fixed_vertices,
+        n,
+        seed,
+        EigenOptions::default().tol,
+    )
 }
 
 /// [`eigenmodes`] with an explicit relative residual tolerance.
@@ -216,13 +229,22 @@ pub fn eigenmodes_tol(
         }
     }
     let unanchored = fixed_vertices.is_empty();
-    let defl = if unanchored { rigid_modes(&mesh.verts) } else { Vec::new() };
+    let defl = if unanchored {
+        rigid_modes(&mesh.verts)
+    } else {
+        Vec::new()
+    };
     let extra = if unanchored { 6 } else { 0 };
     let res = smallest_eigenpairs(
         &kf,
         &mf,
         &defl,
-        &EigenOptions { n: n + extra, seed, tol, ..Default::default() },
+        &EigenOptions {
+            n: n + extra,
+            seed,
+            tol,
+            ..Default::default()
+        },
     )?;
     let trk: f64 = kf.diagonal().iter().sum();
     let trm: f64 = mf.iter().sum();
@@ -257,5 +279,8 @@ pub fn natural_frequencies(
     n: usize,
 ) -> Result<Vec<f64>, String> {
     let (vals, _) = eigenmodes(mesh, materials, fixed_vertices, n, 0x00f2_ee9e)?;
-    Ok(vals.iter().map(|&l| l.max(0.0).sqrt() / (2.0 * std::f64::consts::PI)).collect())
+    Ok(vals
+        .iter()
+        .map(|&l| l.max(0.0).sqrt() / (2.0 * std::f64::consts::PI))
+        .collect())
 }

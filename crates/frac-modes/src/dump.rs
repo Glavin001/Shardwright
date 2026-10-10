@@ -43,7 +43,9 @@ fn parse_disc(t: &str) -> Result<Option<Discretization>, String> {
         "auto" => None,
         "full" => Some(Discretization::Full),
         _ => Some(Discretization::CellPolynomial(
-            t.strip_prefix('p').and_then(|d| d.parse().ok()).ok_or_else(|| format!("bad discretization {t}"))?,
+            t.strip_prefix('p')
+                .and_then(|d| d.parse().ok())
+                .ok_or_else(|| format!("bad discretization {t}"))?,
         )),
     })
 }
@@ -59,8 +61,11 @@ fn solver_name(s: Solver) -> &'static str {
 impl ModesDump {
     /// Weight lookup matching the pipeline (`1.0` for pairs not in the adjacency).
     pub fn weight_fn(&self) -> impl Fn(u32, u32) -> f64 + Sync + '_ {
-        let map: std::collections::BTreeMap<(u32, u32), f64> =
-            self.adjacency.iter().map(|&(a, b, _, w)| ((a, b), w)).collect();
+        let map: std::collections::BTreeMap<(u32, u32), f64> = self
+            .adjacency
+            .iter()
+            .map(|&(a, b, _, w)| ((a, b), w))
+            .collect();
         move |a: u32, b: u32| *map.get(&(a.min(b), a.max(b))).unwrap_or(&1.0)
     }
 
@@ -84,14 +89,26 @@ impl ModesDump {
             u8::from(p.multi_start)
         )
         .unwrap();
-        writeln!(s, "seg {} {} {}", self.n_analysis, self.target, f(self.min_volume)).unwrap();
+        writeln!(
+            s,
+            "seg {} {} {}",
+            self.n_analysis,
+            self.target,
+            f(self.min_volume)
+        )
+        .unwrap();
         writeln!(s, "verts {}", self.mesh.verts.len()).unwrap();
         for v in &self.mesh.verts {
             writeln!(s, "{} {} {}", f(v[0]), f(v[1]), f(v[2])).unwrap();
         }
         writeln!(s, "tets {}", self.mesh.tets.len()).unwrap();
         for (t, tt) in self.mesh.tets.iter().enumerate() {
-            writeln!(s, "{} {} {} {} {}", tt[0], tt[1], tt[2], tt[3], self.tet_cell[t]).unwrap();
+            writeln!(
+                s,
+                "{} {} {} {} {}",
+                tt[0], tt[1], tt[2], tt[3], self.tet_cell[t]
+            )
+            .unwrap();
         }
         writeln!(s, "materials {}", self.tet_material.len()).unwrap();
         for m in &self.tet_material {
@@ -132,15 +149,22 @@ impl ModesDump {
         let mut lines = text.lines();
         let mut next = || lines.next().ok_or_else(|| "truncated dump".to_string());
         let hf = |t: &str| -> Result<f64, String> {
-            u64::from_str_radix(t, 16).map(f64::from_bits).map_err(|e| format!("bad float {t}: {e}"))
+            u64::from_str_radix(t, 16)
+                .map(f64::from_bits)
+                .map_err(|e| format!("bad float {t}: {e}"))
         };
-        let pu = |t: &str| -> Result<u64, String> { t.parse::<u64>().map_err(|e| format!("bad int {t}: {e}")) };
+        let pu = |t: &str| -> Result<u64, String> {
+            t.parse::<u64>().map_err(|e| format!("bad int {t}: {e}"))
+        };
         let header = |line: &str, key: &str| -> Result<usize, String> {
             let mut it = line.split_whitespace();
             if it.next() != Some(key) {
                 return Err(format!("expected '{key}', got '{line}'"));
             }
-            it.next().ok_or("missing count")?.parse::<usize>().map_err(|e| e.to_string())
+            it.next()
+                .ok_or("missing count")?
+                .parse::<usize>()
+                .map_err(|e| e.to_string())
         };
         if next()? != "frac-modes-dump 1" {
             return Err("not a frac-modes dump".into());
@@ -162,10 +186,22 @@ impl ModesDump {
             max_iters: pu(t[4])? as usize,
             solver,
             seed: pu(t[6])?,
-            large_dofs: if t.len() >= 9 { pu(t[7])? as usize } else { ModesParams::default().large_dofs },
-            eps_large: if t.len() >= 9 { hf(t[8])? } else { ModesParams::default().eps_large },
+            large_dofs: if t.len() >= 9 {
+                pu(t[7])? as usize
+            } else {
+                ModesParams::default().large_dofs
+            },
+            eps_large: if t.len() >= 9 {
+                hf(t[8])?
+            } else {
+                ModesParams::default().eps_large
+            },
             // dumps before these fields were written by the linear-elastic P1 model
-            discretization: if t.len() == 12 { parse_disc(t[9])? } else { None },
+            discretization: if t.len() == 12 {
+                parse_disc(t[9])?
+            } else {
+                None
+            },
             area_weighted: t.len() == 12 && t[10] == "1",
             multi_start: t.len() == 12 && t[11] == "1",
         };
@@ -187,7 +223,10 @@ impl ModesDump {
         let mut tet_cell = Vec::with_capacity(nt);
         for _ in 0..nt {
             let l = next()?;
-            let t: Vec<u32> = l.split_whitespace().map(|x| x.parse::<u32>().map_err(|e| e.to_string())).collect::<Result<_, _>>()?;
+            let t: Vec<u32> = l
+                .split_whitespace()
+                .map(|x| x.parse::<u32>().map_err(|e| e.to_string()))
+                .collect::<Result<_, _>>()?;
             tets.push([t[0], t[1], t[2], t[3]]);
             tet_cell.push(t[4]);
         }
@@ -208,7 +247,12 @@ impl ModesDump {
             } else {
                 None
             };
-            tet_material.push(ElasticMaterial { youngs: t[0], poisson: t[1], density: t[2], transverse });
+            tet_material.push(ElasticMaterial {
+                youngs: t[0],
+                poisson: t[1],
+                density: t[2],
+                transverse,
+            });
         }
         let na = header(next()?, "adjacency")?;
         let mut adjacency = Vec::with_capacity(na);

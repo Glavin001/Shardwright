@@ -1,7 +1,7 @@
-use frac_fem::eigen::{smallest_eigenpairs, EigenOptions};
+use frac_fem::eigen::{EigenOptions, smallest_eigenpairs};
 use frac_fem::*;
-use frac_geom::mesh::{box_mesh, icosphere};
 use frac_geom::DVec3;
+use frac_geom::mesh::{box_mesh, icosphere};
 
 fn bar(l: f64, a: f64, h: f64) -> TetMesh {
     let solid = box_mesh(DVec3::ZERO, DVec3::new(l, a, a));
@@ -9,11 +9,17 @@ fn bar(l: f64, a: f64, h: f64) -> TetMesh {
 }
 
 fn verts_where(m: &TetMesh, f: impl Fn([f64; 3]) -> bool) -> Vec<u32> {
-    (0..m.verts.len() as u32).filter(|&v| f(m.verts[v as usize])).collect()
+    (0..m.verts.len() as u32)
+        .filter(|&v| f(m.verts[v as usize]))
+        .collect()
 }
 
 /// Consistent nodal forces for a uniform traction on boundary faces selected by `sel`.
-fn face_load(m: &TetMesh, sel: impl Fn([f64; 3]) -> bool, traction: [f64; 3]) -> (Vec<[f64; 3]>, f64) {
+fn face_load(
+    m: &TetMesh,
+    sel: impl Fn([f64; 3]) -> bool,
+    traction: [f64; 3],
+) -> (Vec<[f64; 3]>, f64) {
     let mut f = vec![[0.0; 3]; m.verts.len()];
     let mut area = 0.0;
     for t in m.boundary_faces() {
@@ -21,7 +27,11 @@ fn face_load(m: &TetMesh, sel: impl Fn([f64; 3]) -> bool, traction: [f64; 3]) ->
         if p.iter().all(|&q| sel(q)) {
             let e1 = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
             let e2 = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
-            let c = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+            let c = [
+                e1[1] * e2[2] - e1[2] * e2[1],
+                e1[2] * e2[0] - e1[0] * e2[2],
+                e1[0] * e2[1] - e1[1] * e2[0],
+            ];
             let ar = 0.5 * (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt();
             area += ar;
             for &v in &t {
@@ -45,7 +55,12 @@ fn box_mesh_quality_and_volume() {
     for f in m.boundary_faces() {
         for v in f {
             let p = m.verts[v as usize];
-            let d = p[0].min(2.0 - p[0]).min(p[1]).min(1.0 - p[1]).min(p[2]).min(0.5 - p[2]);
+            let d = p[0]
+                .min(2.0 - p[0])
+                .min(p[1])
+                .min(1.0 - p[1])
+                .min(p[2])
+                .min(0.5 - p[2]);
             assert!(d.abs() < 1e-9, "boundary vertex off surface: {p:?}");
         }
     }
@@ -55,7 +70,11 @@ fn box_mesh_quality_and_volume() {
     assert_eq!(m, m2);
     // coarsening cap
     let mc = tetrahedralize(&solid, 0.02, 2000);
-    assert!(mc.tets.len() <= 2000 && mc.tets.len() > 500, "{}", mc.tets.len());
+    assert!(
+        mc.tets.len() <= 2000 && mc.tets.len() > 500,
+        "{}",
+        mc.tets.len()
+    );
 }
 
 #[test]
@@ -77,7 +96,11 @@ fn axial_bar_stiffness() {
     let mats = vec![ElasticMaterial::isotropic(e, 0.3, 1.0); m.tets.len()];
     let fixed = verts_where(&m, |p| p[0].abs() < 1e-9);
     let p_total = 1.0;
-    let (f, area) = face_load(&m, |p| (p[0] - l).abs() < 1e-9, [p_total / (a * a), 0.0, 0.0]);
+    let (f, area) = face_load(
+        &m,
+        |p| (p[0] - l).abs() < 1e-9,
+        [p_total / (a * a), 0.0, 0.0],
+    );
     assert!((area - a * a).abs() < 1e-9);
     let u = solve_static(&m, &mats, &fixed, &f).unwrap();
     let tip = verts_where(&m, |p| (p[0] - l).abs() < 1e-9);
@@ -104,12 +127,16 @@ fn cantilever_tip_deflection_and_frequency() {
     let inertia = a.powi(4) / 12.0;
     let exact = p * l.powi(3) / (3.0 * e * inertia);
     let err = (mean / exact - 1.0).abs();
-    eprintln!("cantilever: tets {} fem {mean} exact {exact} err {err}", m.tets.len());
+    eprintln!(
+        "cantilever: tets {} fem {mean} exact {exact} err {err}",
+        m.tets.len()
+    );
     assert!(err < 0.10, "cantilever deflection error {err}");
 
     let freqs = natural_frequencies(&m, &mats, &fixed, 3).unwrap();
     let beta = 1.875_104_068_711_961;
-    let f1 = beta * beta / (2.0 * std::f64::consts::PI) * (e * inertia / (rho * a * a * l.powi(4))).sqrt();
+    let f1 = beta * beta / (2.0 * std::f64::consts::PI)
+        * (e * inertia / (rho * a * a * l.powi(4))).sqrt();
     let ferr = (freqs[0] / f1 - 1.0).abs();
     eprintln!("cantilever freq: fem {:?} EB {f1} err {ferr}", freqs);
     assert!(ferr < 0.10, "frequency error {ferr}");
@@ -127,7 +154,14 @@ fn transverse_isotropic_axial() {
     let tip = verts_where(&m, |p| (p[0] - l).abs() < 1e-9);
     let mut ks = Vec::new();
     for axis in [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]] {
-        let t = TransverseIsotropic { axis, e_long: 10.0e3, e_trans: 1.0e3, g_long: 0.8e3, nu_trans: 0.0, nu_long: 0.0 };
+        let t = TransverseIsotropic {
+            axis,
+            e_long: 10.0e3,
+            e_trans: 1.0e3,
+            g_long: 0.8e3,
+            nu_trans: 0.0,
+            nu_long: 0.0,
+        };
         let mats = vec![ElasticMaterial::transverse(t, 1.0); m.tets.len()];
         let u = solve_static(&m, &mats, &fixed, &f).unwrap();
         let mean: f64 = tip.iter().map(|&v| u[v as usize][0]).sum::<f64>() / tip.len() as f64;
@@ -151,8 +185,23 @@ fn eigensolver_matches_dense() {
     assert!(n > 240 && n < 700, "dofs {n}");
     let t0 = std::time::Instant::now();
     let defl = rigid_modes(&m.verts);
-    let res = smallest_eigenpairs(&k, &mm, &defl, &EigenOptions { n: 8, seed: 3, ..Default::default() }).unwrap();
-    eprintln!("n {n} iters {} res {} t {:?}", res.iterations, res.max_residual, t0.elapsed());
+    let res = smallest_eigenpairs(
+        &k,
+        &mm,
+        &defl,
+        &EigenOptions {
+            n: 8,
+            seed: 3,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    eprintln!(
+        "n {n} iters {} res {} t {:?}",
+        res.iterations,
+        res.max_residual,
+        t0.elapsed()
+    );
     assert!(res.converged);
     // dense reference: M^{-1/2} K M^{-1/2}
     let kd = k.to_dense();
@@ -170,17 +219,26 @@ fn eigensolver_matches_dense() {
     }
     for i in 0..8 {
         let rel = (res.values[i] - w[6 + i]).abs() / w[6 + i];
-        assert!(rel < 1e-8, "eig {i}: {} vs {} ({rel})", res.values[i], w[6 + i]);
+        assert!(
+            rel < 1e-8,
+            "eig {i}: {} vs {} ({rel})",
+            res.values[i],
+            w[6 + i]
+        );
     }
     // M-orthonormal vectors
     for i in 0..8 {
         for j in 0..8 {
-            let d: f64 = (0..n).map(|q| res.vectors[i][q] * mm[q] * res.vectors[j][q]).sum();
+            let d: f64 = (0..n)
+                .map(|q| res.vectors[i][q] * mm[q] * res.vectors[j][q])
+                .sum();
             assert!((d - if i == j { 1.0 } else { 0.0 }).abs() < 1e-8);
         }
     }
     // anchored problem via the dense path vs iterative path on the same matrix
-    let fixed: Vec<u32> = (0..m.verts.len() as u32).filter(|&v| m.verts[v as usize][0] < 1e-9).collect();
+    let fixed: Vec<u32> = (0..m.verts.len() as u32)
+        .filter(|&v| m.verts[v as usize][0] < 1e-9)
+        .collect();
     let (vals, vecs) = frac_fem::analysis::eigenmodes(&m, &mats, &fixed, 4, 1).unwrap();
     assert_eq!(vals.len(), 4);
     assert_eq!(vecs[0].len(), n);

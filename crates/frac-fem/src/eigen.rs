@@ -33,7 +33,13 @@ pub struct EigenOptions {
 
 impl Default for EigenOptions {
     fn default() -> Self {
-        EigenOptions { n: 6, seed: 0x5eed, tol: 1e-7, max_iter: 400, block: None }
+        EigenOptions {
+            n: 6,
+            seed: 0x5eed,
+            tol: 1e-7,
+            max_iter: 400,
+            block: None,
+        }
     }
 }
 
@@ -135,12 +141,22 @@ pub fn smallest_eigenpairs(
     let avail = ndof.saturating_sub(r.len());
     let nwant = opts.n.min(avail);
     if nwant == 0 {
-        return Ok(EigenResult { values: vec![], vectors: vec![], iterations: 0, converged: true, max_residual: 0.0 });
+        return Ok(EigenResult {
+            values: vec![],
+            vectors: vec![],
+            iterations: 0,
+            converged: true,
+            max_residual: 0.0,
+        });
     }
     if ndof <= 240 {
         return dense_eigenpairs(k, m, &r, nwant);
     }
-    let p = opts.block.unwrap_or((2 * nwant).max(nwant + 8)).max(nwant).min(avail);
+    let p = opts
+        .block
+        .unwrap_or((2 * nwant).max(nwant + 8))
+        .max(nwant)
+        .min(avail);
     let trk: f64 = k.diagonal().iter().sum();
     let trm: f64 = m.iter().sum();
     let sigma = 1e-7 * trk / trm;
@@ -162,7 +178,10 @@ pub fn smallest_eigenpairs(
     for it in 0..opts.max_iter {
         iterations = it + 1;
         // Y = (K + σM)^{-1} M X
-        let mut y: Vec<Vec<f64>> = x.iter().map(|v| (0..ndof).map(|i| m[i] * v[i]).collect()).collect();
+        let mut y: Vec<Vec<f64>> = x
+            .iter()
+            .map(|v| (0..ndof).map(|i| m[i] * v[i]).collect())
+            .collect();
         chol.solve_many(&mut y);
         for v in y.iter_mut() {
             deflate(v, &r, m);
@@ -215,10 +234,21 @@ pub fn smallest_eigenpairs(
     }
     x.truncate(nwant);
     theta.truncate(nwant);
-    Ok(EigenResult { values: theta, vectors: x, iterations, converged, max_residual: max_res })
+    Ok(EigenResult {
+        values: theta,
+        vectors: x,
+        iterations,
+        converged,
+        max_residual: max_res,
+    })
 }
 
-fn dense_eigenpairs(k: &CsrMatrix, m: &[f64], r: &[Vec<f64>], nwant: usize) -> Result<EigenResult, String> {
+fn dense_eigenpairs(
+    k: &CsrMatrix,
+    m: &[f64],
+    r: &[Vec<f64>],
+    nwant: usize,
+) -> Result<EigenResult, String> {
     let n = k.n_rows;
     let kd = k.to_dense();
     let s: Vec<f64> = m.iter().map(|&x| 1.0 / x.sqrt()).collect();
@@ -230,7 +260,10 @@ fn dense_eigenpairs(k: &CsrMatrix, m: &[f64], r: &[Vec<f64>], nwant: usize) -> R
     }
     // deflate: A' = P A P + big * Y Y^T with Y = M^{1/2} R (orthonormal)
     if !r.is_empty() {
-        let ys: Vec<Vec<f64>> = r.iter().map(|q| (0..n).map(|i| q[i] * m[i].sqrt()).collect()).collect();
+        let ys: Vec<Vec<f64>> = r
+            .iter()
+            .map(|q| (0..n).map(|i| q[i] * m[i].sqrt()).collect())
+            .collect();
         let big = 10.0 * a.iter().map(|x| x.abs()).sum::<f64>() + 1.0;
         // P = I - Y Y^T
         let mut pm = vec![0.0; n * n];
@@ -272,5 +305,11 @@ fn dense_eigenpairs(k: &CsrMatrix, m: &[f64], r: &[Vec<f64>], nwant: usize) -> R
     for j in 0..nwant {
         vectors.push((0..n).map(|i| v[i * n + j] * s[i]).collect());
     }
-    Ok(EigenResult { values: w[..nwant].to_vec(), vectors, iterations: 1, converged: true, max_residual: 0.0 })
+    Ok(EigenResult {
+        values: w[..nwant].to_vec(),
+        vectors,
+        iterations: 1,
+        converged: true,
+        max_residual: 0.0,
+    })
 }

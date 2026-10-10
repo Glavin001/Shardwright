@@ -121,10 +121,12 @@ impl AuthoringMeta {
         base
     }
     pub fn from_json(s: &str) -> Result<Self, crate::FracError> {
-        serde_json::from_str(s).map_err(|e| crate::FracError::new(crate::Stage::Config, "metadata", e.to_string()))
+        serde_json::from_str(s)
+            .map_err(|e| crate::FracError::new(crate::Stage::Config, "metadata", e.to_string()))
     }
     pub fn from_toml(s: &str) -> Result<Self, crate::FracError> {
-        toml::from_str(s).map_err(|e| crate::FracError::new(crate::Stage::Config, "metadata", e.to_string()))
+        toml::from_str(s)
+            .map_err(|e| crate::FracError::new(crate::Stage::Config, "metadata", e.to_string()))
     }
 }
 

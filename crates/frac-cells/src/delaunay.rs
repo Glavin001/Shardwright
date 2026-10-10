@@ -3,7 +3,7 @@
 //! (rank = point index), consistent with the plane perturbation in
 //! [`crate::planes`].
 
-use frac_geom::predicates::{insphere_sos, orient3d, P3};
+use frac_geom::predicates::{P3, insphere_sos, orient3d};
 
 pub const NONE: u32 = u32::MAX;
 
@@ -37,7 +37,13 @@ impl Delaunay {
             points.swap(2, 3);
         }
         points.extend_from_slice(pts);
-        let mut d = Delaunay { points, tets: vec![[0, 1, 2, 3]], neigh: vec![[NONE; 4]], alive: vec![true], n_super: 4 };
+        let mut d = Delaunay {
+            points,
+            tets: vec![[0, 1, 2, 3]],
+            neigh: vec![[NONE; 4]],
+            alive: vec![true],
+            n_super: 4,
+        };
         let mut last = 0u32;
         for i in 4..d.points.len() as u32 {
             last = d.insert(i, last)?;
@@ -49,7 +55,12 @@ impl Delaunay {
     fn orient_with(&self, t: u32, slot: usize, p: u32) -> i8 {
         let mut v = self.tets[t as usize];
         v[slot] = p;
-        orient3d(&self.points[v[0] as usize], &self.points[v[1] as usize], &self.points[v[2] as usize], &self.points[v[3] as usize])
+        orient3d(
+            &self.points[v[0] as usize],
+            &self.points[v[1] as usize],
+            &self.points[v[2] as usize],
+            &self.points[v[3] as usize],
+        )
     }
 
     fn in_conflict(&self, t: u32, p: u32) -> bool {
@@ -61,11 +72,18 @@ impl Delaunay {
             &self.points[v[3] as usize],
             &self.points[p as usize],
         ];
-        insphere_sos(pts, [v[0] as u64, v[1] as u64, v[2] as u64, v[3] as u64, p as u64]) > 0
+        insphere_sos(
+            pts,
+            [v[0] as u64, v[1] as u64, v[2] as u64, v[3] as u64, p as u64],
+        ) > 0
     }
 
     fn locate(&self, p: u32, start: u32) -> u32 {
-        let mut t = if self.alive[start as usize] { start } else { self.alive.iter().rposition(|&a| a).unwrap() as u32 };
+        let mut t = if self.alive[start as usize] {
+            start
+        } else {
+            self.alive.iter().rposition(|&a| a).unwrap() as u32
+        };
         let mut steps = 0usize;
         // deterministic pseudo-random face order to avoid cycling
         let mut rot = 0usize;
@@ -132,7 +150,9 @@ impl Delaunay {
             }
         }
         if seed == NONE {
-            return Err(format!("delaunay: no conflict tet for point {p} (duplicate point?)"));
+            return Err(format!(
+                "delaunay: no conflict tet for point {p} (duplicate point?)"
+            ));
         }
         // cavity BFS
         let mut cavity = vec![seed];
@@ -232,7 +252,13 @@ impl Delaunay {
         for (i, &a) in self.alive.iter().enumerate() {
             if a {
                 let n = self.neigh[i];
-                neigh.push([0, 1, 2, 3].map(|k| if n[k] == NONE { NONE } else { map[n[k] as usize] }));
+                neigh.push([0, 1, 2, 3].map(|k| {
+                    if n[k] == NONE {
+                        NONE
+                    } else {
+                        map[n[k] as usize]
+                    }
+                }));
             }
         }
         self.alive = vec![true; tets.len()];
@@ -243,7 +269,12 @@ impl Delaunay {
     /// Structural validation: orientation and neighbor symmetry.
     pub fn validate(&self) -> Result<(), String> {
         for (t, v) in self.tets.iter().enumerate() {
-            let o = orient3d(&self.points[v[0] as usize], &self.points[v[1] as usize], &self.points[v[2] as usize], &self.points[v[3] as usize]);
+            let o = orient3d(
+                &self.points[v[0] as usize],
+                &self.points[v[1] as usize],
+                &self.points[v[2] as usize],
+                &self.points[v[3] as usize],
+            );
             if o <= 0 {
                 return Err(format!("tet {t} not positive"));
             }
@@ -263,7 +294,12 @@ impl Delaunay {
     /// Exact circumcenter (rounded) of tet `t`.
     pub fn circumcenter(&self, t: usize) -> P3 {
         let v = self.tets[t];
-        circumcenter(&self.points[v[0] as usize], &self.points[v[1] as usize], &self.points[v[2] as usize], &self.points[v[3] as usize])
+        circumcenter(
+            &self.points[v[0] as usize],
+            &self.points[v[1] as usize],
+            &self.points[v[2] as usize],
+            &self.points[v[3] as usize],
+        )
     }
 
     /// For each vertex, one incident tet.
@@ -310,7 +346,7 @@ impl Delaunay {
 
 /// Circumcenter of a tetrahedron computed from exact numerators/denominator.
 pub fn circumcenter(a: &P3, b: &P3, c: &P3, d: &P3) -> P3 {
-    use frac_geom::exact::{det3, Expansion};
+    use frac_geom::exact::{Expansion, det3};
     let sub = |p: &P3, q: &P3| -> [Expansion; 3] {
         [
             Expansion::from_f64(p[0]).sub(&Expansion::from_f64(q[0])),
@@ -347,7 +383,15 @@ mod tests {
     #[test]
     fn random_points() {
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(3);
-        let pts: Vec<P3> = (0..2000).map(|_| [rng.gen_range(0.0..1.0), rng.gen_range(0.0..1.0), rng.gen_range(0.0..1.0)]).collect();
+        let pts: Vec<P3> = (0..2000)
+            .map(|_| {
+                [
+                    rng.gen_range(0.0..1.0),
+                    rng.gen_range(0.0..1.0),
+                    rng.gen_range(0.0..1.0),
+                ]
+            })
+            .collect();
         let d = Delaunay::build(&pts, [0.5; 3], 1.0).unwrap();
         d.validate().unwrap();
         // empty circumsphere property spot-check

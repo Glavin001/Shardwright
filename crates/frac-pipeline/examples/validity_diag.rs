@@ -26,28 +26,86 @@ fn main() {
     for (i, _) in &bad {
         per_level[asset.hierarchy.fragments[*i].level as usize] += 1;
     }
-    println!("{} invalid clean fragments; per level {:?}", bad.len(), per_level);
-    let ones: Vec<_> = bad.iter().filter(|(i, _)| asset.fragment_cells(&asset.hierarchy.fragments[*i]).len() == 1).collect();
-    let pick: Vec<_> = if ones.is_empty() { bad.iter().collect() } else { ones };
+    println!(
+        "{} invalid clean fragments; per level {:?}",
+        bad.len(),
+        per_level
+    );
+    let ones: Vec<_> = bad
+        .iter()
+        .filter(|(i, _)| asset.fragment_cells(&asset.hierarchy.fragments[*i]).len() == 1)
+        .collect();
+    let pick: Vec<_> = if ones.is_empty() {
+        bad.iter().collect()
+    } else {
+        ones
+    };
     for (i, d) in pick.into_iter().take(max) {
         let f = &asset.hierarchy.fragments[*i];
         let cells = asset.fragment_cells(f);
         let comp = &asset.components[asset.cells[cells[0].idx()].component.idx()];
-        println!("fragment {i} level {} component '{}' cells {}: {d}", f.level, comp.name, cells.len());
+        println!(
+            "fragment {i} level {} component '{}' cells {}: {d}",
+            f.level,
+            comp.name,
+            cells.len()
+        );
         if cells.len() == 1 {
             let c = cells[0];
             let g = &comp.geometry;
-            let pr = |l: &[u32]| l.iter().map(|&v| { let p = g.verts[v as usize]; format!("{v}:({:.4},{:.4},{:.4})", p.x, p.y, p.z) }).collect::<Vec<_>>().join(" ");
+            let pr = |l: &[u32]| {
+                l.iter()
+                    .map(|&v| {
+                        let p = g.verts[v as usize];
+                        format!("{v}:({:.4},{:.4},{:.4})", p.x, p.y, p.z)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
             for e in g.ext_polys.iter().filter(|e| e.cell == c) {
-                let degen = e.tris.iter().filter(|t| TriMesh { verts: g.verts.clone(), tris: vec![**t] }.is_degenerate(0)).count();
+                let degen = e
+                    .tris
+                    .iter()
+                    .filter(|t| {
+                        TriMesh {
+                            verts: g.verts.clone(),
+                            tris: vec![**t],
+                        }
+                        .is_degenerate(0)
+                    })
+                    .count();
                 if degen > 0 {
-                    println!("  ext src_tri {} loop [{}] tris {:?} ({degen} degenerate)", e.src_tri, pr(&e.verts), e.tris);
+                    println!(
+                        "  ext src_tri {} loop [{}] tris {:?} ({degen} degenerate)",
+                        e.src_tri,
+                        pr(&e.verts),
+                        e.tris
+                    );
                 }
             }
-            for p in g.patches.iter().filter(|p| p.cells.0 == c || p.cells.1 == c) {
-                let degen = p.tris.iter().filter(|t| TriMesh { verts: g.verts.clone(), tris: vec![**t] }.is_degenerate(0)).count();
+            for p in g
+                .patches
+                .iter()
+                .filter(|p| p.cells.0 == c || p.cells.1 == c)
+            {
+                let degen = p
+                    .tris
+                    .iter()
+                    .filter(|t| {
+                        TriMesh {
+                            verts: g.verts.clone(),
+                            tris: vec![**t],
+                        }
+                        .is_degenerate(0)
+                    })
+                    .count();
                 if degen > 0 {
-                    println!("  patch cells {:?} loops {:?} tris {:?} ({degen} degenerate)", p.cells, p.loops.iter().map(|l| pr(l)).collect::<Vec<_>>(), p.tris);
+                    println!(
+                        "  patch cells {:?} loops {:?} tris {:?} ({degen} degenerate)",
+                        p.cells,
+                        p.loops.iter().map(|l| pr(l)).collect::<Vec<_>>(),
+                        p.tris
+                    );
                 }
             }
         }
@@ -56,12 +114,23 @@ fn main() {
         for (&(a, b), ts) in &em {
             let r = em.get(&(b, a)).map(|v| v.len()).unwrap_or(0);
             if ts.len() != 1 || r != 1 {
-                println!("   edge {a}->{b} {:?}->{:?}: {} fwd {} rev; tris {:?}", m.verts[a as usize], m.verts[b as usize], ts.len(), r, ts.iter().map(|&t| m.tris[t as usize]).collect::<Vec<_>>());
+                println!(
+                    "   edge {a}->{b} {:?}->{:?}: {} fwd {} rev; tris {:?}",
+                    m.verts[a as usize],
+                    m.verts[b as usize],
+                    ts.len(),
+                    r,
+                    ts.iter().map(|&t| m.tris[t as usize]).collect::<Vec<_>>()
+                );
             }
         }
         for (a, b) in m.self_intersections(2) {
             for t in [a, b] {
-                println!("   tri {t} {:?} degenerate {}", m.tri_points(t as usize), m.is_degenerate(t as usize));
+                println!(
+                    "   tri {t} {:?} degenerate {}",
+                    m.tri_points(t as usize),
+                    m.is_degenerate(t as usize)
+                );
             }
         }
     }

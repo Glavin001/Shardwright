@@ -1,7 +1,6 @@
 //! Level-1 structural fragments: material-aware fracture modes (Stage 3/4)
 //! with agglomeration (method B) as the fallback.
 
-use rayon::prelude::*;
 use crate::assemble::ComponentCells;
 use frac_core::input::PartMeta;
 use frac_core::*;
@@ -9,6 +8,7 @@ use frac_geom::bvh::Bvh;
 use frac_geom::inside::MeshQuery;
 use frac_geom::{Aabb, DVec3, TriMesh};
 use frac_material::MaterialLibrary;
+use rayon::prelude::*;
 use std::collections::BTreeMap;
 
 /// Analysis-cell adjacency of one component: (a, b, shared area, w_g).
@@ -24,7 +24,9 @@ pub fn analysis_adjacency(
     let mut acc: BTreeMap<(u32, u32), (f64, f64, bool)> = BTreeMap::new(); // area, Σ area*w, forbidden
     let gref = lib.reference_fracture_energy.max(1e-12);
     for it in &asset.interfaces {
-        let CellOrWorld::Cell(cb) = it.cells.1 else { continue };
+        let CellOrWorld::Cell(cb) = it.cells.1 else {
+            continue;
+        };
         let ca = it.cells.0;
         if !comp.cells.contains(&ca.0) || !comp.cells.contains(&cb.0) {
             continue;
@@ -39,7 +41,11 @@ pub fn analysis_adjacency(
             Some(m) => lib.interface_fracture_energy(m),
             None => lib.fracture_energy(comp.material, n, comp.grain.map(|g| g.to_array())),
         };
-        let w = if material_aware { (gf / gref).max(1e-12).sqrt() } else { 1.0 };
+        let w = if material_aware {
+            (gf / gref).max(1e-12).sqrt()
+        } else {
+            1.0
+        };
         let mut c = DVec3::ZERO;
         let mut ar = 0.0;
         for p in &it.polygons {
@@ -55,7 +61,20 @@ pub fn analysis_adjacency(
         e.2 |= forb;
     }
     acc.into_iter()
-        .map(|((a, b), (area, aw, forb))| (a, b, area, if forb { f64::INFINITY } else if area > 0.0 { aw / area } else { 1.0 }))
+        .map(|((a, b), (area, aw, forb))| {
+            (
+                a,
+                b,
+                area,
+                if forb {
+                    f64::INFINITY
+                } else if area > 0.0 {
+                    aw / area
+                } else {
+                    1.0
+                },
+            )
+        })
         .collect()
 }
 
@@ -73,8 +92,8 @@ pub fn cell_meshes(comp: &Component) -> Vec<TriMesh> {
         tris[c].extend(e.tris.iter().copied());
     }
     for p in &g.patches {
-        let a = (p.cells.0 .0 - comp.cells.start) as usize;
-        let b = (p.cells.1 .0 - comp.cells.start) as usize;
+        let a = (p.cells.0.0 - comp.cells.start) as usize;
+        let b = (p.cells.1.0 - comp.cells.start) as usize;
         for t in &p.tris {
             tris[a].push(*t);
             tris[b].push([t[0], t[2], t[1]]);
@@ -83,7 +102,8 @@ pub fn cell_meshes(comp: &Component) -> Vec<TriMesh> {
     tris.into_par_iter()
         .map(|t| {
             // same mesh as TriMesh { verts: g.verts, tris }.compact()
-            let mut used: std::collections::HashMap<u32, u32> = std::collections::HashMap::with_capacity(t.len());
+            let mut used: std::collections::HashMap<u32, u32> =
+                std::collections::HashMap::with_capacity(t.len());
             let mut verts = Vec::new();
             let tris = t
                 .iter()
@@ -114,7 +134,11 @@ impl<'a> CellLocator<'a> {
         let queries: Vec<MeshQuery<'a>> = meshes.par_iter().map(MeshQuery::new).collect();
         let boxes: Vec<Aabb> = meshes.iter().map(|m| m.aabb()).collect();
         let bvh = Bvh::build(&boxes);
-        CellLocator { queries, boxes, bvh }
+        CellLocator {
+            queries,
+            boxes,
+            bvh,
+        }
     }
     pub fn locate(&self, p: DVec3) -> u32 {
         let q = Aabb { min: p, max: p };
@@ -127,7 +151,12 @@ impl<'a> CellLocator<'a> {
         // nearest cell boundary
         let mut best = (f64::INFINITY, 0u32);
         let bb_d: Vec<(f64, u32)> = {
-            let mut v: Vec<(f64, u32)> = self.boxes.iter().enumerate().map(|(i, b)| (b.dist2(p), i as u32)).collect();
+            let mut v: Vec<(f64, u32)> = self
+                .boxes
+                .iter()
+                .enumerate()
+                .map(|(i, b)| (b.dist2(p), i as u32))
+                .collect();
             v.sort_by(|a, b| a.partial_cmp(b).unwrap());
             v
         };
@@ -160,7 +189,11 @@ pub struct ModesConfig<'a> {
 }
 
 /// Elastic material for a component (transversely isotropic wood).
-pub fn elastic_material(lib: &MaterialLibrary, m: MaterialId, grain: Option<DVec3>) -> frac_fem::ElasticMaterial {
+pub fn elastic_material(
+    lib: &MaterialLibrary,
+    m: MaterialId,
+    grain: Option<DVec3>,
+) -> frac_fem::ElasticMaterial {
     let mat = lib.material(m);
     match (&mat.anisotropy, grain) {
         (Some(a), Some(g)) => frac_fem::ElasticMaterial {
@@ -178,7 +211,12 @@ pub fn elastic_material(lib: &MaterialLibrary, m: MaterialId, grain: Option<DVec
         },
         _ => {
             let e = lib.elastic(m);
-            frac_fem::ElasticMaterial { youngs: e.youngs, poisson: e.poisson, density: e.density, transverse: None }
+            frac_fem::ElasticMaterial {
+                youngs: e.youngs,
+                poisson: e.poisson,
+                density: e.density,
+                transverse: None,
+            }
         }
     }
 }
@@ -199,20 +237,41 @@ pub fn level1(
     let na = info.n_analysis as usize;
     let mut warnings = Vec::new();
     if na <= 1 {
-        return Level1Result { labels: vec![0; na], method: "single".into(), jumps: Vec::new(), warnings };
+        return Level1Result {
+            labels: vec![0; na],
+            method: "single".into(),
+            jumps: Vec::new(),
+            warnings,
+        };
     }
     let target = target.clamp(1, na);
-    let centroids: Vec<DVec3> = asset.analysis_cells[comp.analysis_cells.start as usize..comp.analysis_cells.end as usize].iter().map(|a| a.mass.com).collect();
-    let volumes: Vec<f64> = asset.analysis_cells[comp.analysis_cells.start as usize..comp.analysis_cells.end as usize].iter().map(|a| a.mass.volume).collect();
+    let centroids: Vec<DVec3> = asset.analysis_cells
+        [comp.analysis_cells.start as usize..comp.analysis_cells.end as usize]
+        .iter()
+        .map(|a| a.mass.com)
+        .collect();
+    let volumes: Vec<f64> = asset.analysis_cells
+        [comp.analysis_cells.start as usize..comp.analysis_cells.end as usize]
+        .iter()
+        .map(|a| a.mass.volume)
+        .collect();
     if cfg.settings.enabled && !comp.unfractured {
         match run_modes(asset, comp, info, adj, lib, meta, cfg, target) {
             Ok(r) => return r,
-            Err(e) => warnings.push(format!("component '{}': fracture modes failed ({e}); using agglomeration", comp.name)),
+            Err(e) => warnings.push(format!(
+                "component '{}': fracture modes failed ({e}); using agglomeration",
+                comp.name
+            )),
         }
     }
     let labels = frac_hierarchy::agglomerate(&centroids, &volumes, adj, target, compactness, None);
     let labels = frac_hierarchy::connected_labels(&labels, adj);
-    Level1Result { labels, method: "agglomeration".into(), jumps: Vec::new(), warnings }
+    Level1Result {
+        labels,
+        method: "agglomeration".into(),
+        jumps: Vec::new(),
+        warnings,
+    }
 }
 
 /// `modes.discretization` setting → frac-modes discretization (`None`: the
@@ -223,7 +282,9 @@ pub fn mode_discretization(name: &str) -> Result<Option<frac_modes::Discretizati
         "p1" => Ok(None),
         "full" => Ok(Some(frac_modes::Discretization::Full)),
         "cell-p1" => Ok(Some(frac_modes::Discretization::CellPolynomial(1))),
-        other => Err(format!("unknown modes.discretization '{other}' (translational, p1, full, cell-p1)")),
+        other => Err(format!(
+            "unknown modes.discretization '{other}' (translational, p1, full, cell-p1)"
+        )),
     }
 }
 
@@ -241,7 +302,8 @@ fn run_modes(
     let s = cfg.settings;
     let t_start = std::time::Instant::now();
     // analysis resolution: tet edge <= ratio * median analysis cell diameter
-    let mut diam: Vec<f64> = asset.analysis_cells[comp.analysis_cells.start as usize..comp.analysis_cells.end as usize]
+    let mut diam: Vec<f64> = asset.analysis_cells
+        [comp.analysis_cells.start as usize..comp.analysis_cells.end as usize]
         .iter()
         .map(|a| a.mass.volume.max(0.0).cbrt())
         .collect();
@@ -262,7 +324,9 @@ fn run_modes(
         .tets
         .par_iter()
         .map(|t| {
-            let c = t.iter().fold(DVec3::ZERO, |a, &v| a + DVec3::from_array(mesh.verts[v as usize])) / 4.0;
+            let c = t.iter().fold(DVec3::ZERO, |a, &v| {
+                a + DVec3::from_array(mesh.verts[v as usize])
+            }) / 4.0;
             let lc = loc.locate(c);
             info.cell_analysis[lc as usize]
         })
@@ -273,7 +337,9 @@ fn run_modes(
     let wmap: BTreeMap<(u32, u32), f64> = adj.iter().map(|&(a, b, _, w)| ((a, b), w)).collect();
     let weight = move |a: u32, b: u32| -> f64 { *wmap.get(&(a.min(b), a.max(b))).unwrap_or(&1.0) };
     let anchored: Vec<u32> = match cfg.anchor_height {
-        Some(h) => (0..mesh.verts.len() as u32).filter(|&v| mesh.verts[v as usize][1] <= h + 0.5 * edge).collect(),
+        Some(h) => (0..mesh.verts.len() as u32)
+            .filter(|&v| mesh.verts[v as usize][1] <= h + 0.5 * edge)
+            .collect(),
         None => Vec::new(),
     };
     let solver = match s.solver.as_str() {
@@ -301,7 +367,11 @@ fn run_modes(
             multi_start: s.multi_start,
         },
     };
-    let volumes: Vec<f64> = asset.analysis_cells[comp.analysis_cells.start as usize..comp.analysis_cells.end as usize].iter().map(|a| a.mass.volume).collect();
+    let volumes: Vec<f64> = asset.analysis_cells
+        [comp.analysis_cells.start as usize..comp.analysis_cells.end as usize]
+        .iter()
+        .map(|a| a.mass.volume)
+        .collect();
     // fragments below a quarter of the mean target size are merged
     let min_volume = 0.25 * volumes.iter().sum::<f64>() / target.max(1) as f64;
     if let Some(dir) = std::env::var_os("FRAC_MODES_DUMP") {
@@ -318,7 +388,8 @@ fn run_modes(
             target: target as u32,
             min_volume,
         };
-        let path = std::path::Path::new(&dir).join(format!("component_{}.modes.txt", cfg.component));
+        let path =
+            std::path::Path::new(&dir).join(format!("component_{}.modes.txt", cfg.component));
         if let Err(e) = std::fs::write(&path, dump.to_text()) {
             eprintln!("FRAC_MODES_DUMP: cannot write {}: {e}", path.display());
         }
@@ -326,7 +397,11 @@ fn run_modes(
     let t_modes = std::time::Instant::now();
     let out = frac_modes::compute_modes(&input)?;
     if std::env::var_os("FRAC_LOG").is_some() {
-        let stages: Vec<String> = out.timings_ms.iter().map(|(k, v)| format!("{k} {:.2}", v / 1e3)).collect();
+        let stages: Vec<String> = out
+            .timings_ms
+            .iter()
+            .map(|(k, v)| format!("{k} {:.2}", v / 1e3))
+            .collect();
         eprintln!(
             "    [modes] component {} '{}': {} analysis cells, {} tets, {} unknowns, {}: setup {:.2} s (tetrahedralize {t_tet:.2}, locate {t_loc:.2}), modes {:.2} s ({})",
             cfg.component,
@@ -349,24 +424,48 @@ fn run_modes(
         Some(mj) => (adj_pairs, mj),
         None => (out.groups.clone(), out.max_jump()),
     };
-    let (l1, groups, mj) = frac_modes::segment_from_jumps(info.n_analysis, &seg_groups, &max_jump, adj, &volumes, target as u32, min_volume);
+    let (l1, groups, mj) = frac_modes::segment_from_jumps(
+        info.n_analysis,
+        &seg_groups,
+        &max_jump,
+        adj,
+        &volumes,
+        target as u32,
+        min_volume,
+    );
     let mut warnings = Vec::new();
     if !l1.hit_target {
-        warnings.push(format!("component '{}': modes segmentation reached {} fragments (target {target})", comp.name, l1.n_fragments));
+        warnings.push(format!(
+            "component '{}': modes segmentation reached {} fragments (target {target})",
+            comp.name, l1.n_fragments
+        ));
     }
     let not_conv = out.converged.iter().filter(|&&c| !c).count();
     if not_conv > 0 {
-        warnings.push(format!("component '{}': {not_conv} ICCM modes did not converge", comp.name));
+        warnings.push(format!(
+            "component '{}': {not_conv} ICCM modes did not converge",
+            comp.name
+        ));
     }
-    let jumps = groups.iter().zip(mj.iter()).map(|(&(a, b), &j)| (a, b, j)).collect();
+    let jumps = groups
+        .iter()
+        .zip(mj.iter())
+        .map(|(&(a, b), &j)| (a, b, j))
+        .collect();
     // ensure labels are connected over the exact adjacency
     let labels = frac_hierarchy::connected_labels(&l1.labels, adj);
     if let Some(dir) = std::env::var_os("FRAC_MODES_DUMP") {
         let text: String = labels.iter().map(|l| format!("{l}\n")).collect();
-        let path = std::path::Path::new(&dir).join(format!("component_{}.labels.txt", cfg.component));
+        let path =
+            std::path::Path::new(&dir).join(format!("component_{}.labels.txt", cfg.component));
         if let Err(e) = std::fs::write(&path, text) {
             eprintln!("FRAC_MODES_DUMP: cannot write {}: {e}", path.display());
         }
     }
-    Ok(Level1Result { labels, method: format!("modes({})", out.solver_used), jumps, warnings })
+    Ok(Level1Result {
+        labels,
+        method: format!("modes({})", out.solver_used),
+        jumps,
+        warnings,
+    })
 }

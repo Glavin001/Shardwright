@@ -108,7 +108,10 @@ pub fn grid_cells(m: &TetMesh, lo: [f64; 3], hi: [f64; 3], dims: [usize; 3]) -> 
     let mut used: Vec<usize> = raw.clone();
     used.sort_unstable();
     used.dedup();
-    let labels = raw.iter().map(|r| used.binary_search(r).unwrap() as u32).collect();
+    let labels = raw
+        .iter()
+        .map(|r| used.binary_search(r).unwrap() as u32)
+        .collect();
     (labels, used.len() as u32)
 }
 
@@ -140,7 +143,9 @@ pub fn group_centroids(m: &TetMesh, cells: &[u32], groups: &[(u32, u32)]) -> Vec
         }
         acc[g][3] += ar;
     }
-    acc.iter().map(|a| [a[0] / a[3], a[1] / a[3], a[2] / a[3]]).collect()
+    acc.iter()
+        .map(|a| [a[0] / a[3], a[1] / a[3], a[2] / a[3]])
+        .collect()
 }
 
 pub fn steel() -> ElasticMaterial {
@@ -166,7 +171,12 @@ pub fn case(solid: &TriMesh, h: f64, lo: [f64; 3], hi: [f64; 3], dims: [usize; 3
     }
 }
 
-pub fn run(c: &Case, w: &(dyn Fn(u32, u32) -> f64 + Sync), anchors: &[u32], params: ModesParams) -> ModesOutput {
+pub fn run(
+    c: &Case,
+    w: &(dyn Fn(u32, u32) -> f64 + Sync),
+    anchors: &[u32],
+    params: ModesParams,
+) -> ModesOutput {
     let input = ModesInput {
         mesh: &c.mesh,
         tet_material: &c.mats,

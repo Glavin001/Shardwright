@@ -28,7 +28,11 @@ impl Bvh {
         if boxes.is_empty() {
             return Bvh { nodes, order };
         }
-        nodes.push(Node { bbox: Aabb::EMPTY, start: 0, count: 0 });
+        nodes.push(Node {
+            bbox: Aabb::EMPTY,
+            start: 0,
+            count: 0,
+        });
         // iterative build: stack of (node index, start, end)
         let mut stack = vec![(0usize, 0usize, boxes.len())];
         while let Some((ni, s, e)) = stack.pop() {
@@ -49,11 +53,21 @@ impl Bvh {
             order[s..e].select_nth_unstable_by(mid - s, |&a, &b| {
                 let ca = centers[a as usize][axis];
                 let cbv = centers[b as usize][axis];
-                ca.partial_cmp(&cbv).unwrap_or(std::cmp::Ordering::Equal).then(a.cmp(&b))
+                ca.partial_cmp(&cbv)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then(a.cmp(&b))
             });
             let left = nodes.len();
-            nodes.push(Node { bbox: Aabb::EMPTY, start: 0, count: 0 });
-            nodes.push(Node { bbox: Aabb::EMPTY, start: 0, count: 0 });
+            nodes.push(Node {
+                bbox: Aabb::EMPTY,
+                start: 0,
+                count: 0,
+            });
+            nodes.push(Node {
+                bbox: Aabb::EMPTY,
+                start: 0,
+                count: 0,
+            });
             nodes[ni].start = left as u32;
             nodes[ni].count = 0;
             stack.push((left, s, mid));
@@ -121,7 +135,12 @@ impl Bvh {
     /// Nearest item only if every item is farther than `r2` (squared):
     /// returns `None` as soon as an item with `item_d2 <= r2` is found
     /// (early exit for Hausdorff-style maxima), else the nearest item.
-    pub fn nearest_beyond(&self, p: DVec3, r2: f64, mut item_d2: impl FnMut(u32) -> f64) -> Option<(u32, f64)> {
+    pub fn nearest_beyond(
+        &self,
+        p: DVec3,
+        r2: f64,
+        mut item_d2: impl FnMut(u32) -> f64,
+    ) -> Option<(u32, f64)> {
         if self.nodes.is_empty() {
             return None;
         }
@@ -228,11 +247,7 @@ impl Bvh {
                                 continue;
                             }
                             if boxes[x as usize].overlaps(&boxes[y as usize]) {
-                                if x < y {
-                                    f(x, y)
-                                } else {
-                                    f(y, x)
-                                }
+                                if x < y { f(x, y) } else { f(y, x) }
                             }
                         }
                     }

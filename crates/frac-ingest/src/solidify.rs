@@ -13,7 +13,14 @@ use std::collections::BTreeMap;
 /// The 6 tetrahedra of the Freudenthal (Kuhn) subdivision of a cube, as
 /// corner indices (bit 0 = x, bit 1 = y, bit 2 = z). All share the 0-7
 /// diagonal, which makes the subdivision consistent across cubes.
-const KUHN: [[usize; 4]; 6] = [[0, 1, 3, 7], [0, 3, 2, 7], [0, 2, 6, 7], [0, 6, 4, 7], [0, 4, 5, 7], [0, 5, 1, 7]];
+const KUHN: [[usize; 4]; 6] = [
+    [0, 1, 3, 7],
+    [0, 3, 2, 7],
+    [0, 2, 6, 7],
+    [0, 6, 4, 7],
+    [0, 4, 5, 7],
+    [0, 5, 1, 7],
+];
 
 pub fn solidify(m: &TriMesh, resolution: u32) -> Result<TriMesh, String> {
     if m.tris.is_empty() {
@@ -79,17 +86,26 @@ pub fn solidify(m: &TriMesh, resolution: u32) -> Result<TriMesh, String> {
                     let cin = tin.iter().fold(DVec3::ZERO, |a, &c| a + cp[c]) / tin.len() as f64;
                     let cout = tout.iter().fold(DVec3::ZERO, |a, &c| a + cp[c]) / tout.len() as f64;
                     let outward = cout - cin;
-                    let emit = |a: u32, b: u32, c: u32, verts: &Vec<DVec3>, tris: &mut Vec<[u32; 3]>| {
-                        let n = (verts[b as usize] - verts[a as usize]).cross(verts[c as usize] - verts[a as usize]);
-                        if n.dot(outward) >= 0.0 {
-                            tris.push([a, b, c]);
-                        } else {
-                            tris.push([a, c, b]);
-                        }
-                    };
+                    let emit =
+                        |a: u32, b: u32, c: u32, verts: &Vec<DVec3>, tris: &mut Vec<[u32; 3]>| {
+                            let n = (verts[b as usize] - verts[a as usize])
+                                .cross(verts[c as usize] - verts[a as usize]);
+                            if n.dot(outward) >= 0.0 {
+                                tris.push([a, b, c]);
+                            } else {
+                                tris.push([a, c, b]);
+                            }
+                        };
                     if tin.len() == 1 || tout.len() == 1 {
-                        let (lone, others) = if tin.len() == 1 { (tin[0], &tout) } else { (tout[0], &tin) };
-                        let v: Vec<u32> = others.iter().map(|&o| get_vert(cg[lone], cg[o], cp[lone], cp[o], &mut verts)).collect();
+                        let (lone, others) = if tin.len() == 1 {
+                            (tin[0], &tout)
+                        } else {
+                            (tout[0], &tin)
+                        };
+                        let v: Vec<u32> = others
+                            .iter()
+                            .map(|&o| get_vert(cg[lone], cg[o], cp[lone], cp[o], &mut verts))
+                            .collect();
                         emit(v[0], v[1], v[2], &verts, &mut tris);
                     } else {
                         // 2-2 split: quad
@@ -115,7 +131,10 @@ pub fn solidify(m: &TriMesh, resolution: u32) -> Result<TriMesh, String> {
     }
     // feature-preserving projection onto the source surface
     let projected = project_to_surface(&out, m, 0.5 * h);
-    if projected.topology().is_closed_manifold() && projected.self_intersections(1).is_empty() && projected.signed_volume() > 0.0 {
+    if projected.topology().is_closed_manifold()
+        && projected.self_intersections(1).is_empty()
+        && projected.signed_volume() > 0.0
+    {
         out = projected;
     }
     if out.signed_volume() <= 0.0 {
@@ -131,7 +150,10 @@ fn project_to_surface(m: &TriMesh, src: &TriMesh, maxd: f64) -> TriMesh {
     let targets: Vec<Option<DVec3>> = m
         .verts
         .par_iter()
-        .map(|&v| q.closest_point(v).and_then(|(p, d2, _)| if d2.sqrt() <= maxd { Some(p) } else { None }))
+        .map(|&v| {
+            q.closest_point(v)
+                .and_then(|(p, d2, _)| if d2.sqrt() <= maxd { Some(p) } else { None })
+        })
         .collect();
     let mut out = m.clone();
     let mut vt: Vec<Vec<u32>> = vec![Vec::new(); m.verts.len()];

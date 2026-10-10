@@ -35,7 +35,9 @@ pub(crate) fn write_glb_container(json: &[u8], bin: Option<&[u8]>) -> Vec<u8> {
 /// file in place (header and JSON are inserted in front of it), avoiding a
 /// fresh multi-GB allocation and copy for building-scale scenes.
 pub(crate) fn write_glb_container_owned(json: &[u8], bin: Option<Vec<u8>>) -> Vec<u8> {
-    let Some(mut b) = bin else { return write_glb_container(json, None) };
+    let Some(mut b) = bin else {
+        return write_glb_container(json, None);
+    };
     let json_len = json.len().next_multiple_of(4);
     let bin_len = b.len().next_multiple_of(4);
     let total = 12 + 8 + json_len + 8 + bin_len;

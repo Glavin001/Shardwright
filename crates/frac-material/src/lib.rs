@@ -176,7 +176,8 @@ pub struct Elastic {
 
 impl MaterialLibrary {
     pub fn from_toml(s: &str) -> Result<Self, FracError> {
-        let lib: MaterialLibrary = toml::from_str(s).map_err(|e| FracError::new(Stage::Config, "materials.toml", e.to_string()))?;
+        let lib: MaterialLibrary = toml::from_str(s)
+            .map_err(|e| FracError::new(Stage::Config, "materials.toml", e.to_string()))?;
         lib.validate()?;
         Ok(lib)
     }
@@ -185,7 +186,10 @@ impl MaterialLibrary {
         let err = |m: String| Err(FracError::new(Stage::Config, "materials.toml", m));
         let parts: Vec<&str> = self.library_version.split('.').collect();
         if parts.len() != 3 || parts.iter().any(|p| p.parse::<u64>().is_err()) {
-            return err(format!("library_version '{}' is not semver", self.library_version));
+            return err(format!(
+                "library_version '{}' is not semver",
+                self.library_version
+            ));
         }
         let mut seen = BTreeMap::new();
         for (i, m) in self.materials.iter().enumerate() {
@@ -196,7 +200,10 @@ impl MaterialLibrary {
                 return err(format!("material '{}': density must be > 0", m.id));
             }
             if m.youngs_modulus.is_none() && m.anisotropy.is_none() {
-                return err(format!("material '{}': needs youngs_modulus or anisotropy", m.id));
+                return err(format!(
+                    "material '{}': needs youngs_modulus or anisotropy",
+                    m.id
+                ));
             }
             if !(m.poisson > -1.0 && m.poisson < 0.5) {
                 return err(format!("material '{}': poisson out of range", m.id));
@@ -208,7 +215,10 @@ impl MaterialLibrary {
             }
             if let Some(j) = &m.joint_interface_material {
                 if self.interface_index(j).is_none() {
-                    return err(format!("material '{}': unknown interface material '{j}'", m.id));
+                    return err(format!(
+                        "material '{}': unknown interface material '{j}'",
+                        m.id
+                    ));
                 }
             }
         }
@@ -230,7 +240,10 @@ impl MaterialLibrary {
     }
 
     pub fn material_id(&self, id: &str) -> Option<MaterialId> {
-        self.materials.iter().position(|m| m.id == id).map(|i| MaterialId(i as u16))
+        self.materials
+            .iter()
+            .position(|m| m.id == id)
+            .map(|i| MaterialId(i as u16))
     }
     pub fn material(&self, id: MaterialId) -> &Material {
         &self.materials[id.idx()]
@@ -241,10 +254,13 @@ impl MaterialLibrary {
         self.interface_materials.iter().position(|m| m.id == id)
     }
     pub fn interface_material_id(&self, id: &str) -> Option<MaterialId> {
-        self.interface_index(id).map(|k| MaterialId((self.materials.len() + k) as u16))
+        self.interface_index(id)
+            .map(|k| MaterialId((self.materials.len() + k) as u16))
     }
     pub fn interface_material(&self, id: MaterialId) -> Option<&InterfaceMaterial> {
-        id.idx().checked_sub(self.materials.len()).and_then(|k| self.interface_materials.get(k))
+        id.idx()
+            .checked_sub(self.materials.len())
+            .and_then(|k| self.interface_materials.get(k))
     }
     pub fn noise(&self, id: &str) -> Option<&NoiseProfile> {
         self.noise_profiles.iter().find(|n| n.id == id)
@@ -259,15 +275,30 @@ impl MaterialLibrary {
             (None, Some(e)) => (e, e / (2.0 * (1.0 + m.poisson))),
             _ => (1e9, 1e9 / 2.4),
         };
-        Elastic { youngs: e, poisson: m.poisson, shear: g, density: m.density }
+        Elastic {
+            youngs: e,
+            poisson: m.poisson,
+            shear: g,
+            density: m.density,
+        }
     }
 
     /// Fracture energy for a crack plane with unit normal `n` in a material
     /// with grain direction `grain` (spec §4.2): along-grain cracks have
     /// normals perpendicular to the grain.
-    pub fn fracture_energy(&self, id: MaterialId, n: Option<[f64; 3]>, grain: Option<[f64; 3]>) -> f64 {
+    pub fn fracture_energy(
+        &self,
+        id: MaterialId,
+        n: Option<[f64; 3]>,
+        grain: Option<[f64; 3]>,
+    ) -> f64 {
         let m = self.material(id);
-        match (m.fracture_energy_along_grain, m.fracture_energy_across_grain, n, grain) {
+        match (
+            m.fracture_energy_along_grain,
+            m.fracture_energy_across_grain,
+            n,
+            grain,
+        ) {
             (Some(ga), Some(gx), Some(n), Some(g)) => {
                 let c = (n[0] * g[0] + n[1] * g[1] + n[2] * g[2]).abs().min(1.0);
                 // c = 1: crack plane across the grain; c = 0: along the grain
@@ -279,7 +310,9 @@ impl MaterialLibrary {
     }
 
     pub fn interface_fracture_energy(&self, id: MaterialId) -> f64 {
-        self.interface_material(id).and_then(|m| m.fracture_energy).unwrap_or(self.reference_fracture_energy)
+        self.interface_material(id)
+            .and_then(|m| m.fracture_energy)
+            .unwrap_or(self.reference_fracture_energy)
     }
 
     /// Weibull modulus for strength scaling.
@@ -287,7 +320,10 @@ impl MaterialLibrary {
         if let Some(im) = self.interface_material(id) {
             return im.weibull_modulus;
         }
-        self.materials.get(id.idx()).map(|m| m.weibull_modulus).unwrap_or(8.0)
+        self.materials
+            .get(id.idx())
+            .map(|m| m.weibull_modulus)
+            .unwrap_or(8.0)
     }
 
     /// Canonical identity hash of the library content.

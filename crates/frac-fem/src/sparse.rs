@@ -4,8 +4,8 @@
 use faer::dyn_stack::{MemBuffer, MemStack};
 use faer::linalg::cholesky::llt::factor::LltRegularization;
 use faer::sparse::linalg::cholesky::{
-    factorize_symbolic_cholesky, CholeskySymbolicParams, LltRef, SymbolicCholesky,
-    SymbolicCholeskyRaw, SymmetricOrdering,
+    CholeskySymbolicParams, LltRef, SymbolicCholesky, SymbolicCholeskyRaw, SymmetricOrdering,
+    factorize_symbolic_cholesky,
 };
 use faer::sparse::{SparseColMatRef, SymbolicSparseColMatRef};
 use faer::{Conj, Mat, MatMut, Par, Side};
@@ -44,7 +44,13 @@ impl CsrMatrix {
         for i in 0..n_rows {
             row_ptr[i + 1] += row_ptr[i];
         }
-        CsrMatrix { n_rows, n_cols, row_ptr, col_idx, vals }
+        CsrMatrix {
+            n_rows,
+            n_cols,
+            row_ptr,
+            col_idx,
+            vals,
+        }
     }
 
     pub fn nnz(&self) -> usize {
@@ -120,7 +126,13 @@ impl CsrMatrix {
                 pos[c[k]] += 1;
             }
         }
-        CsrMatrix { n_rows: self.n_cols, n_cols: self.n_rows, row_ptr, col_idx, vals }
+        CsrMatrix {
+            n_rows: self.n_cols,
+            n_cols: self.n_rows,
+            row_ptr,
+            col_idx,
+            vals,
+        }
     }
 
     /// Diagonal entries (zero where absent).
@@ -169,7 +181,13 @@ impl CsrMatrix {
         for i in 0..n_r {
             row_ptr[i + 1] += row_ptr[i];
         }
-        CsrMatrix { n_rows: n_r, n_cols: n_c, row_ptr, col_idx, vals }
+        CsrMatrix {
+            n_rows: n_r,
+            n_cols: n_c,
+            row_ptr,
+            col_idx,
+            vals,
+        }
     }
 
     /// `alpha*A + beta*B` (same shape; union pattern).
@@ -203,7 +221,13 @@ impl CsrMatrix {
             }
             row_ptr[i + 1] = col_idx.len();
         }
-        CsrMatrix { n_rows: self.n_rows, n_cols: self.n_cols, row_ptr, col_idx, vals }
+        CsrMatrix {
+            n_rows: self.n_rows,
+            n_cols: self.n_cols,
+            row_ptr,
+            col_idx,
+            vals,
+        }
     }
 
     /// Adds `d[i]` to the diagonal (the diagonal must be in the pattern or
@@ -255,7 +279,13 @@ impl CsrMatrix {
             }
             row_ptr[j + 1] = col_idx.len();
         }
-        CsrMatrix { n_rows: n, n_cols: n, row_ptr, col_idx, vals }
+        CsrMatrix {
+            n_rows: n,
+            n_cols: n,
+            row_ptr,
+            col_idx,
+            vals,
+        }
     }
 
     /// Sparse product `A B` (Gustavson; deterministic accumulation order).
@@ -290,7 +320,13 @@ impl CsrMatrix {
             }
             row_ptr[i + 1] = col_idx.len();
         }
-        CsrMatrix { n_rows: self.n_rows, n_cols: n, row_ptr, col_idx, vals }
+        CsrMatrix {
+            n_rows: self.n_rows,
+            n_cols: n,
+            row_ptr,
+            col_idx,
+            vals,
+        }
     }
 
     /// Dense copy (row-major), for tests and tiny problems.
@@ -316,7 +352,11 @@ pub struct SolveWork {
 
 impl Default for SolveWork {
     fn default() -> Self {
-        SolveWork { mem: None, mat: Mat::zeros(0, 0), x: Vec::new() }
+        SolveWork {
+            mem: None,
+            mat: Mat::zeros(0, 0),
+            x: Vec::new(),
+        }
     }
 }
 
@@ -344,24 +384,37 @@ impl SparseCholesky {
     /// run through a lean allocation-free loop; best for small/medium
     /// matrices solved many times.
     pub fn new_simplicial(a: &CsrMatrix) -> Result<Self, String> {
-        Self::with_threshold(a, faer::sparse::linalg::SupernodalThreshold::FORCE_SIMPLICIAL)
+        Self::with_threshold(
+            a,
+            faer::sparse::linalg::SupernodalThreshold::FORCE_SIMPLICIAL,
+        )
     }
 
     /// Forces the supernodal factorization (dense blocks: about half the
     /// memory traffic per solve of the simplicial one); best for large
     /// matrices.
     pub fn new_supernodal(a: &CsrMatrix) -> Result<Self, String> {
-        Self::with_threshold(a, faer::sparse::linalg::SupernodalThreshold::FORCE_SUPERNODAL)
+        Self::with_threshold(
+            a,
+            faer::sparse::linalg::SupernodalThreshold::FORCE_SUPERNODAL,
+        )
     }
 
-    fn with_threshold(a: &CsrMatrix, th: faer::sparse::linalg::SupernodalThreshold) -> Result<Self, String> {
+    fn with_threshold(
+        a: &CsrMatrix,
+        th: faer::sparse::linalg::SupernodalThreshold,
+    ) -> Result<Self, String> {
         assert_eq!(a.n_rows, a.n_cols);
         let n = a.n_rows;
         // a symmetric CSR matrix is its own CSC
         let sym = SymbolicSparseColMatRef::new_checked(n, n, &a.row_ptr, None, &a.col_idx);
-        let params = CholeskySymbolicParams { supernodal_flop_ratio_threshold: th, ..Default::default() };
-        let symbolic = factorize_symbolic_cholesky(sym, Side::Lower, SymmetricOrdering::Amd, params)
-            .map_err(|e| format!("symbolic cholesky failed: {e:?}"))?;
+        let params = CholeskySymbolicParams {
+            supernodal_flop_ratio_threshold: th,
+            ..Default::default()
+        };
+        let symbolic =
+            factorize_symbolic_cholesky(sym, Side::Lower, SymmetricOrdering::Amd, params)
+                .map_err(|e| format!("symbolic cholesky failed: {e:?}"))?;
         let simplicial = match symbolic.raw() {
             SymbolicCholeskyRaw::Simplicial(sm) => {
                 let cp = sm.col_ptr().to_vec();
@@ -397,7 +450,8 @@ impl SparseCholesky {
         let sym = SymbolicSparseColMatRef::new_checked(n, n, &a.row_ptr, None, &a.col_idx);
         let mat = SparseColMatRef::new(sym, &a.vals);
         let mut mem = MemBuffer::new(
-            self.symbolic.factorize_numeric_llt_scratch::<f64>(Par::Seq, Default::default()),
+            self.symbolic
+                .factorize_numeric_llt_scratch::<f64>(Par::Seq, Default::default()),
         );
         let stack = MemStack::new(&mut mem);
         self.symbolic
@@ -425,9 +479,17 @@ impl SparseCholesky {
 
     /// Solves `A X = B` in place for a column-major block of right-hand sides.
     pub fn solve_mat(&self, rhs: MatMut<'_, f64>) {
-        let mut mem = MemBuffer::new(self.symbolic.solve_in_place_scratch::<f64>(rhs.ncols(), Par::Seq));
+        let mut mem = MemBuffer::new(
+            self.symbolic
+                .solve_in_place_scratch::<f64>(rhs.ncols(), Par::Seq),
+        );
         let stack = MemStack::new(&mut mem);
-        LltRef::new(&self.symbolic, &self.values).solve_in_place_with_conj(Conj::No, rhs, Par::Seq, stack);
+        LltRef::new(&self.symbolic, &self.values).solve_in_place_with_conj(
+            Conj::No,
+            rhs,
+            Par::Seq,
+            stack,
+        );
     }
 
     /// Solves `A x = b` in place.
@@ -477,13 +539,20 @@ impl SparseCholesky {
             w.mat = Mat::<f64>::zeros(n, 1);
         }
         if w.mem.is_none() {
-            w.mem = Some(MemBuffer::new(self.symbolic.solve_in_place_scratch::<f64>(1, Par::Seq)));
+            w.mem = Some(MemBuffer::new(
+                self.symbolic.solve_in_place_scratch::<f64>(1, Par::Seq),
+            ));
         }
         for i in 0..n {
             w.mat[(i, 0)] = b[i];
         }
         let stack = MemStack::new(w.mem.as_mut().unwrap());
-        LltRef::new(&self.symbolic, &self.values).solve_in_place_with_conj(Conj::No, w.mat.as_mut(), Par::Seq, stack);
+        LltRef::new(&self.symbolic, &self.values).solve_in_place_with_conj(
+            Conj::No,
+            w.mat.as_mut(),
+            Par::Seq,
+            stack,
+        );
         for i in 0..n {
             b[i] = w.mat[(i, 0)];
         }
@@ -553,7 +622,11 @@ mod tests {
         }
         let a2 = CsrMatrix::from_triplets(g * g, g * g, t);
         let x2: Vec<f64> = (0..g * g).map(|i| (i as f64 * 0.11).cos()).collect();
-        for ch in [SparseCholesky::new_simplicial(&a2).unwrap(), SparseCholesky::new(&a2).unwrap(), SparseCholesky::new_supernodal(&a2).unwrap()] {
+        for ch in [
+            SparseCholesky::new_simplicial(&a2).unwrap(),
+            SparseCholesky::new(&a2).unwrap(),
+            SparseCholesky::new_supernodal(&a2).unwrap(),
+        ] {
             let mut b = a2.mul(&x2);
             ch.solve_in_place(&mut b);
             for i in 0..g * g {

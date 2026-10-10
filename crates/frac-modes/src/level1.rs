@@ -59,10 +59,19 @@ fn components(n_cells: u32, groups: &[(u32, u32)], cut: &[bool]) -> (u32, Vec<u3
 /// zero jump (e.g. forbidden interfaces) are never cut. If the target is not
 /// reachable within ±10%, the closest achievable count is returned with
 /// `hit_target = false`.
-pub fn segment_level1(n_cells: u32, groups: &[(u32, u32)], max_jump: &[f64], target: u32) -> Level1 {
+pub fn segment_level1(
+    n_cells: u32,
+    groups: &[(u32, u32)],
+    max_jump: &[f64],
+    target: u32,
+) -> Level1 {
     assert_eq!(groups.len(), max_jump.len());
     // candidate thresholds: L = [0] ∪ {positive jumps}, sorted, unique
-    let mut vals: Vec<f64> = max_jump.iter().copied().filter(|v| *v > 0.0 && v.is_finite()).collect();
+    let mut vals: Vec<f64> = max_jump
+        .iter()
+        .copied()
+        .filter(|v| *v > 0.0 && v.is_finite())
+        .collect();
     vals.push(0.0);
     vals.sort_by(|a, b| a.total_cmp(b));
     vals.dedup();
@@ -113,13 +122,26 @@ pub fn segment_level1(n_cells: u32, groups: &[(u32, u32)], max_jump: &[f64], tar
     }
     let (sigma, nf, labels, cut_groups) = best;
     let hit_target = ((nf as f64) - (target as f64)).abs() <= 0.1 * target as f64;
-    Level1 { labels, n_fragments: nf, sigma, cut_groups, hit_target }
+    Level1 {
+        labels,
+        n_fragments: nf,
+        sigma,
+        cut_groups,
+        hit_target,
+    }
 }
 
 /// Merge components below `min_volume` into the adjacent component they
 /// share the most interface area with (smallest first, deterministic
 /// tie-breaks). Returns the relabelled components (dense labels).
-fn merge_small(n_comp: u32, labels: &[u32], groups: &[(u32, u32)], area: &[f64], volume: &[f64], min_volume: f64) -> (u32, Vec<u32>) {
+fn merge_small(
+    n_comp: u32,
+    labels: &[u32],
+    groups: &[(u32, u32)],
+    area: &[f64],
+    volume: &[f64],
+    min_volume: f64,
+) -> (u32, Vec<u32>) {
     let mut parent: Vec<u32> = (0..n_comp).collect();
     let mut vol = vec![0.0f64; n_comp as usize];
     for (c, &l) in labels.iter().enumerate() {
@@ -128,9 +150,13 @@ fn merge_small(n_comp: u32, labels: &[u32], groups: &[(u32, u32)], area: &[f64],
     loop {
         // current roots and their shared areas
         let root = |p: &mut Vec<u32>, x: u32| find(p, x);
-        let mut shared: std::collections::BTreeMap<(u32, u32), f64> = std::collections::BTreeMap::new();
+        let mut shared: std::collections::BTreeMap<(u32, u32), f64> =
+            std::collections::BTreeMap::new();
         for (g, &(a, b)) in groups.iter().enumerate() {
-            let (ra, rb) = (root(&mut parent, labels[a as usize]), root(&mut parent, labels[b as usize]));
+            let (ra, rb) = (
+                root(&mut parent, labels[a as usize]),
+                root(&mut parent, labels[b as usize]),
+            );
             if ra != rb {
                 *shared.entry((ra.min(rb), ra.max(rb))).or_insert(0.0) += area[g];
             }
@@ -141,14 +167,22 @@ fn merge_small(n_comp: u32, labels: &[u32], groups: &[(u32, u32)], area: &[f64],
             if parent[r as usize] != r || vol[r as usize] >= min_volume {
                 continue;
             }
-            if shared.keys().any(|&(a, b)| a == r || b == r) && small.is_none_or(|(v, _)| vol[r as usize] < v) {
+            if shared.keys().any(|&(a, b)| a == r || b == r)
+                && small.is_none_or(|(v, _)| vol[r as usize] < v)
+            {
                 small = Some((vol[r as usize], r));
             }
         }
         let Some((_, r)) = small else { break };
         let mut best: Option<(f64, u32)> = None;
         for (&(a, b), &ar) in &shared {
-            let o = if a == r { b } else if b == r { a } else { continue };
+            let o = if a == r {
+                b
+            } else if b == r {
+                a
+            } else {
+                continue;
+            };
             if best.is_none_or(|(ba, bo)| ar > ba || (ar == ba && o < bo)) {
                 best = Some((ar, o));
             }
@@ -181,14 +215,32 @@ fn merge_small(n_comp: u32, labels: &[u32], groups: &[(u32, u32)], area: &[f64],
 /// share the most area with, and σ is chosen (largest first, i.e. fewest
 /// cuts) so that the merged fragment count is closest to `target`.
 #[allow(clippy::too_many_arguments)]
-pub fn segment_level1_balanced(n_cells: u32, groups: &[(u32, u32)], max_jump: &[f64], area: &[f64], volume: &[f64], target: u32, min_volume: f64) -> Level1 {
+pub fn segment_level1_balanced(
+    n_cells: u32,
+    groups: &[(u32, u32)],
+    max_jump: &[f64],
+    area: &[f64],
+    volume: &[f64],
+    target: u32,
+    min_volume: f64,
+) -> Level1 {
     assert_eq!(groups.len(), max_jump.len());
     assert_eq!(groups.len(), area.len());
-    let mut vals: Vec<f64> = max_jump.iter().copied().filter(|v| *v > 0.0 && v.is_finite()).collect();
+    let mut vals: Vec<f64> = max_jump
+        .iter()
+        .copied()
+        .filter(|v| *v > 0.0 && v.is_finite())
+        .collect();
     vals.push(0.0);
     vals.sort_by(|a, b| a.total_cmp(b));
     vals.dedup();
-    let sigma_at = |j: usize| -> f64 { if j + 1 < vals.len() { 0.5 * (vals[j] + vals[j + 1]) } else { vals[j] } };
+    let sigma_at = |j: usize| -> f64 {
+        if j + 1 < vals.len() {
+            0.5 * (vals[j] + vals[j + 1])
+        } else {
+            vals[j]
+        }
+    };
     let eval = |sigma: f64| -> (u32, Vec<u32>) {
         let cut: Vec<bool> = max_jump.iter().map(|&v| v > sigma).collect();
         let (n, l) = components(n_cells, groups, &cut);
@@ -209,9 +261,18 @@ pub fn segment_level1_balanced(n_cells: u32, groups: &[(u32, u32)], max_jump: &[
         }
     }
     let (_, sigma, nf, labels) = best.unwrap();
-    let cut_groups = groups.iter().map(|&(a, b)| labels[a as usize] != labels[b as usize]).collect();
+    let cut_groups = groups
+        .iter()
+        .map(|&(a, b)| labels[a as usize] != labels[b as usize])
+        .collect();
     let hit_target = ((nf as f64) - (target as f64)).abs() <= 0.1 * target as f64;
-    Level1 { labels, n_fragments: nf, sigma, cut_groups, hit_target }
+    Level1 {
+        labels,
+        n_fragments: nf,
+        sigma,
+        cut_groups,
+        hit_target,
+    }
 }
 
 /// Level-1 segmentation from mode jumps over an exact analysis-cell
@@ -237,8 +298,14 @@ pub fn segment_from_jumps(
             mj.push(0.0);
         }
     }
-    let area_of: std::collections::BTreeMap<(u32, u32), f64> = adjacency.iter().map(|&(a, b, ar, _)| ((a, b), ar)).collect();
-    let areas: Vec<f64> = groups.iter().map(|&(a, b)| *area_of.get(&(a.min(b), a.max(b))).unwrap_or(&0.0)).collect();
+    let area_of: std::collections::BTreeMap<(u32, u32), f64> = adjacency
+        .iter()
+        .map(|&(a, b, ar, _)| ((a, b), ar))
+        .collect();
+    let areas: Vec<f64> = groups
+        .iter()
+        .map(|&(a, b)| *area_of.get(&(a.min(b), a.max(b))).unwrap_or(&0.0))
+        .collect();
     let l1 = segment_level1_balanced(n_cells, &groups, &mj, &areas, volume, target, min_volume);
     (l1, groups, mj)
 }
@@ -276,7 +343,9 @@ mod tests {
     fn ari_known_values() {
         assert_eq!(adjusted_rand_index(&[0, 0, 1, 1], &[5, 5, 2, 2]), 1.0);
         // sklearn: adjusted_rand_score([0,0,1,1],[0,0,1,2]) = 0.5714285714
-        assert!((adjusted_rand_index(&[0, 0, 1, 1], &[0, 0, 1, 2]) - 0.5714285714285714).abs() < 1e-12);
+        assert!(
+            (adjusted_rand_index(&[0, 0, 1, 1], &[0, 0, 1, 2]) - 0.5714285714285714).abs() < 1e-12
+        );
     }
 
     #[test]

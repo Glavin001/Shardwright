@@ -2,7 +2,7 @@
 //! plane clipping, used for collision shapes and validation.
 
 use crate::integrals::VolumeIntegrals;
-use crate::mesh::{p3, TriMesh};
+use crate::mesh::{TriMesh, p3};
 use crate::predicates::orient3d;
 use glam::DVec3;
 use serde::{Deserialize, Serialize};
@@ -83,7 +83,11 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
             return None;
         }
     }
-    let (a, b, c, d) = if orient3d(&p(i0), &p(i1), &p(i2), &p(i3)) > 0 { (i0, i2, i1, i3) } else { (i0, i1, i2, i3) };
+    let (a, b, c, d) = if orient3d(&p(i0), &p(i1), &p(i2), &p(i3)) > 0 {
+        (i0, i2, i1, i3)
+    } else {
+        (i0, i1, i2, i3)
+    };
     // Quickhull with conflict (outside) sets; visibility by exact orient3d.
     struct Face {
         v: [usize; 3],
@@ -96,10 +100,20 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
     let mk = |v: [usize; 3]| -> Face {
         let (x, y, z) = (points[v[0]], points[v[1]], points[v[2]]);
         let n = (y - x).cross(z - x);
-        Face { v, n, l: n.length(), outside: Vec::new(), alive: true }
+        Face {
+            v,
+            n,
+            l: n.length(),
+            outside: Vec::new(),
+            alive: true,
+        }
     };
-    let mut faces: Vec<Face> = [[a, b, c], [a, d, b], [b, d, c], [c, d, a]].iter().map(|&v| mk(v)).collect();
-    let mut edge_face: std::collections::HashMap<(usize, usize), usize, EdgeHash> = std::collections::HashMap::with_capacity_and_hasher(4 * n.min(4096), EdgeHash);
+    let mut faces: Vec<Face> = [[a, b, c], [a, d, b], [b, d, c], [c, d, a]]
+        .iter()
+        .map(|&v| mk(v))
+        .collect();
+    let mut edge_face: std::collections::HashMap<(usize, usize), usize, EdgeHash> =
+        std::collections::HashMap::with_capacity_and_hasher(4 * n.min(4096), EdgeHash);
     // visited stamps per face (faces are only appended)
     let mut stamp: Vec<u32> = Vec::new();
     let mut round: u32 = 0;
@@ -108,7 +122,9 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
             edge_face.insert((f.v[k], f.v[(k + 1) % 3]), fi);
         }
     }
-    let scale = crate::aabb::Aabb::from_points(points.iter()).diagonal().max(1e-300);
+    let scale = crate::aabb::Aabb::from_points(points.iter())
+        .diagonal()
+        .max(1e-300);
     let tol = 1e-11 * scale;
     let sees = |f: &Face, q: usize| {
         if fast {
@@ -133,7 +149,8 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
     }
     let mut queue: std::collections::VecDeque<usize> = (0..4).collect();
     // buffers reused across iterations
-    let (mut visible, mut horizon, mut orphans): (Vec<usize>, Vec<(usize, usize)>, Vec<usize>) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut visible, mut horizon, mut orphans): (Vec<usize>, Vec<(usize, usize)>, Vec<usize>) =
+        (Vec::new(), Vec::new(), Vec::new());
     while let Some(fi) = queue.pop_front() {
         if !faces[fi].alive || faces[fi].outside.is_empty() {
             continue;
@@ -235,7 +252,10 @@ fn hull_impl(points: &[DVec3], fast: bool) -> Option<TriMesh> {
             verts.push(points[i]);
         }
     }
-    let tris = tris_idx.iter().map(|t| [remap[t[0]], remap[t[1]], remap[t[2]]]).collect();
+    let tris = tris_idx
+        .iter()
+        .map(|t| [remap[t[0]], remap[t[1]], remap[t[2]]])
+        .collect();
     Some(TriMesh { verts, tris })
 }
 
@@ -371,7 +391,9 @@ impl ConvexPolytope {
                     dir.push((u, v));
                 }
             }
-            let next = |u: u32| -> Option<u32> { dir.binary_search_by(|x| x.0.cmp(&u)).ok().map(|i| dir[i].1) };
+            let next = |u: u32| -> Option<u32> {
+                dir.binary_search_by(|x| x.0.cmp(&u)).ok().map(|i| dir[i].1)
+            };
             if let Some(&(start, first)) = dir.first() {
                 let mut poly = vec![m.verts[start as usize]];
                 let mut cur = first;
@@ -397,7 +419,8 @@ impl ConvexPolytope {
     pub fn vertices(&self) -> Vec<DVec3> {
         // first occurrence order (the set is only used for membership)
         let mut v: Vec<DVec3> = Vec::new();
-        let mut seen: std::collections::HashSet<[u64; 3], EdgeHash> = std::collections::HashSet::with_capacity_and_hasher(64, EdgeHash);
+        let mut seen: std::collections::HashSet<[u64; 3], EdgeHash> =
+            std::collections::HashSet::with_capacity_and_hasher(64, EdgeHash);
         for (_, f) in &self.faces {
             for p in f {
                 if seen.insert([p.x.to_bits(), p.y.to_bits(), p.z.to_bits()]) {
@@ -414,7 +437,11 @@ impl ConvexPolytope {
 
     pub fn volume_integrals(&self) -> VolumeIntegrals {
         let mut vi = VolumeIntegrals::default();
-        let r = self.faces.first().and_then(|f| f.1.first().copied()).unwrap_or(DVec3::ZERO);
+        let r = self
+            .faces
+            .first()
+            .and_then(|f| f.1.first().copied())
+            .unwrap_or(DVec3::ZERO);
         for (_, f) in &self.faces {
             vi.add_polygon(r, f);
         }
@@ -466,11 +493,18 @@ impl ConvexPolytope {
         if cut_pts.len() >= 3 {
             let c = cut_pts.iter().fold(DVec3::ZERO, |a, &p| a + p) / cut_pts.len() as f64;
             let (u, v) = crate::polygon::plane_basis(h.n);
-            let mut pts: Vec<(f64, DVec3)> = cut_pts.iter().map(|&p| (libm::atan2((p - c).dot(v), (p - c).dot(u)), p)).collect();
+            let mut pts: Vec<(f64, DVec3)> = cut_pts
+                .iter()
+                .map(|&p| (libm::atan2((p - c).dot(v), (p - c).dot(u)), p))
+                .collect();
             pts.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
             let mut cap: Vec<DVec3> = Vec::new();
             for (_, p) in pts {
-                if cap.last().map(|q: &DVec3| (*q - p).length() > eps * 10.0).unwrap_or(true) {
+                if cap
+                    .last()
+                    .map(|q: &DVec3| (*q - p).length() > eps * 10.0)
+                    .unwrap_or(true)
+                {
                     cap.push(p);
                 }
             }
@@ -482,7 +516,11 @@ impl ConvexPolytope {
             }
         }
         let res = ConvexPolytope { faces: out };
-        if res.faces.len() < 4 { ConvexPolytope::default() } else { res }
+        if res.faces.len() < 4 {
+            ConvexPolytope::default()
+        } else {
+            res
+        }
     }
 
     pub fn clip_all(&self, hs: &[HalfSpace]) -> ConvexPolytope {
@@ -508,7 +546,14 @@ impl ConvexPolytope {
         let vs = self.vertices();
         let bb = crate::aabb::Aabb::from_points(vs.iter()).expanded(1.0);
         let base = ConvexPolytope::from_box(bb.min, bb.max);
-        let hs: Vec<HalfSpace> = self.faces.iter().map(|(h, _)| HalfSpace { n: h.n, d: h.d - margin }).collect();
+        let hs: Vec<HalfSpace> = self
+            .faces
+            .iter()
+            .map(|(h, _)| HalfSpace {
+                n: h.n,
+                d: h.d - margin,
+            })
+            .collect();
         base.clip_all(&hs)
     }
 
@@ -554,7 +599,10 @@ mod tests {
         let poly = ConvexPolytope::from_hull_mesh(&h);
         assert_eq!(poly.faces.len(), 6);
         assert!((poly.volume() - 1.0).abs() < 1e-12);
-        let c = poly.clip(&HalfSpace { n: DVec3::X, d: 0.25 });
+        let c = poly.clip(&HalfSpace {
+            n: DVec3::X,
+            d: 0.25,
+        });
         assert!((c.volume() - 0.25).abs() < 1e-12);
         let s = poly.shrunk(0.1);
         assert!((s.volume() - 0.8f64.powi(3)).abs() < 1e-10);
@@ -572,6 +620,11 @@ mod bench {
         let m = crate::mesh::icosphere(DVec3::ZERO, 1.0, 4);
         let t = std::time::Instant::now();
         let h = convex_hull(&m.verts).unwrap();
-        eprintln!("{} pts -> {} tris in {:?}", m.verts.len(), h.tris.len(), t.elapsed());
+        eprintln!(
+            "{} pts -> {} tris in {:?}",
+            m.verts.len(),
+            h.tris.len(),
+            t.elapsed()
+        );
     }
 }

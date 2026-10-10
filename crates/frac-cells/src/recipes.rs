@@ -8,7 +8,7 @@ use crate::cellset::{CellSet, CellSetParams};
 use crate::clip::{Clipper, SiteGrid, VKey};
 use crate::complex::Complex;
 use crate::seeding;
-use frac_core::determinism::{rng_for, stable_hash, unit_f64, RngStage};
+use frac_core::determinism::{RngStage, rng_for, stable_hash, unit_f64};
 use frac_geom::inside::MeshQuery;
 use frac_geom::integrals::sym_eigen3;
 use frac_geom::polygon::outer;
@@ -63,32 +63,60 @@ pub enum Recipe {
     ClusteredVoronoi,
     Masonry(MasonryLayout),
     /// Wood: anisotropic Voronoi stretched along the grain.
-    Wood { stretch: f64, fine_stretch: f64 },
+    Wood {
+        stretch: f64,
+        fine_stretch: f64,
+    },
     /// Annealed glass: radial + concentric pattern around an impact center.
-    GlassAnnealed { impact: Option<[f64; 3]>, rings: u32, spokes: u32 },
+    GlassAnnealed {
+        impact: Option<[f64; 3]>,
+        rings: u32,
+        spokes: u32,
+    },
     /// Tempered glass: fine near-uniform dicing.
-    GlassTempered { cell_size: Option<f64> },
+    GlassTempered {
+        cell_size: Option<f64>,
+    },
     /// Drywall/plaster panels: panel-scale Voronoi with ragged sub-cells.
     Panel,
     /// Steel: one cell per member.
     Steel,
     /// Stone: bedding-plane slabs with Voronoi inside.
-    Stone { bedding: [f64; 3], layer: f64, flatten: f64 },
+    Stone {
+        bedding: [f64; 3],
+        layer: f64,
+        flatten: f64,
+    },
     /// User-provided seed points (world frame).
-    Custom { seeds: Vec<[f64; 3]> },
+    Custom {
+        seeds: Vec<[f64; 3]>,
+    },
 }
 
 impl Recipe {
     pub fn from_name(name: &str) -> Option<Recipe> {
         Some(match name {
-            "concrete_clustered_voronoi" | "clustered_voronoi" | "voronoi" | "ceramic" => Recipe::ClusteredVoronoi,
+            "concrete_clustered_voronoi" | "clustered_voronoi" | "voronoi" | "ceramic" => {
+                Recipe::ClusteredVoronoi
+            }
             "masonry" | "masonry_bricks" => Recipe::Masonry(MasonryLayout::default()),
-            "wood_anisotropic_voronoi" | "wood" => Recipe::Wood { stretch: 6.0, fine_stretch: 9.0 },
-            "glass_annealed" | "glass_radial" => Recipe::GlassAnnealed { impact: None, rings: 6, spokes: 14 },
+            "wood_anisotropic_voronoi" | "wood" => Recipe::Wood {
+                stretch: 6.0,
+                fine_stretch: 9.0,
+            },
+            "glass_annealed" | "glass_radial" => Recipe::GlassAnnealed {
+                impact: None,
+                rings: 6,
+                spokes: 14,
+            },
             "glass_tempered" | "glass_dicing" => Recipe::GlassTempered { cell_size: None },
             "drywall" | "plaster" | "panel" => Recipe::Panel,
             "steel" | "steel_member" => Recipe::Steel,
-            "stone" | "stone_bedding" => Recipe::Stone { bedding: [0.0, 1.0, 0.0], layer: 0.15, flatten: 2.5 },
+            "stone" | "stone_bedding" => Recipe::Stone {
+                bedding: [0.0, 1.0, 0.0],
+                layer: 0.15,
+                flatten: 2.5,
+            },
             _ => return None,
         })
     }
@@ -133,7 +161,11 @@ pub struct Frame {
 
 impl Frame {
     pub fn identity() -> Frame {
-        Frame { rot: DMat3::IDENTITY, origin: DVec3::ZERO, scale: DVec3::ONE }
+        Frame {
+            rot: DMat3::IDENTITY,
+            origin: DVec3::ZERO,
+            scale: DVec3::ONE,
+        }
     }
     pub fn is_identity(&self) -> bool {
         self.rot == DMat3::IDENTITY && self.origin == DVec3::ZERO && self.scale == DVec3::ONE
@@ -148,7 +180,11 @@ impl Frame {
     }
     /// Frame whose rows are the given orthonormal axes (u, v, w).
     pub fn from_axes(u: DVec3, v: DVec3, w: DVec3, origin: DVec3) -> Frame {
-        Frame { rot: DMat3::from_cols(u, v, w).transpose(), origin, scale: DVec3::ONE }
+        Frame {
+            rot: DMat3::from_cols(u, v, w).transpose(),
+            origin,
+            scale: DVec3::ONE,
+        }
     }
 }
 
@@ -182,7 +218,9 @@ pub fn build_cells(solid: &TriMesh, p: &CellParams) -> Result<CellBuild, String>
     let (ev, axes, com) = principal_axes(solid);
     let comp_min_extent = (12.0 * ev.x.max(0.0)).sqrt();
     let n_a = p.analysis_target.max(1);
-    let n_f = (n_a * p.fine_per_analysis.max(1)).min(p.max_fine.max(1)).max(n_a);
+    let n_f = (n_a * p.fine_per_analysis.max(1))
+        .min(p.max_fine.max(1))
+        .max(n_a);
     let jitter_seed = stable_hash(&[p.asset_seed, p.component as u64, p.variant as u64, 77]);
 
     // ---- choose frame and build complex in the local frame
@@ -219,7 +257,11 @@ pub fn build_cells(solid: &TriMesh, p: &CellParams) -> Result<CellBuild, String>
             // exact axis-aligned frame when possible
             let snap = |v: DVec3| -> DVec3 {
                 let r = DVec3::new(v.x.round(), v.y.round(), v.z.round());
-                if (r - v).length() < 1e-12 && r.length() == 1.0 { r } else { v }
+                if (r - v).length() < 1e-12 && r.length() == 1.0 {
+                    r
+                } else {
+                    v
+                }
             };
             let frame = Frame::from_axes(snap(len_axis), up, snap(thick), DVec3::ZERO);
             let local = solid.transformed(|x| frame.to_local(x));
@@ -232,32 +274,42 @@ pub fn build_cells(solid: &TriMesh, p: &CellParams) -> Result<CellBuild, String>
         }
         recipe => {
             // Voronoi family
-            let (frame, fine_scale_z, cluster_scale_z, planar): (Frame, f64, f64, bool) = match recipe {
-                Recipe::Wood { stretch, fine_stretch } => {
-                    let g = p.grain.unwrap_or(axes.col(2)).normalize();
-                    let (u, v) = frac_geom::polygon::plane_basis(g);
-                    let mut f = Frame::from_axes(u, v, g, com);
-                    // grain = local z, compressed so cells elongate along it
-                    f.scale = DVec3::new(1.0, 1.0, 1.0 / fine_stretch.max(1.0));
-                    (f, *fine_stretch, *stretch, false)
-                }
-                Recipe::Stone { bedding, flatten, .. } => {
-                    let b = DVec3::from_array(*bedding).normalize();
-                    let (u, v) = frac_geom::polygon::plane_basis(b);
-                    let mut f = Frame::from_axes(u, v, b, com);
-                    f.scale = DVec3::new(1.0, 1.0, flatten.max(1.0));
-                    (f, 1.0, 1.0, false)
-                }
-                Recipe::GlassAnnealed { .. } | Recipe::GlassTempered { .. } | Recipe::Panel => {
-                    // pane frame: w = thinnest principal axis
-                    let w = axes.col(0);
-                    let u = axes.col(2);
-                    let v = w.cross(u);
-                    (Frame::from_axes(u, v, w, com), 1.0, 1.0, true)
-                }
-                _ => (Frame::identity(), 1.0, 1.0, false),
+            let (frame, fine_scale_z, cluster_scale_z, planar): (Frame, f64, f64, bool) =
+                match recipe {
+                    Recipe::Wood {
+                        stretch,
+                        fine_stretch,
+                    } => {
+                        let g = p.grain.unwrap_or(axes.col(2)).normalize();
+                        let (u, v) = frac_geom::polygon::plane_basis(g);
+                        let mut f = Frame::from_axes(u, v, g, com);
+                        // grain = local z, compressed so cells elongate along it
+                        f.scale = DVec3::new(1.0, 1.0, 1.0 / fine_stretch.max(1.0));
+                        (f, *fine_stretch, *stretch, false)
+                    }
+                    Recipe::Stone {
+                        bedding, flatten, ..
+                    } => {
+                        let b = DVec3::from_array(*bedding).normalize();
+                        let (u, v) = frac_geom::polygon::plane_basis(b);
+                        let mut f = Frame::from_axes(u, v, b, com);
+                        f.scale = DVec3::new(1.0, 1.0, flatten.max(1.0));
+                        (f, 1.0, 1.0, false)
+                    }
+                    Recipe::GlassAnnealed { .. } | Recipe::GlassTempered { .. } | Recipe::Panel => {
+                        // pane frame: w = thinnest principal axis
+                        let w = axes.col(0);
+                        let u = axes.col(2);
+                        let v = w.cross(u);
+                        (Frame::from_axes(u, v, w, com), 1.0, 1.0, true)
+                    }
+                    _ => (Frame::identity(), 1.0, 1.0, false),
+                };
+            let local = if frame.is_identity() {
+                solid.clone()
+            } else {
+                solid.transformed(|x| frame.to_local(x))
             };
-            let local = if frame.is_identity() { solid.clone() } else { solid.transformed(|x| frame.to_local(x)) };
             let q = MeshQuery::new(&local);
             let bb = local.aabb();
             let inside = |x: DVec3| q.contains(x);
@@ -272,11 +324,20 @@ pub fn build_cells(solid: &TriMesh, p: &CellParams) -> Result<CellBuild, String>
             let (mut fine, analysis): (Vec<DVec3>, Vec<DVec3>) = match recipe {
                 Recipe::Steel => (vec![bb.center()], vec![bb.center()]),
                 Recipe::Custom { seeds } => {
-                    let f: Vec<DVec3> = seeds.iter().map(|s| frame.to_local(DVec3::from_array(*s))).collect();
+                    let f: Vec<DVec3> = seeds
+                        .iter()
+                        .map(|s| frame.to_local(DVec3::from_array(*s)))
+                        .collect();
                     (f.clone(), f)
                 }
-                Recipe::GlassAnnealed { impact, rings, spokes } => {
-                    let c = impact.map(|i| frame.to_local(DVec3::from_array(i))).unwrap_or(DVec3::new(0.0, 0.0, mid_w));
+                Recipe::GlassAnnealed {
+                    impact,
+                    rings,
+                    spokes,
+                } => {
+                    let c = impact
+                        .map(|i| frame.to_local(DVec3::from_array(i)))
+                        .unwrap_or(DVec3::new(0.0, 0.0, mid_w));
                     let rmax = [bb.min, bb.max]
                         .iter()
                         .flat_map(|a| [bb.min, bb.max].map(move |b| DVec3::new(a.x, b.y, mid_w)))
@@ -291,17 +352,33 @@ pub fn build_cells(solid: &TriMesh, p: &CellParams) -> Result<CellBuild, String>
                     for k in 1..=rings_n {
                         let t = k as f64 / rings_n as f64;
                         let r = rmax * t.powf(1.4);
-                        let m = ((base as f64 * per_ring_scale) * (0.6 + 0.4 * t)).round().max(6.0) as usize;
+                        let m = ((base as f64 * per_ring_scale) * (0.6 + 0.4 * t))
+                            .round()
+                            .max(6.0) as usize;
                         let phase = hash_unit(jitter_seed, k as u64, 1) * std::f64::consts::TAU;
                         for j in 0..m {
-                            let a = phase + std::f64::consts::TAU * (j as f64 + 0.35 * (hash_unit(jitter_seed, (k * 1000 + j) as u64, 2) - 0.5)) / m as f64;
-                            let rr = r * (1.0 + 0.12 * (hash_unit(jitter_seed, (k * 1000 + j) as u64, 3) - 0.5));
-                            pts.push(DVec3::new(c.x + rr * libm::cos(a), c.y + rr * libm::sin(a), mid_w));
+                            let a = phase
+                                + std::f64::consts::TAU
+                                    * (j as f64
+                                        + 0.35
+                                            * (hash_unit(jitter_seed, (k * 1000 + j) as u64, 2)
+                                                - 0.5))
+                                    / m as f64;
+                            let rr = r
+                                * (1.0
+                                    + 0.12
+                                        * (hash_unit(jitter_seed, (k * 1000 + j) as u64, 3) - 0.5));
+                            pts.push(DVec3::new(
+                                c.x + rr * libm::cos(a),
+                                c.y + rr * libm::sin(a),
+                                mid_w,
+                            ));
                         }
                     }
                     // keep seeds whose column hits the pane
                     let keep: Vec<DVec3> = pts.into_iter().filter(|s| inside(*s)).collect();
-                    let cand = seeding::candidates_in(bb.min, bb.max, &inside, n_a * 32, flat, &mut rng);
+                    let cand =
+                        seeding::candidates_in(bb.min, bb.max, &inside, n_a * 32, flat, &mut rng);
                     let an = seeding::eliminate(&cand, &spacing_local, n_a, &mut rng);
                     (keep, an)
                 }
@@ -315,9 +392,20 @@ pub fn build_cells(solid: &TriMesh, p: &CellParams) -> Result<CellBuild, String>
                         }
                         _ => n_f,
                     };
-                    let cand = seeding::candidates_in(bb.min, bb.max, &inside, (target_f * 8).max(64), flat, &mut rng);
+                    let cand = seeding::candidates_in(
+                        bb.min,
+                        bb.max,
+                        &inside,
+                        (target_f * 8).max(64),
+                        flat,
+                        &mut rng,
+                    );
                     let fine = seeding::eliminate(&cand, &spacing_local, target_f, &mut rng);
-                    let an_cand = if cand.len() >= n_a { cand.clone() } else { fine.clone() };
+                    let an_cand = if cand.len() >= n_a {
+                        cand.clone()
+                    } else {
+                        fine.clone()
+                    };
                     let an = seeding::eliminate(&an_cand, &spacing_local, n_a, &mut rng);
                     (fine, an)
                 }
@@ -326,25 +414,38 @@ pub fn build_cells(solid: &TriMesh, p: &CellParams) -> Result<CellBuild, String>
                 fine.push(bb.center());
             }
             // jitter to break exact symmetries (relative to spacing)
-            let sp = (bb.extent().x.max(bb.extent().y).max(bb.extent().z)) / (fine.len() as f64).cbrt().max(1.0);
+            let sp = (bb.extent().x.max(bb.extent().y).max(bb.extent().z))
+                / (fine.len() as f64).cbrt().max(1.0);
             for (i, s) in fine.iter_mut().enumerate() {
                 let j = DVec3::new(
                     hash_unit(jitter_seed, i as u64, 11) - 0.5,
                     hash_unit(jitter_seed, i as u64, 12) - 0.5,
-                    if planar { 0.0 } else { hash_unit(jitter_seed, i as u64, 13) - 0.5 },
+                    if planar {
+                        0.0
+                    } else {
+                        hash_unit(jitter_seed, i as u64, 13) - 0.5
+                    },
                 );
                 *s += j * (sp * 1e-6);
             }
             let fine_arr: Vec<[f64; 3]> = fine.iter().map(|s| s.to_array()).collect();
             let pad = bb.extent() * 0.01 + DVec3::splat(1e-9);
-            let cx = Complex::voronoi(&fine_arr, (bb.min - pad).to_array(), (bb.max + pad).to_array())?;
+            let cx = Complex::voronoi(
+                &fine_arr,
+                (bb.min - pad).to_array(),
+                (bb.max + pad).to_array(),
+            )?;
             // clustering: nearest analysis seed in the analysis metric
             // local z = world_z / fine_stretch; analysis metric wants world_z / stretch
             let zs = fine_scale_z / cluster_scale_z.max(1e-9);
             let scale_pt = |x: DVec3| [x.x, x.y, x.z * zs];
             let analysis_pts: Vec<[f64; 3]> = analysis.iter().map(|a| scale_pt(*a)).collect();
             let grid = SiteGrid::new(&analysis_pts);
-            let mut cluster: Vec<u32> = cx.sites.iter().map(|s| grid.nearest(scale_pt(DVec3::from_array(*s))).unwrap_or(0)).collect();
+            let mut cluster: Vec<u32> = cx
+                .sites
+                .iter()
+                .map(|s| grid.nearest(scale_pt(DVec3::from_array(*s))).unwrap_or(0))
+                .collect();
             if let Recipe::Stone { layer, flatten, .. } = recipe {
                 // slabs: combine bedding layer index with lateral clusters
                 let lz = layer * flatten.max(1.0);
@@ -362,7 +463,11 @@ pub fn build_cells(solid: &TriMesh, p: &CellParams) -> Result<CellBuild, String>
     };
 
     // ---- clip in the local frame
-    let local = if frame.is_identity() { solid.clone() } else { solid.transformed(|x| frame.to_local(x)) };
+    let local = if frame.is_identity() {
+        solid.clone()
+    } else {
+        solid.transformed(|x| frame.to_local(x))
+    };
     let mut out = Clipper::new(&local, &complex).run()?;
     if !frame.is_identity() {
         for (i, k) in out.keys.iter().enumerate() {
@@ -385,19 +490,38 @@ pub fn build_cells(solid: &TriMesh, p: &CellParams) -> Result<CellBuild, String>
     let mut cells = CellSet::from_clip(out, &unit_of, &cluster_of, &params);
     // recompute patch areas in the world frame
     for pt in cells.patches.iter_mut() {
-        let loops: Vec<Vec<DVec3>> = pt.loops.iter().map(|l| l.iter().map(|&v| cells.verts[v as usize]).collect()).collect();
+        let loops: Vec<Vec<DVec3>> = pt
+            .loops
+            .iter()
+            .map(|l| l.iter().map(|&v| cells.verts[v as usize]).collect())
+            .collect();
         pt.area = frac_geom::polygon::area_integrals(&loops, pt.normal).area;
     }
     let n_clusters = cells.finalize_clusters();
-    Ok(CellBuild { cells, n_clusters, recipe: p.recipe.name().to_string(), fine_seeds: nf_used, analysis_seeds: na_used })
+    Ok(CellBuild {
+        cells,
+        n_clusters,
+        recipe: p.recipe.name().to_string(),
+        fine_seeds: nf_used,
+        analysis_seeds: na_used,
+    })
 }
 
 /// Axis-aligned brick boxes `(lo, hi, brick_id)` tiling an extended box
 /// around `[lo, hi]` in the wall frame (x = length, y = height, z = depth).
-pub fn masonry_boxes(l: &MasonryLayout, lo: DVec3, hi: DVec3, seed: u64) -> Vec<([f64; 3], [f64; 3], u32)> {
+pub fn masonry_boxes(
+    l: &MasonryLayout,
+    lo: DVec3,
+    hi: DVec3,
+    seed: u64,
+) -> Vec<([f64; 3], [f64; 3], u32)> {
     let ext = hi - lo;
     let big = ext.length().max(1.0);
-    let (bl, bh, bd) = (l.brick[0] + l.mortar, l.brick[1] + l.mortar, l.brick[2] + l.mortar);
+    let (bl, bh, bd) = (
+        l.brick[0] + l.mortar,
+        l.brick[1] + l.mortar,
+        l.brick[2] + l.mortar,
+    );
     let thick = ext.z;
     let nw = ((thick / bd).round() as usize).max(1);
     let mut zc: Vec<f64> = vec![lo.z - big];
@@ -423,9 +547,16 @@ pub fn masonry_boxes(l: &MasonryLayout, lo: DVec3, hi: DVec3, seed: u64) -> Vec<
             BondPattern::Stack => (vec![(bl, false)], 0.0),
             BondPattern::Stretcher => (vec![(bl, false)], if c % 2 == 1 { bl * 0.5 } else { 0.0 }),
             BondPattern::English => {
-                if header_course { (vec![(bd, true)], bd * 0.5) } else { (vec![(bl, false)], 0.0) }
+                if header_course {
+                    (vec![(bd, true)], bd * 0.5)
+                } else {
+                    (vec![(bl, false)], 0.0)
+                }
             }
-            BondPattern::Flemish => (vec![(bl, false), (bd, true)], if c % 2 == 1 { (bl + bd) * 0.5 } else { 0.0 }),
+            BondPattern::Flemish => (
+                vec![(bl, false), (bd, true)],
+                if c % 2 == 1 { (bl + bd) * 0.5 } else { 0.0 },
+            ),
         };
         let period: f64 = pattern.iter().map(|p| p.0).sum();
         let x_start = lo.x + l.origin[0] + offset;
@@ -455,14 +586,19 @@ pub fn masonry_boxes(l: &MasonryLayout, lo: DVec3, hi: DVec3, seed: u64) -> Vec<
         }
         segs.push((prev.0, hi.x + big, prev.1));
         for (x0, x1, span) in segs {
-            let wy: Vec<(f64, f64)> = if span || nw == 1 { vec![(zc[0], *zc.last().unwrap())] } else { zc.windows(2).map(|w| (w[0], w[1])).collect() };
+            let wy: Vec<(f64, f64)> = if span || nw == 1 {
+                vec![(zc[0], *zc.last().unwrap())]
+            } else {
+                zc.windows(2).map(|w| (w[0], w[1])).collect()
+            };
             for (z0, z1) in wy {
                 let id = brick;
                 brick += 1;
                 let (yl, yh) = (yc[c], yc[c + 1]);
                 let h = stable_hash(&[seed, id as u64, 5]);
                 let u = unit_f64(h);
-                let interior = x0 > lo.x - big && x1 < hi.x + big && yl > lo.y - big && yh < hi.y + big;
+                let interior =
+                    x0 > lo.x - big && x1 < hi.x + big && yl > lo.y - big && yh < hi.y + big;
                 if interior && u < l.half_split_fraction {
                     let xm = 0.5 * (x0 + x1);
                     boxes.push(([x0, yl, z0], [xm, yh, z1], id));
@@ -471,8 +607,16 @@ pub fn masonry_boxes(l: &MasonryLayout, lo: DVec3, hi: DVec3, seed: u64) -> Vec<
                     let corner = (h >> 20) & 3;
                     let cw = 0.25 * (x1 - x0);
                     let chh = 0.4 * (yh - yl);
-                    let (xa, xb) = if corner & 1 == 0 { (x0, x0 + cw) } else { (x1 - cw, x1) };
-                    let (ya, yb) = if corner & 2 == 0 { (yl, yl + chh) } else { (yh - chh, yh) };
+                    let (xa, xb) = if corner & 1 == 0 {
+                        (x0, x0 + cw)
+                    } else {
+                        (x1 - cw, x1)
+                    };
+                    let (ya, yb) = if corner & 2 == 0 {
+                        (yl, yl + chh)
+                    } else {
+                        (yh - chh, yh)
+                    };
                     // chip, column remainder, rest
                     boxes.push(([xa, ya, z0], [xb, yb, z1], id));
                     let (ry0, ry1) = if corner & 2 == 0 { (yb, yh) } else { (yl, ya) };

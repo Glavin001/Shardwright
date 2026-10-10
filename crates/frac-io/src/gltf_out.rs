@@ -29,7 +29,7 @@
 //! hold glTF mesh indices).
 
 use crate::IoError;
-use crate::glb::{write_glb_container_owned, read_glb_container, write_glb_container};
+use crate::glb::{read_glb_container, write_glb_container, write_glb_container_owned};
 use serde_json::{Map, Value, json};
 
 #[derive(Clone, Debug, Default)]
@@ -151,12 +151,19 @@ fn json_f32_exact(x: f32) -> String {
 impl ViewRec {
     fn write_json(&self, s: &mut String) {
         use std::fmt::Write;
-        let _ = write!(s, r#"{{"buffer":{},"byteLength":{},"byteOffset":{}"#, self.buffer, self.byte_length, self.byte_offset);
+        let _ = write!(
+            s,
+            r#"{{"buffer":{},"byteLength":{},"byteOffset":{}"#,
+            self.buffer, self.byte_length, self.byte_offset
+        );
         if let Some(st) = self.byte_stride {
             let _ = write!(s, r#","byteStride":{st}"#);
         }
         if let Some((off, len, st, count, mode)) = self.meshopt {
-            let _ = write!(s, r#","extensions":{{"{EXT_MESHOPT}":{{"buffer":0,"byteLength":{len},"byteOffset":{off},"byteStride":{st},"count":{count},"mode":"{mode}"}}}}"#);
+            let _ = write!(
+                s,
+                r#","extensions":{{"{EXT_MESHOPT}":{{"buffer":0,"byteLength":{len},"byteOffset":{off},"byteStride":{st},"count":{count},"mode":"{mode}"}}}}"#
+            );
         }
         let _ = write!(s, r#","target":{}}}"#, self.target);
     }
@@ -169,9 +176,18 @@ impl AccRec {
         if self.byte_offset > 0 {
             let _ = write!(s, r#","byteOffset":{}"#, self.byte_offset);
         }
-        let _ = write!(s, r#","componentType":{},"count":{}"#, self.component_type, self.count);
+        let _ = write!(
+            s,
+            r#","componentType":{},"count":{}"#,
+            self.component_type, self.count
+        );
         if let Some((mn, mx)) = self.min_max {
-            let f = |v: [f32; 3]| v.iter().map(|&x| json_f32_exact(x)).collect::<Vec<_>>().join(",");
+            let f = |v: [f32; 3]| {
+                v.iter()
+                    .map(|&x| json_f32_exact(x))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            };
             let _ = write!(s, r#","max":[{}],"min":[{}]"#, f(mx), f(mn));
         }
         let _ = write!(s, r#","type":"{}"}}"#, self.ty);
@@ -225,7 +241,12 @@ struct PView {
 
 fn prep_view(data: Vec<u8>, kind: ViewKind, compress: bool) -> Result<PView, IoError> {
     if !compress {
-        return Ok(PView { kind, bytes: data, fallback_len: 0, ext: None });
+        return Ok(PView {
+            kind,
+            bytes: data,
+            fallback_len: 0,
+            ext: None,
+        });
     }
     let (encoded, fallback_len, ext) = match kind {
         ViewKind::Attribute { stride, count } => {
@@ -234,18 +255,33 @@ fn prep_view(data: Vec<u8>, kind: ViewKind, compress: bool) -> Result<PView, IoE
         }
         ViewKind::Index { stride, count } => {
             let idx: Vec<u32> = if stride == 2 {
-                data.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]]) as u32).collect()
+                data.chunks_exact(2)
+                    .map(|c| u16::from_le_bytes([c[0], c[1]]) as u32)
+                    .collect()
             } else {
-                data.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
+                data.chunks_exact(4)
+                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect()
             };
-            let vcount = idx.iter().copied().max().map(|m| m as usize + 1).unwrap_or(0);
-            let enc = meshopt::encode_index_buffer(&idx, vcount).map_err(|e| IoError::Meshopt(e.to_string()))?;
+            let vcount = idx
+                .iter()
+                .copied()
+                .max()
+                .map(|m| m as usize + 1)
+                .unwrap_or(0);
+            let enc = meshopt::encode_index_buffer(&idx, vcount)
+                .map_err(|e| IoError::Meshopt(e.to_string()))?;
             // The fallback buffer holds no data, only the decoded length.
             // (The codec may rotate triangle corners; winding is preserved.)
             (enc, count * stride, (stride, count, "TRIANGLES"))
         }
     };
-    Ok(PView { kind, bytes: encoded, fallback_len, ext: Some(ext) })
+    Ok(PView {
+        kind,
+        bytes: encoded,
+        fallback_len,
+        ext: Some(ext),
+    })
 }
 
 impl Writer {
@@ -262,11 +298,25 @@ impl Writer {
             let fb_off = self.fallback_len.next_multiple_of(4);
             self.fallback_len = fb_off + pv.fallback_len;
             self.used_compression = true;
-            ViewRec { buffer: 1, byte_offset: fb_off, byte_length: pv.fallback_len, byte_stride, target, meshopt: Some((c_off, pv.bytes.len(), st, count, mode)) }
+            ViewRec {
+                buffer: 1,
+                byte_offset: fb_off,
+                byte_length: pv.fallback_len,
+                byte_stride,
+                target,
+                meshopt: Some((c_off, pv.bytes.len(), st, count, mode)),
+            }
         } else {
             let off = self.bin.len();
             self.bin.extend_from_slice(&pv.bytes);
-            ViewRec { buffer: 0, byte_offset: off, byte_length: pv.bytes.len(), byte_stride, target, meshopt: None }
+            ViewRec {
+                buffer: 0,
+                byte_offset: off,
+                byte_length: pv.bytes.len(),
+                byte_stride,
+                target,
+                meshopt: None,
+            }
         };
         self.views.push(rec);
         self.views.len() - 1
@@ -657,7 +707,14 @@ impl MeshList<'_> {
     fn release(&mut self, i: usize, freed: &mut usize) {
         if let MeshList::Owned(m) = self {
             let mesh = std::mem::take(&mut m[i]);
-            *freed += mesh.positions.capacity() * 12 + mesh.normals.capacity() * 12 + mesh.uvs.as_ref().map_or(0, |u| u.capacity() * 8) + mesh.primitives.iter().map(|p| p.indices.capacity() * 4).sum::<usize>();
+            *freed += mesh.positions.capacity() * 12
+                + mesh.normals.capacity() * 12
+                + mesh.uvs.as_ref().map_or(0, |u| u.capacity() * 8)
+                + mesh
+                    .primitives
+                    .iter()
+                    .map(|p| p.indices.capacity() * 4)
+                    .sum::<usize>();
             drop(mesh);
             // the binary buffer is one large (mmap'd) allocation that cannot
             // reuse the freed mesh memory; hand it back to the OS every
@@ -680,7 +737,11 @@ pub fn release_free_memory() {
     }
 }
 
-fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptions) -> Result<Vec<u8>, IoError> {
+fn write_glb_core(
+    scene: &RenderScene,
+    mut mesh_list: MeshList,
+    opts: &GltfOptions,
+) -> Result<Vec<u8>, IoError> {
     let t0 = std::time::Instant::now();
     let glog = std::env::var_os("FRAC_LOG").is_some();
     // reserve the (uncompressed) binary size up front: doubling growth of a
@@ -689,12 +750,21 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
         .map(|i| mesh_list.get(i))
         .map(|m| {
             let nv = m.positions.len();
-            nv * (24 + m.uvs.as_ref().map_or(0, |_| 8) + m.tangents.as_ref().map_or(0, |_| 16)) + m.primitives.iter().map(|p| 4 * p.indices.len() + 4).sum::<usize>() + 64
+            nv * (24 + m.uvs.as_ref().map_or(0, |_| 8) + m.tangents.as_ref().map_or(0, |_| 16))
+                + m.primitives
+                    .iter()
+                    .map(|p| 4 * p.indices.len() + 4)
+                    .sum::<usize>()
+                + 64
         })
         .sum();
     let mut w = Writer {
         compress: opts.meshopt_compression,
-        bin: Vec::with_capacity(if opts.meshopt_compression { estimate / 2 } else { estimate }),
+        bin: Vec::with_capacity(if opts.meshopt_compression {
+            estimate / 2
+        } else {
+            estimate
+        }),
         fallback_len: 0,
         views: Vec::new(),
         accessors: Vec::new(),
@@ -755,7 +825,11 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
     let compress = w.compress;
     let prep = |m: &RenderMesh| -> Result<Option<PMesh>, IoError> {
         let nv = m.positions.len();
-        let prims: Vec<&RenderPrimitive> = m.primitives.iter().filter(|p| !p.indices.is_empty()).collect();
+        let prims: Vec<&RenderPrimitive> = m
+            .primitives
+            .iter()
+            .filter(|p| !p.indices.is_empty())
+            .collect();
         if nv == 0 || prims.is_empty() {
             return Ok(None);
         }
@@ -803,10 +877,18 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
                 vb.extend_from_slice(&[d[0], d[1], d[2], if t[3] < 0.0 { -1.0 } else { 1.0 }]);
             }
         }
-        let vertices = prep_view(bytes_of(&vb), ViewKind::Attribute { stride, count: nv }, compress)?;
+        let vertices = prep_view(
+            bytes_of(&vb),
+            ViewKind::Attribute { stride, count: nv },
+            compress,
+        )?;
         let use_u16 = nv <= 65535;
         let total: usize = prims.iter().map(|p| p.indices.len()).sum();
-        let (istride, ct) = if use_u16 { (2, UNSIGNED_SHORT) } else { (4, UNSIGNED_INT) };
+        let (istride, ct) = if use_u16 {
+            (2, UNSIGNED_SHORT)
+        } else {
+            (4, UNSIGNED_INT)
+        };
         let mut out_prims = Vec::with_capacity(prims.len());
         let data = if use_u16 {
             let mut v: Vec<u16> = Vec::with_capacity(total);
@@ -823,8 +905,24 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
             }
             bytes_of(&v)
         };
-        let indices = prep_view(data, ViewKind::Index { stride: istride, count: total }, compress)?;
-        Ok(Some(PMesh { name: m.name.clone(), nv, mn, mx, vertices, attrs, indices, prims: out_prims }))
+        let indices = prep_view(
+            data,
+            ViewKind::Index {
+                stride: istride,
+                count: total,
+            },
+            compress,
+        )?;
+        Ok(Some(PMesh {
+            name: m.name.clone(),
+            nv,
+            mn,
+            mx,
+            vertices,
+            attrs,
+            indices,
+            prims: out_prims,
+        }))
     };
     let mut mesh_map: Vec<Option<usize>> = Vec::with_capacity(mesh_list.len());
     // mesh JSON written directly (one entry per mesh; spliced into the root)
@@ -839,7 +937,10 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
         let prepared: Vec<Result<Option<PMesh>, IoError>> = {
             use rayon::prelude::*;
             let ml = &mesh_list;
-            (c0..c1).into_par_iter().map(|mi| prep(ml.get(mi))).collect()
+            (c0..c1)
+                .into_par_iter()
+                .map(|mi| prep(ml.get(mi)))
+                .collect()
         };
         t_prep += tp.elapsed().as_secs_f64();
         let tl = std::time::Instant::now();
@@ -854,7 +955,17 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
             let mut attr: Vec<(&str, usize)> = Vec::with_capacity(pm.attrs.len());
             for &(name, off, ty) in &pm.attrs {
                 let min_max = (name == "POSITION").then_some((pm.mn, pm.mx));
-                attr.push((name, w.add_accessor(AccRec { view: vv, byte_offset: off, component_type: FLOAT, count: nv, ty, min_max })));
+                attr.push((
+                    name,
+                    w.add_accessor(AccRec {
+                        view: vv,
+                        byte_offset: off,
+                        component_type: FLOAT,
+                        count: nv,
+                        ty,
+                        min_max,
+                    }),
+                ));
             }
             // attribute keys in serde_json's (sorted) order
             attr.sort_unstable();
@@ -866,11 +977,22 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
             let iv = w.push_view(pm.indices);
             let mut mj = String::from("{");
             if !pm.name.is_empty() {
-                let _ = write!(mj, "\"name\":{},", serde_json::to_string(&pm.name).unwrap_or_default());
+                let _ = write!(
+                    mj,
+                    "\"name\":{},",
+                    serde_json::to_string(&pm.name).unwrap_or_default()
+                );
             }
             mj.push_str("\"primitives\":[");
             for (i, (material, count, ct, off)) in pm.prims.into_iter().enumerate() {
-                let a = w.add_accessor(AccRec { view: iv, byte_offset: off, component_type: ct, count, ty: "SCALAR", min_max: None });
+                let a = w.add_accessor(AccRec {
+                    view: iv,
+                    byte_offset: off,
+                    component_type: ct,
+                    count,
+                    ty: "SCALAR",
+                    min_max: None,
+                });
                 if i > 0 {
                     mj.push(',');
                 }
@@ -892,7 +1014,13 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
     }
 
     if std::env::var_os("FRAC_LOG").is_some() {
-        eprintln!("  glb meshes: {} meshes, {} bufferViews, {:.0} MB binary ({:.1} s)", meshes.len(), w.views.len(), w.bin.len() as f64 / 1048576.0, t0.elapsed().as_secs_f64());
+        eprintln!(
+            "  glb meshes: {} meshes, {} bufferViews, {:.0} MB binary ({:.1} s)",
+            meshes.len(),
+            w.views.len(),
+            w.bin.len() as f64 / 1048576.0,
+            t0.elapsed().as_secs_f64()
+        );
     }
     // Nodes.
     let n = scene.nodes.len();
@@ -1020,7 +1148,6 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
         root.insert("materials".into(), Value::Array(materials));
     }
 
-
     let has_bin = !w.bin.is_empty();
     let mut buffers = Vec::new();
     if has_bin {
@@ -1038,7 +1165,8 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
     // the root without accessors/bufferViews through serde, the two big
     // arrays serialized directly and spliced in (JSON key order is free)
     let rest = serde_json::to_vec(&Value::Object(root))?;
-    let mut json_bytes: Vec<u8> = Vec::with_capacity(rest.len() + 64 * (w.views.len() + w.accessors.len()));
+    let mut json_bytes: Vec<u8> =
+        Vec::with_capacity(rest.len() + 64 * (w.views.len() + w.accessors.len()));
     json_bytes.push(b'{');
     if !w.accessors.is_empty() {
         json_bytes.extend_from_slice(b"\"accessors\":");
@@ -1064,7 +1192,11 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
         json_bytes.push(b'}');
     }
     if glog {
-        eprintln!("  glb json serialized ({:.0} MB): {:.1} s", json_bytes.len() as f64 / 1048576.0, t0.elapsed().as_secs_f64());
+        eprintln!(
+            "  glb json serialized ({:.0} MB): {:.1} s",
+            json_bytes.len() as f64 / 1048576.0,
+            t0.elapsed().as_secs_f64()
+        );
     }
     let out = write_glb_container_owned(&json_bytes, has_bin.then(|| std::mem::take(&mut w.bin)));
     if glog {

@@ -42,7 +42,9 @@ impl InterfaceKind {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 #[repr(u8)]
 #[serde(rename_all = "snake_case")]
 pub enum ComponentRole {
@@ -86,7 +88,11 @@ pub struct RebarCrossing {
 
 impl Default for RebarCrossing {
     fn default() -> Self {
-        RebarCrossing { count: 0, steel_area: 0.0, dir: DVec3::ZERO }
+        RebarCrossing {
+            count: 0,
+            steel_area: 0.0,
+            dir: DVec3::ZERO,
+        }
     }
 }
 
@@ -117,7 +123,12 @@ pub struct Obb2 {
 
 impl Default for Obb2 {
     fn default() -> Self {
-        Obb2 { center: DVec3::ZERO, axis_u: DVec3::X, axis_v: DVec3::Y, half: [0.0; 2] }
+        Obb2 {
+            center: DVec3::ZERO,
+            axis_u: DVec3::X,
+            axis_v: DVec3::Y,
+            half: [0.0; 2],
+        }
     }
 }
 
@@ -408,7 +419,12 @@ impl CellPolys {
     /// Exterior polygons of a cell set and its boundary patches
     /// (`(patch, flipped)`: flipped when the set holds the patch's second
     /// cell), both sorted. `inside` must answer membership in the set.
-    pub fn boundary_of(&self, cells: &[CellId], inside: impl Fn(CellId) -> bool, geom: &ComponentGeometry) -> (Vec<usize>, Vec<(usize, bool)>) {
+    pub fn boundary_of(
+        &self,
+        cells: &[CellId],
+        inside: impl Fn(CellId) -> bool,
+        geom: &ComponentGeometry,
+    ) -> (Vec<usize>, Vec<(usize, bool)>) {
         let mut exts = Vec::new();
         let mut pats = Vec::new();
         for &c in cells {

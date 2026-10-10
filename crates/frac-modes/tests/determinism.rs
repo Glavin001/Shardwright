@@ -20,7 +20,13 @@ fn bits(o: &ModesOutput) -> Vec<u64> {
     v.extend(o.energies.iter().map(|x| x.to_bits()));
     v.extend(o.eigenvalues.iter().map(|x| x.to_bits()));
     v.extend(o.group_area.iter().map(|x| x.to_bits()));
-    v.extend(o.mode_fields.iter().flatten().flatten().map(|x| x.to_bits()));
+    v.extend(
+        o.mode_fields
+            .iter()
+            .flatten()
+            .flatten()
+            .map(|x| x.to_bits()),
+    );
     v
 }
 
@@ -31,7 +37,12 @@ fn compute_modes_is_bitwise_deterministic() {
     // translational default and linear-elastic P1 (size-based choice)
     for disc in [Some(Discretization::CellPolynomial(0)), None] {
         for solver in [Solver::Admm, Solver::Clarabel] {
-            let p = ModesParams { k: 3, solver, discretization: disc, ..Default::default() };
+            let p = ModesParams {
+                k: 3,
+                solver,
+                discretization: disc,
+                ..Default::default()
+            };
             let a = strip(run(&c, &w, &[], p));
             let b = strip(run(&c, &w, &[], p));
             assert_eq!(bits(&a), bits(&b), "{disc:?} {solver:?}");
@@ -40,7 +51,10 @@ fn compute_modes_is_bitwise_deterministic() {
     }
     // reduced discretizations
     for d in [0u8, 1, 2] {
-        let p = ModesParams { k: 3, ..Default::default() };
+        let p = ModesParams {
+            k: 3,
+            ..Default::default()
+        };
         let a = strip(run_disc(&c, &w, &[], p, Discretization::CellPolynomial(d)));
         let b = strip(run_disc(&c, &w, &[], p, Discretization::CellPolynomial(d)));
         assert_eq!(bits(&a), bits(&b), "p{d}");
@@ -53,18 +67,51 @@ fn compute_modes_is_bitwise_deterministic() {
 
 fn auto_agrees_with_admm(disc: Option<Discretization>, prefix: &str) {
     let c = small_case();
-    let auto = run(&c, &|_, _| 1.0, &[], ModesParams { k: 2, discretization: disc, ..Default::default() });
+    let auto = run(
+        &c,
+        &|_, _| 1.0,
+        &[],
+        ModesParams {
+            k: 2,
+            discretization: disc,
+            ..Default::default()
+        },
+    );
     assert!(auto.n_dofs < AUTO_CLARABEL_MAX_DOFS);
     assert_eq!(auto.solver_used, format!("{prefix}clarabel"));
-    let fast = run(&c, &|_, _| 1.0, &[], ModesParams { k: 2, solver: Solver::Admm, discretization: disc, ..Default::default() });
-    assert!(fast.solver_used.starts_with(&format!("{prefix}admm")), "{}", fast.solver_used);
+    let fast = run(
+        &c,
+        &|_, _| 1.0,
+        &[],
+        ModesParams {
+            k: 2,
+            solver: Solver::Admm,
+            discretization: disc,
+            ..Default::default()
+        },
+    );
+    assert!(
+        fast.solver_used.starts_with(&format!("{prefix}admm")),
+        "{}",
+        fast.solver_used
+    );
     for i in 0..2 {
         let rel = (auto.energies[i] - fast.energies[i]).abs() / auto.energies[i];
-        assert!(rel < 1e-3, "mode {i}: energies {} vs {} ({rel})", auto.energies[i], fast.energies[i]);
+        assert!(
+            rel < 1e-3,
+            "mode {i}: energies {} vs {} ({rel})",
+            auto.energies[i],
+            fast.energies[i]
+        );
         let jmax = auto.jumps[i].iter().cloned().fold(0.0, f64::max);
         for g in 0..auto.groups.len() {
             let d = (auto.jumps[i][g] - fast.jumps[i][g]).abs();
-            assert!(d < 0.02 * jmax, "mode {i} group {g}: {} vs {}", auto.jumps[i][g], fast.jumps[i][g]);
+            assert!(
+                d < 0.02 * jmax,
+                "mode {i} group {g}: {} vs {}",
+                auto.jumps[i][g],
+                fast.jumps[i][g]
+            );
         }
     }
 }
@@ -85,7 +132,16 @@ fn auto_picks_clarabel_for_small_and_agrees_with_admm_p1() {
 fn jumps_are_normalized_rms() {
     // consistency of reported quantities
     let c = small_case();
-    let out = run(&c, &|_, _| 1.0, &[], ModesParams { k: 2, solver: Solver::Admm, ..Default::default() });
+    let out = run(
+        &c,
+        &|_, _| 1.0,
+        &[],
+        ModesParams {
+            k: 2,
+            solver: Solver::Admm,
+            ..Default::default()
+        },
+    );
     assert_eq!(out.jumps.len(), 2);
     assert_eq!(out.groups.len(), out.group_area.len());
     assert!(out.groups.windows(2).all(|w| w[0] < w[1]));
@@ -93,7 +149,10 @@ fn jumps_are_normalized_rms() {
     // total fault area equals the sum over groups
     let total: f64 = out.group_area.iter().sum();
     // 4 x 2 x 1 cells of a 2 x 1 x 0.6 box: 3 planes of 1 x 0.6 and one of 2 x 0.6 (staircased)
-    assert!(total > 0.9 * 3.0 && total < 1.6 * 3.0, "total fault area {total}");
+    assert!(
+        total > 0.9 * 3.0 && total < 1.6 * 3.0,
+        "total fault area {total}"
+    );
     assert!(out.eigenvalues[0] > 0.0);
     assert!(out.energies.iter().all(|&e| e > 0.0 && e.is_finite()));
 }

@@ -39,13 +39,23 @@ pub struct ElasticMaterial {
 impl ElasticMaterial {
     /// Isotropic material.
     pub fn isotropic(youngs: f64, poisson: f64, density: f64) -> Self {
-        ElasticMaterial { youngs, poisson, density, transverse: None }
+        ElasticMaterial {
+            youngs,
+            poisson,
+            density,
+            transverse: None,
+        }
     }
 
     /// Transversely isotropic material; `youngs`/`poisson` are set to the
     /// longitudinal values for reference.
     pub fn transverse(t: TransverseIsotropic, density: f64) -> Self {
-        ElasticMaterial { youngs: t.e_long, poisson: t.nu_long, density, transverse: Some(t) }
+        ElasticMaterial {
+            youngs: t.e_long,
+            poisson: t.nu_long,
+            density,
+            transverse: Some(t),
+        }
     }
 
     /// Basic validity check (positive moduli, admissible Poisson ratios,
@@ -57,14 +67,24 @@ impl ElasticMaterial {
         match &self.transverse {
             None => {
                 if !(self.youngs > 0.0 && self.youngs.is_finite()) {
-                    return Err(format!("Young's modulus must be positive, got {}", self.youngs));
+                    return Err(format!(
+                        "Young's modulus must be positive, got {}",
+                        self.youngs
+                    ));
                 }
                 if !(self.poisson > -1.0 && self.poisson < 0.5) {
-                    return Err(format!("Poisson ratio must be in (-1, 0.5), got {}", self.poisson));
+                    return Err(format!(
+                        "Poisson ratio must be in (-1, 0.5), got {}",
+                        self.poisson
+                    ));
                 }
             }
             Some(t) => {
-                for (n, v) in [("e_long", t.e_long), ("e_trans", t.e_trans), ("g_long", t.g_long)] {
+                for (n, v) in [
+                    ("e_long", t.e_long),
+                    ("e_trans", t.e_trans),
+                    ("g_long", t.g_long),
+                ] {
                     if !(v > 0.0 && v.is_finite()) {
                         return Err(format!("{n} must be positive, got {v}"));
                     }
@@ -147,7 +167,11 @@ fn dot3(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 fn cross3(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
 }
 
 const VOIGT: [[usize; 3]; 3] = [[0, 5, 4], [5, 1, 3], [4, 3, 2]];
@@ -263,7 +287,12 @@ mod tests {
         let b = isotropic_c(e, nu);
         for i in 0..6 {
             for j in 0..6 {
-                assert!((a[i][j] - b[i][j]).abs() < 1e-6 * e, "{i} {j} {} {}", a[i][j], b[i][j]);
+                assert!(
+                    (a[i][j] - b[i][j]).abs() < 1e-6 * e,
+                    "{i} {j} {} {}",
+                    a[i][j],
+                    b[i][j]
+                );
             }
         }
     }

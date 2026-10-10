@@ -11,7 +11,12 @@ use std::collections::BTreeMap;
 /// constraint `|x - y| >= r * min(s(x), s(y))`, where `s` is a relative
 /// spacing field (1 = nominal; smaller = denser). Candidates are visited in
 /// a random (seeded) order. Returns accepted points in candidate order.
-pub fn eliminate(candidates: &[DVec3], spacing: &dyn Fn(DVec3) -> f64, target: usize, rng: &mut ChaCha8Rng) -> Vec<DVec3> {
+pub fn eliminate(
+    candidates: &[DVec3],
+    spacing: &dyn Fn(DVec3) -> f64,
+    target: usize,
+    rng: &mut ChaCha8Rng,
+) -> Vec<DVec3> {
     if candidates.is_empty() || target == 0 {
         return Vec::new();
     }
@@ -27,8 +32,17 @@ pub fn eliminate(candidates: &[DVec3], spacing: &dyn Fn(DVec3) -> f64, target: u
     let s: Vec<f64> = candidates.iter().map(|&p| spacing(p).max(1e-6)).collect();
     let bb = frac_geom::Aabb::from_points(candidates.iter());
     let ext = bb.extent();
-    let dim = ext.to_array().iter().filter(|&&e| e > 1e-12 * bb.diagonal()).count().max(1) as f64;
-    let measure: f64 = ext.to_array().iter().filter(|&&e| e > 1e-12 * bb.diagonal()).product();
+    let dim = ext
+        .to_array()
+        .iter()
+        .filter(|&&e| e > 1e-12 * bb.diagonal())
+        .count()
+        .max(1) as f64;
+    let measure: f64 = ext
+        .to_array()
+        .iter()
+        .filter(|&&e| e > 1e-12 * bb.diagonal())
+        .product();
     let r0 = (measure / target as f64).powf(1.0 / dim);
     let run = |r: f64| -> Vec<usize> {
         let smax = s.iter().cloned().fold(0.0, f64::max);
@@ -105,7 +119,11 @@ pub fn candidates_in(
         let batch = (want - out.len()).max(64) * 2;
         let pts: Vec<DVec3> = (0..batch)
             .map(|_| {
-                let mut p = DVec3::new(rng.gen_range(lo.x..=hi.x), rng.gen_range(lo.y..=hi.y), rng.gen_range(lo.z..=hi.z));
+                let mut p = DVec3::new(
+                    rng.gen_range(lo.x..=hi.x),
+                    rng.gen_range(lo.y..=hi.y),
+                    rng.gen_range(lo.z..=hi.z),
+                );
                 if let Some((ax, v)) = flat_axis {
                     p[ax] = v;
                 }

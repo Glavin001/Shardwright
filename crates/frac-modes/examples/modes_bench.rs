@@ -54,7 +54,8 @@ fn main() {
         i += 1;
     }
     let path = path.expect("usage: modes_bench <dump> [--ref labels] [--out prefix]");
-    let mut d = ModesDump::from_text(&std::fs::read_to_string(&path).expect("read dump")).expect("parse dump");
+    let mut d = ModesDump::from_text(&std::fs::read_to_string(&path).expect("read dump"))
+        .expect("parse dump");
     if let Some(k) = k {
         d.params.k = k;
     }
@@ -77,7 +78,9 @@ fn main() {
                 d.params.discretization = match v.as_str() {
                     "auto" => None,
                     "full" => Some(frac_modes::Discretization::Full),
-                    p => Some(frac_modes::Discretization::CellPolynomial(p.trim_start_matches('p').parse().expect("--disc"))),
+                    p => Some(frac_modes::Discretization::CellPolynomial(
+                        p.trim_start_matches('p').parse().expect("--disc"),
+                    )),
                 }
             }
             "--large-dofs" => d.params.large_dofs = v.parse().expect("--large-dofs"),
@@ -112,8 +115,20 @@ fn main() {
         Some(mj) => (adj_pairs, mj),
         None => (res.groups.clone(), res.max_jump()),
     };
-    let (l1, _, mjx) = frac_modes::segment_from_jumps(d.n_analysis, &seg_groups, &mj, &d.adjacency, &d.cell_volume, d.target, d.min_volume);
-    let timings: Vec<String> = res.timings_ms.iter().map(|(k, v)| format!("{k}={:.0}ms", v)).collect();
+    let (l1, _, mjx) = frac_modes::segment_from_jumps(
+        d.n_analysis,
+        &seg_groups,
+        &mj,
+        &d.adjacency,
+        &d.cell_volume,
+        d.target,
+        d.min_volume,
+    );
+    let timings: Vec<String> = res
+        .timings_ms
+        .iter()
+        .map(|(k, v)| format!("{k}={:.0}ms", v))
+        .collect();
     println!(
         "time {secs:.2}s n {} solver {} iters {:?} conv {}/{} frags {} sigma {:.4e}",
         res.n_dofs,
@@ -125,11 +140,23 @@ fn main() {
         l1.sigma
     );
     println!("timings {}", timings.join(" "));
-    println!("energies {:?}", res.energies.iter().map(|e| format!("{e:.5e}")).collect::<Vec<_>>());
+    println!(
+        "energies {:?}",
+        res.energies
+            .iter()
+            .map(|e| format!("{e:.5e}"))
+            .collect::<Vec<_>>()
+    );
     if let Some(r) = &reference {
         let text = std::fs::read_to_string(r).expect("read ref");
-        let ref_labels: Vec<u32> = text.split_whitespace().map(|x| x.parse().unwrap()).collect();
-        println!("ARI vs ref {:.4}", frac_modes::adjusted_rand_index(&ref_labels, &l1.labels));
+        let ref_labels: Vec<u32> = text
+            .split_whitespace()
+            .map(|x| x.parse().unwrap())
+            .collect();
+        println!(
+            "ARI vs ref {:.4}",
+            frac_modes::adjusted_rand_index(&ref_labels, &l1.labels)
+        );
     }
     if let Some(o) = &out {
         let lt: String = l1.labels.iter().map(|l| format!("{l}\n")).collect();
@@ -138,11 +165,20 @@ fn main() {
         std::fs::write(format!("{o}.jumps.txt"), jt).unwrap();
         let mut et = String::new();
         for m in &res.jumps {
-            et.push_str(&m.iter().map(|j| format!("{j:.6e}")).collect::<Vec<_>>().join(" "));
+            et.push_str(
+                &m.iter()
+                    .map(|j| format!("{j:.6e}"))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
             et.push('\n');
         }
         std::fs::write(format!("{o}.modejumps.txt"), et).unwrap();
-        let gt: String = res.groups.iter().map(|(a, b)| format!("{a} {b}\n")).collect();
+        let gt: String = res
+            .groups
+            .iter()
+            .map(|(a, b)| format!("{a} {b}\n"))
+            .collect();
         std::fs::write(format!("{o}.groups.txt"), gt).unwrap();
     }
 }

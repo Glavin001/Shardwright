@@ -4,7 +4,7 @@
 //! connectivity.
 
 use crate::clip::{ClipOutput, ExtPolyOut, PatchOut};
-use frac_geom::integrals::{sym_eigen3, VolumeIntegrals};
+use frac_geom::integrals::{VolumeIntegrals, sym_eigen3};
 use frac_geom::{Aabb, DVec3};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -48,7 +48,11 @@ fn principal_extents(vi: &VolumeIntegrals) -> DVec3 {
     let cov = (vi.second - frac_geom::polygon::outer(c, c) * vi.volume) / vi.volume;
     let (ev, _) = sym_eigen3(&cov);
     // extent of a uniform box with this covariance: L = sqrt(12 * var)
-    DVec3::new((12.0 * ev.x.max(0.0)).sqrt(), (12.0 * ev.y.max(0.0)).sqrt(), (12.0 * ev.z.max(0.0)).sqrt())
+    DVec3::new(
+        (12.0 * ev.x.max(0.0)).sqrt(),
+        (12.0 * ev.y.max(0.0)).sqrt(),
+        (12.0 * ev.z.max(0.0)).sqrt(),
+    )
 }
 
 /// Thickness ratio: smallest principal extent over the largest one, capped
@@ -57,7 +61,11 @@ fn principal_extents(vi: &VolumeIntegrals) -> DVec3 {
 pub fn thickness_ratio(vi: &VolumeIntegrals, comp_min_extent: f64) -> f64 {
     let e = principal_extents(vi);
     let denom = e.z.min(comp_min_extent.max(1e-300));
-    if denom <= 0.0 { 0.0 } else { (e.x / denom).min(1.0) }
+    if denom <= 0.0 {
+        0.0
+    } else {
+        (e.x / denom).min(1.0)
+    }
 }
 
 struct Uf(Vec<u32>);
@@ -98,8 +106,19 @@ enum PRef {
 impl CellSet {
     /// Build cells from a clip result. `unit_of[complex_cell]` and
     /// `cluster_of[complex_cell]` label the complex cells.
-    pub fn from_clip(out: ClipOutput, unit_of: &[u32], cluster_of: &[u32], params: &CellSetParams) -> CellSet {
-        let ClipOutput { verts, keys: _, ext, patches, warnings } = out;
+    pub fn from_clip(
+        out: ClipOutput,
+        unit_of: &[u32],
+        cluster_of: &[u32],
+        params: &CellSetParams,
+    ) -> CellSet {
+        let ClipOutput {
+            verts,
+            keys: _,
+            ext,
+            patches,
+            warnings,
+        } = out;
         let mut warnings = warnings;
         // polygons per complex cell
         let mut per: BTreeMap<u32, Vec<PRef>> = BTreeMap::new();
@@ -107,8 +126,12 @@ impl CellSet {
             per.entry(e.cell).or_default().push(PRef::Ext(i as u32));
         }
         for (i, p) in patches.iter().enumerate() {
-            per.entry(p.cells[0]).or_default().push(PRef::Patch(i as u32, false));
-            per.entry(p.cells[1]).or_default().push(PRef::Patch(i as u32, true));
+            per.entry(p.cells[0])
+                .or_default()
+                .push(PRef::Patch(i as u32, false));
+            per.entry(p.cells[1])
+                .or_default()
+                .push(PRef::Patch(i as u32, true));
         }
         let boundary_edges = |r: &PRef| -> Vec<(u32, u32)> {
             match *r {
@@ -175,14 +198,20 @@ impl CellSet {
                 // degenerate (≈ zero-volume) shells that are not inside any
                 // positive shell join the largest shell of this cell, or
                 // stand alone (and are merged as slivers later)
-                let best = best.or_else(|| (0..pos.len()).max_by(|&a, &b| pos[a].1.volume.partial_cmp(&pos[b].1.volume).unwrap()));
+                let best = best.or_else(|| {
+                    (0..pos.len())
+                        .max_by(|&a, &b| pos[a].1.volume.partial_cmp(&pos[b].1.volume).unwrap())
+                });
                 match best {
                     Some(b) => {
                         pos[b].0.extend(g);
                         pos[b].1.add(&vi);
                     }
                     None => {
-                        warnings.push(format!("cell {cc}: isolated degenerate shell (volume {:e})", vi.volume));
+                        warnings.push(format!(
+                            "cell {cc}: isolated degenerate shell (volume {:e})",
+                            vi.volume
+                        ));
                         pos.push((g, vi));
                     }
                 }
@@ -219,11 +248,14 @@ impl CellSet {
                 });
             }
         }
-        let ext: Vec<ExtPolyOut> =
-            ext.into_iter().enumerate().map(|(i, mut e)| {
+        let ext: Vec<ExtPolyOut> = ext
+            .into_iter()
+            .enumerate()
+            .map(|(i, mut e)| {
                 e.cell = assign_ext[i];
                 e
-            }).collect();
+            })
+            .collect();
         let patches: Vec<PatchOut> = patches
             .into_iter()
             .enumerate()
@@ -232,7 +264,13 @@ impl CellSet {
                 p
             })
             .collect();
-        let mut cs = CellSet { verts, ext, patches, cells, warnings };
+        let mut cs = CellSet {
+            verts,
+            ext,
+            patches,
+            cells,
+            warnings,
+        };
         cs.merge_slivers(params);
         cs
     }
@@ -265,13 +303,21 @@ impl CellSet {
                 .filter(|&c| {
                     let cell = &self.cells[c as usize];
                     !cell.complex_cells.is_empty()
-                        && (cell.vi.volume < params.min_cell_volume || cell.thickness_ratio < params.min_thickness_ratio)
+                        && (cell.vi.volume < params.min_cell_volume
+                            || cell.thickness_ratio < params.min_thickness_ratio)
                 })
                 .collect();
             if order.is_empty() {
                 break;
             }
-            order.sort_by(|&a, &b| self.cells[a as usize].vi.volume.partial_cmp(&self.cells[b as usize].vi.volume).unwrap().then(a.cmp(&b)));
+            order.sort_by(|&a, &b| {
+                self.cells[a as usize]
+                    .vi
+                    .volume
+                    .partial_cmp(&self.cells[b as usize].vi.volume)
+                    .unwrap()
+                    .then(a.cmp(&b))
+            });
             let mut target: BTreeMap<u32, u32> = BTreeMap::new();
             let mut touched: BTreeSet<u32> = BTreeSet::new();
             for c in order {
@@ -289,7 +335,8 @@ impl CellSet {
                     touched.insert(c);
                     touched.insert(n);
                 } else {
-                    self.warnings.push(format!("sliver cell {c} has no neighbor to merge into"));
+                    self.warnings
+                        .push(format!("sliver cell {c} has no neighbor to merge into"));
                     // mark to avoid looping
                     touched.insert(c);
                 }
@@ -393,7 +440,10 @@ impl CellSet {
         for (new, &old) in order.iter().enumerate() {
             inv[old as usize] = new as u32;
         }
-        self.cells = order.iter().map(|&o| self.cells[o as usize].clone()).collect();
+        self.cells = order
+            .iter()
+            .map(|&o| self.cells[o as usize].clone())
+            .collect();
         for e in self.ext.iter_mut() {
             e.cell = inv[e.cell as usize];
         }
@@ -426,19 +476,32 @@ fn first_vertex(ext: &[ExtPolyOut], patches: &[PatchOut], r: PRef) -> u32 {
     }
 }
 
-fn integrate(verts: &[DVec3], ext: &[ExtPolyOut], patches: &[PatchOut], refs: impl Iterator<Item = PRef>) -> VolumeIntegrals {
+fn integrate(
+    verts: &[DVec3],
+    ext: &[ExtPolyOut],
+    patches: &[PatchOut],
+    refs: impl Iterator<Item = PRef>,
+) -> VolumeIntegrals {
     let refs: Vec<PRef> = refs.collect();
     let r = verts[first_vertex(ext, patches, refs[0]) as usize];
     let mut vi = VolumeIntegrals::default();
     for pr in refs {
         match pr {
             PRef::Ext(i) => {
-                let pts: Vec<DVec3> = ext[i as usize].verts.iter().map(|&v| verts[v as usize]).collect();
+                let pts: Vec<DVec3> = ext[i as usize]
+                    .verts
+                    .iter()
+                    .map(|&v| verts[v as usize])
+                    .collect();
                 vi.add_polygon(r, &pts);
             }
             PRef::Patch(i, rev) => {
                 for t in &patches[i as usize].tris {
-                    let (a, b, c) = (verts[t[0] as usize], verts[t[1] as usize], verts[t[2] as usize]);
+                    let (a, b, c) = (
+                        verts[t[0] as usize],
+                        verts[t[1] as usize],
+                        verts[t[2] as usize],
+                    );
                     if rev {
                         vi.add_tet(r, a, c, b);
                     } else {
@@ -451,20 +514,39 @@ fn integrate(verts: &[DVec3], ext: &[ExtPolyOut], patches: &[PatchOut], refs: im
     vi
 }
 
-fn shell_contains(verts: &[DVec3], ext: &[ExtPolyOut], patches: &[PatchOut], refs: impl Iterator<Item = PRef>, p: DVec3) -> bool {
+fn shell_contains(
+    verts: &[DVec3],
+    ext: &[ExtPolyOut],
+    patches: &[PatchOut],
+    refs: impl Iterator<Item = PRef>,
+    p: DVec3,
+) -> bool {
     let mut w = 0.0;
     for pr in refs {
         match pr {
             PRef::Ext(i) => {
                 let v = &ext[i as usize].verts;
                 for k in 1..v.len() - 1 {
-                    w += frac_geom::inside::tri_winding(p, verts[v[0] as usize], verts[v[k] as usize], verts[v[k + 1] as usize]);
+                    w += frac_geom::inside::tri_winding(
+                        p,
+                        verts[v[0] as usize],
+                        verts[v[k] as usize],
+                        verts[v[k + 1] as usize],
+                    );
                 }
             }
             PRef::Patch(i, rev) => {
                 for t in &patches[i as usize].tris {
-                    let (a, b, c) = (verts[t[0] as usize], verts[t[1] as usize], verts[t[2] as usize]);
-                    w += if rev { frac_geom::inside::tri_winding(p, a, c, b) } else { frac_geom::inside::tri_winding(p, a, b, c) };
+                    let (a, b, c) = (
+                        verts[t[0] as usize],
+                        verts[t[1] as usize],
+                        verts[t[2] as usize],
+                    );
+                    w += if rev {
+                        frac_geom::inside::tri_winding(p, a, c, b)
+                    } else {
+                        frac_geom::inside::tri_winding(p, a, b, c)
+                    };
                 }
             }
         }

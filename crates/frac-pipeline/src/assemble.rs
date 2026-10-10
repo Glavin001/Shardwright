@@ -6,7 +6,7 @@ use frac_bonds::{patch_polygon, polygon_integrals, rebar_crossings};
 use frac_cells::cellset::CellSet;
 use frac_core::input::PartMeta;
 use frac_core::*;
-use frac_geom::{morton3, Aabb, DVec3, MassProps};
+use frac_geom::{Aabb, DVec3, MassProps, morton3};
 use frac_material::MaterialLibrary;
 use std::collections::BTreeMap;
 
@@ -34,7 +34,11 @@ pub struct ComponentCells {
     pub n_analysis: u32,
 }
 
-pub fn assemble(asset: &mut Asset, built: Vec<BuiltComponent>, lib: &MaterialLibrary) -> Vec<ComponentCells> {
+pub fn assemble(
+    asset: &mut Asset,
+    built: Vec<BuiltComponent>,
+    lib: &MaterialLibrary,
+) -> Vec<ComponentCells> {
     let mut infos = Vec::new();
     for (ci, mut b) in built.into_iter().enumerate() {
         let comp_id = ComponentId(ci as u32);
@@ -48,7 +52,14 @@ pub fn assemble(asset: &mut Asset, built: Vec<BuiltComponent>, lib: &MaterialLib
         });
         b.cells.reorder(&order);
         // analysis clusters: renumber by Morton of cluster centroid
-        let ncl = b.cells.cells.iter().map(|c| c.cluster).max().map(|x| x + 1).unwrap_or(0) as usize;
+        let ncl = b
+            .cells
+            .cells
+            .iter()
+            .map(|c| c.cluster)
+            .max()
+            .map(|x| x + 1)
+            .unwrap_or(0) as usize;
         let mut cl_vi = vec![frac_geom::VolumeIntegrals::default(); ncl];
         for c in &b.cells.cells {
             cl_vi[c.cluster as usize].add(&c.vi);
@@ -77,14 +88,38 @@ pub fn assemble(asset: &mut Asset, built: Vec<BuiltComponent>, lib: &MaterialLib
             });
         }
         for a in 0..ncl as u32 {
-            let members: Vec<CellId> = cell_analysis.iter().enumerate().filter(|(_, x)| **x == a).map(|(k, _)| CellId(base + k as u32)).collect();
-            let mp = MassProps::combine(&members.iter().map(|c| asset.cells[c.idx()].mass).collect::<Vec<_>>());
-            asset.analysis_cells.push(AnalysisCell { id: abase + a, component: comp_id, cells: members, mass: mp });
+            let members: Vec<CellId> = cell_analysis
+                .iter()
+                .enumerate()
+                .filter(|(_, x)| **x == a)
+                .map(|(k, _)| CellId(base + k as u32))
+                .collect();
+            let mp = MassProps::combine(
+                &members
+                    .iter()
+                    .map(|c| asset.cells[c.idx()].mass)
+                    .collect::<Vec<_>>(),
+            );
+            asset.analysis_cells.push(AnalysisCell {
+                id: abase + a,
+                component: comp_id,
+                cells: members,
+                mass: mp,
+            });
         }
         // geometry with global cell ids and interfaces per cell pair
-        let mut geom = ComponentGeometry { verts: b.cells.verts.clone(), ext_polys: Vec::new(), patches: Vec::new() };
+        let mut geom = ComponentGeometry {
+            verts: b.cells.verts.clone(),
+            ext_polys: Vec::new(),
+            patches: Vec::new(),
+        };
         for e in &b.cells.ext {
-            geom.ext_polys.push(ExtPoly { verts: e.verts.clone(), cell: CellId(base + e.cell), src_tri: e.src_tri, tris: e.tris.clone() });
+            geom.ext_polys.push(ExtPoly {
+                verts: e.verts.clone(),
+                cell: CellId(base + e.cell),
+                src_tri: e.src_tri,
+                tris: e.tris.clone(),
+            });
         }
         let mut by_pair: BTreeMap<(u32, u32), Vec<usize>> = BTreeMap::new();
         for (pi, p) in b.cells.patches.iter().enumerate() {
@@ -100,21 +135,45 @@ pub fn assemble(asset: &mut Asset, built: Vec<BuiltComponent>, lib: &MaterialLib
                 // orient from lo to hi
                 let flip = p.cells[0] != lo;
                 let pid = geom.patches.len() as u32;
-                let tris = if flip { p.tris.iter().map(|t| [t[0], t[2], t[1]]).collect() } else { p.tris.clone() };
-                let loops: Vec<Vec<u32>> = if flip { p.loops.iter().map(|l| l.iter().rev().copied().collect()).collect() } else { p.loops.clone() };
-                let patch = Patch { loops, tris, normal: if flip { -p.normal } else { p.normal }, cells: (CellId(base + lo), CellId(base + hi)), interface: iid };
+                let tris = if flip {
+                    p.tris.iter().map(|t| [t[0], t[2], t[1]]).collect()
+                } else {
+                    p.tris.clone()
+                };
+                let loops: Vec<Vec<u32>> = if flip {
+                    p.loops
+                        .iter()
+                        .map(|l| l.iter().rev().copied().collect())
+                        .collect()
+                } else {
+                    p.loops.clone()
+                };
+                let patch = Patch {
+                    loops,
+                    tris,
+                    normal: if flip { -p.normal } else { p.normal },
+                    cells: (CellId(base + lo), CellId(base + hi)),
+                    interface: iid,
+                };
                 polys.push(patch_polygon(&geom.verts, &patch, false));
                 geom.patches.push(patch);
                 patch_ids.push(pid);
             }
             let area: f64 = polys.iter().map(|q| polygon_integrals(q).area).sum();
-            let (ua, ub) = (b.cells.cells[lo as usize].unit, b.cells.cells[hi as usize].unit);
+            let (ua, ub) = (
+                b.cells.cells[lo as usize].unit,
+                b.cells.cells[hi as usize].unit,
+            );
             let (kind, imat) = if ua != ub {
                 b.joint.unwrap_or((InterfaceKind::Monolithic, None))
             } else if b.wood {
                 let n = polys.first().map(|q| q.normal).unwrap_or(DVec3::Y);
                 let g = b.grain.unwrap_or(DVec3::X);
-                if n.dot(g).abs() < 0.5 { (InterfaceKind::GrainBoundary, None) } else { (InterfaceKind::Monolithic, None) }
+                if n.dot(g).abs() < 0.5 {
+                    (InterfaceKind::GrainBoundary, None)
+                } else {
+                    (InterfaceKind::Monolithic, None)
+                }
             } else {
                 (InterfaceKind::Monolithic, None)
             };
@@ -149,7 +208,11 @@ pub fn assemble(asset: &mut Asset, built: Vec<BuiltComponent>, lib: &MaterialLib
             grain: b.grain,
             unfractured: b.unfractured,
         });
-        infos.push(ComponentCells { cell_range: base..base + b.cells.cells.len() as u32, cell_analysis, n_analysis: ncl as u32 });
+        infos.push(ComponentCells {
+            cell_range: base..base + b.cells.cells.len() as u32,
+            cell_analysis,
+            n_analysis: ncl as u32,
+        });
         let _ = b.meta;
     }
     infos
@@ -165,26 +228,43 @@ pub fn add_contacts(
     cos: f64,
 ) -> Vec<String> {
     let mut warnings = Vec::new();
-    let faces: Vec<_> = asset.components.iter().map(|c| cell_faces(&c.geometry)).collect();
+    let faces: Vec<_> = asset
+        .components
+        .iter()
+        .map(|c| cell_faces(&c.geometry))
+        .collect();
     for &(a, b) in contacts {
-        let (na, nb) = (asset.components[a].name.clone(), asset.components[b].name.clone());
-        let spec = connections.iter().find(|c| (c.a == na && c.b == nb) || (c.a == nb && c.b == na));
+        let (na, nb) = (
+            asset.components[a].name.clone(),
+            asset.components[b].name.clone(),
+        );
+        let spec = connections
+            .iter()
+            .find(|c| (c.a == na && c.b == nb) || (c.a == nb && c.b == na));
         let polys = contact_polygons(&faces[a], &faces[b], tol, cos);
         if polys.is_empty() {
-            warnings.push(format!("components '{na}' and '{nb}' are close but share no contact face"));
+            warnings.push(format!(
+                "components '{na}' and '{nb}' are close but share no contact face"
+            ));
             continue;
         }
         for (ca, cb, poly) in polys {
             let (kind, imat) = match spec {
                 Some(s) => (
                     InterfaceKind::from_name(&s.kind).unwrap_or(InterfaceKind::ComponentConnection),
-                    s.interface_material.as_ref().and_then(|m| lib.interface_material_id(m)).or_else(|| lib.interface_material_id(&s.kind)),
+                    s.interface_material
+                        .as_ref()
+                        .and_then(|m| lib.interface_material_id(m))
+                        .or_else(|| lib.interface_material_id(&s.kind)),
                 ),
                 None => {
                     let ma = lib.material(asset.components[a].material).id.clone();
                     let mb = lib.material(asset.components[b].material).id.clone();
                     if ma.starts_with("concrete") && mb.starts_with("concrete") {
-                        (InterfaceKind::ColdJoint, lib.interface_material_id("cold_joint"))
+                        (
+                            InterfaceKind::ColdJoint,
+                            lib.interface_material_id("cold_joint"),
+                        )
                     } else if poly.normal.y.abs() > 0.7 {
                         (InterfaceKind::Bearing, lib.interface_material_id("bearing"))
                     } else {
@@ -254,5 +334,8 @@ pub fn add_anchors(asset: &mut Asset, metas: &[PartMeta], ground: Option<f64>, t
 
 /// Asset bounding box.
 pub fn asset_bbox(asset: &Asset) -> Aabb {
-    asset.components.iter().fold(Aabb::EMPTY, |a, c| a.union(&c.aabb))
+    asset
+        .components
+        .iter()
+        .fold(Aabb::EMPTY, |a, c| a.union(&c.aabb))
 }

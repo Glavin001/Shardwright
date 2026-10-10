@@ -14,7 +14,11 @@ pub fn tet_gradients(p: &[[f64; 3]; 4]) -> Option<([[f64; 3]; 4], f64)> {
     }
     // inverse of D = [e1 e2 e3] (columns): rows of D^{-1} are (e2 x e3, e3 x e1, e1 x e2)/det
     let cr = |a: [f64; 3], b: [f64; 3]| {
-        [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
     };
     let r1 = cr(e2, e3);
     let r2 = cr(e3, e1);
@@ -87,7 +91,12 @@ mod tests {
 
     #[test]
     fn rigid_modes_in_kernel() {
-        let p = [[0.1, 0.0, 0.0], [1.0, 0.2, 0.0], [0.0, 1.0, 0.1], [0.2, 0.1, 1.3]];
+        let p = [
+            [0.1, 0.0, 0.0],
+            [1.0, 0.2, 0.0],
+            [0.0, 1.0, 0.1],
+            [0.2, 0.1, 1.3],
+        ];
         let k = tet_stiffness(&p, &isotropic_c(1.0, 0.3));
         // translation x and rotation about z
         let mut tx = [0.0; 12];

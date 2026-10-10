@@ -4,7 +4,7 @@
 
 use crate::aabb::Aabb;
 use crate::bvh::Bvh;
-use crate::mesh::{p3, TriMesh};
+use crate::mesh::{TriMesh, p3};
 use crate::predicates::orient3d;
 use glam::DVec3;
 
@@ -20,7 +20,12 @@ impl<'a> MeshQuery<'a> {
     pub fn new(mesh: &'a TriMesh) -> Self {
         let boxes = mesh.tri_aabbs();
         let bvh = Bvh::build(&boxes);
-        MeshQuery { mesh, bvh, boxes, bbox: mesh.aabb() }
+        MeshQuery {
+            mesh,
+            bvh,
+            boxes,
+            bbox: mesh.aabb(),
+        }
     }
 
     /// Exact parity of the number of crossings of the segment p->q with
@@ -126,7 +131,10 @@ impl<'a> MeshQuery<'a> {
 
     /// Signed distance (negative inside) for closed meshes.
     pub fn signed_distance(&self, p: DVec3) -> f64 {
-        let d = self.closest_point(p).map(|c| c.1.sqrt()).unwrap_or(f64::INFINITY);
+        let d = self
+            .closest_point(p)
+            .map(|c| c.1.sqrt())
+            .unwrap_or(f64::INFINITY);
         if self.contains(p) { -d } else { d }
     }
 }
@@ -236,7 +244,12 @@ impl<'a> FastWinding<'a> {
             .collect();
         let mut nodes: Vec<FwNode> = Vec::new();
         if n == 0 {
-            return FastWinding { mesh, nodes, order, beta: 2.0 };
+            return FastWinding {
+                mesh,
+                nodes,
+                order,
+                beta: 2.0,
+            };
         }
         fn build(
             nodes: &mut Vec<FwNode>,
@@ -267,12 +280,24 @@ impl<'a> FastWinding<'a> {
                 }
             }
             let idx = nodes.len() as u32;
-            nodes.push(FwNode { bbox: bb, center, radius, an, start: off as u32, count: order.len() as u32, left: u32::MAX, right: u32::MAX });
+            nodes.push(FwNode {
+                bbox: bb,
+                center,
+                radius,
+                an,
+                start: off as u32,
+                count: order.len() as u32,
+                left: u32::MAX,
+                right: u32::MAX,
+            });
             if order.len() > 8 {
                 let axis = cb.longest_axis();
                 let mid = order.len() / 2;
                 order.select_nth_unstable_by(mid, |&a, &b| {
-                    cent[a as usize][axis].partial_cmp(&cent[b as usize][axis]).unwrap().then(a.cmp(&b))
+                    cent[a as usize][axis]
+                        .partial_cmp(&cent[b as usize][axis])
+                        .unwrap()
+                        .then(a.cmp(&b))
                 });
                 let (l, r) = order.split_at_mut(mid);
                 let li = build(nodes, l, off, cent, anv, mesh);
@@ -283,7 +308,12 @@ impl<'a> FastWinding<'a> {
             idx
         }
         build(&mut nodes, &mut order, 0, &cent, &anv, mesh);
-        FastWinding { mesh, nodes, order, beta: 2.0 }
+        FastWinding {
+            mesh,
+            nodes,
+            order,
+            beta: 2.0,
+        }
     }
 
     pub fn eval(&self, p: DVec3) -> f64 {
@@ -339,7 +369,12 @@ mod tests {
     fn fast_winding_matches_brute() {
         let m = icosphere(DVec3::ZERO, 1.0, 3);
         let fw = FastWinding::new(&m);
-        for p in [DVec3::ZERO, DVec3::new(0.5, 0.2, -0.1), DVec3::new(2.0, 0.0, 0.0), DVec3::new(0.99, 0.0, 0.0)] {
+        for p in [
+            DVec3::ZERO,
+            DVec3::new(0.5, 0.2, -0.1),
+            DVec3::new(2.0, 0.0, 0.0),
+            DVec3::new(0.99, 0.0, 0.0),
+        ] {
             let a = fw.eval(p);
             let b = winding_number_brute(&m, p);
             assert!((a - b).abs() < 5e-2, "{p:?} {a} {b}");

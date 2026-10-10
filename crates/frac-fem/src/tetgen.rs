@@ -16,7 +16,7 @@
 //! [`tetrahedralize_external`] runs an fTetWild binary as a subprocess and
 //! parses its Gmsh `.msh` output (2.x ASCII/binary, 4.x ASCII).
 
-use crate::mesh::{tet_signed_volume, TetMesh};
+use crate::mesh::{TetMesh, tet_signed_volume};
 use frac_geom::inside::MeshQuery;
 use frac_geom::{DVec3, TriMesh};
 use rayon::prelude::*;
@@ -115,8 +115,18 @@ fn bcc_mesh(solid: &TriMesh, query: &MeshQuery, h: f64) -> TetMesh {
                     for m in 0..4 {
                         let p = q[m];
                         let r = q[(m + 1) % 4];
-                        let mut t = [a, b, corner_id(p[0], p[1], p[2]) as u32, corner_id(r[0], r[1], r[2]) as u32];
-                        let pts = [pos[t[0] as usize], pos[t[1] as usize], pos[t[2] as usize], pos[t[3] as usize]];
+                        let mut t = [
+                            a,
+                            b,
+                            corner_id(p[0], p[1], p[2]) as u32,
+                            corner_id(r[0], r[1], r[2]) as u32,
+                        ];
+                        let pts = [
+                            pos[t[0] as usize],
+                            pos[t[1] as usize],
+                            pos[t[2] as usize],
+                            pos[t[3] as usize],
+                        ];
                         if tet_signed_volume(&pts.map(|v| v.to_array())) < 0.0 {
                             t.swap(2, 3);
                         }
@@ -130,7 +140,10 @@ fn bcc_mesh(solid: &TriMesh, query: &MeshQuery, h: f64) -> TetMesh {
     let info: Vec<(DVec3, f64, bool)> = pos
         .par_iter()
         .map(|&p| {
-            let (cp, d2) = query.closest_point(p).map(|c| (c.0, c.1)).unwrap_or((p, f64::INFINITY));
+            let (cp, d2) = query
+                .closest_point(p)
+                .map(|c| (c.0, c.1))
+                .unwrap_or((p, f64::INFINITY));
             let inside = query.contains(p);
             (cp, d2.sqrt(), inside)
         })
@@ -147,24 +160,38 @@ fn bcc_mesh(solid: &TriMesh, query: &MeshQuery, h: f64) -> TetMesh {
     let keep: Vec<bool> = tets
         .par_iter()
         .map(|t| {
-            let far_in = t.iter().all(|&v| info[v as usize].2 && info[v as usize].1 > h);
+            let far_in = t
+                .iter()
+                .all(|&v| info[v as usize].2 && info[v as usize].1 > h);
             if far_in {
                 return true;
             }
-            let far_out = t.iter().all(|&v| !info[v as usize].2 && info[v as usize].1 > h);
+            let far_out = t
+                .iter()
+                .all(|&v| !info[v as usize].2 && info[v as usize].1 > h);
             if far_out {
                 return false;
             }
-            let c = (cur[t[0] as usize] + cur[t[1] as usize] + cur[t[2] as usize] + cur[t[3] as usize]) * 0.25;
+            let c =
+                (cur[t[0] as usize] + cur[t[1] as usize] + cur[t[2] as usize] + cur[t[3] as usize])
+                    * 0.25;
             if query.contains(c) {
                 return true;
             }
             // tets whose centroid lies on (or just outside) the surface are kept too;
             // their outside vertices are snapped onto the surface below
-            query.closest_point(c).map(|q| q.1.sqrt() <= KEEP_BETA * h).unwrap_or(false)
+            query
+                .closest_point(c)
+                .map(|q| q.1.sqrt() <= KEEP_BETA * h)
+                .unwrap_or(false)
         })
         .collect();
-    let mut kept: Vec<[u32; 4]> = tets.iter().zip(&keep).filter(|(_, k)| **k).map(|(t, _)| *t).collect();
+    let mut kept: Vec<[u32; 4]> = tets
+        .iter()
+        .zip(&keep)
+        .filter(|(_, k)| **k)
+        .map(|(t, _)| *t)
+        .collect();
     let vmin = MIN_VOL_REL * h * h * h;
     let vol_of = |cur: &[DVec3], t: &[u32; 4]| {
         tet_signed_volume(&[
@@ -188,7 +215,9 @@ fn bcc_mesh(solid: &TriMesh, query: &MeshQuery, h: f64) -> TetMesh {
             }
             let old = cur[v];
             cur[v] = info[v].0;
-            let ok = inc[v].iter().all(|&ti| vol_of(&cur, &kept[ti as usize]) >= vmin);
+            let ok = inc[v]
+                .iter()
+                .all(|&ti| vol_of(&cur, &kept[ti as usize]) >= vmin);
             if ok {
                 snapped[v] = true;
             } else {
@@ -197,7 +226,10 @@ fn bcc_mesh(solid: &TriMesh, query: &MeshQuery, h: f64) -> TetMesh {
         }
     }
     kept.retain(|t| vol_of(&cur, t) >= vmin);
-    let mut mesh = TetMesh { verts: cur.iter().map(|p| p.to_array()).collect(), tets: kept };
+    let mut mesh = TetMesh {
+        verts: cur.iter().map(|p| p.to_array()).collect(),
+        tets: kept,
+    };
     mesh.remove_unreferenced();
     remove_small_components(&mut mesh, 1e-3);
     mesh
@@ -259,13 +291,16 @@ pub fn tetrahedralize_external(bin: &str, solid: &TriMesh, edge: f64) -> Result<
     let output = dir.join("output.msh");
     let result = (|| {
         {
-            let f = std::fs::File::create(&input).map_err(|e| format!("cannot write input: {e}"))?;
+            let f =
+                std::fs::File::create(&input).map_err(|e| format!("cannot write input: {e}"))?;
             let mut w = std::io::BufWriter::new(f);
             for v in &solid.verts {
-                writeln!(w, "v {:.17e} {:.17e} {:.17e}", v.x, v.y, v.z).map_err(|e| e.to_string())?;
+                writeln!(w, "v {:.17e} {:.17e} {:.17e}", v.x, v.y, v.z)
+                    .map_err(|e| e.to_string())?;
             }
             for t in &solid.tris {
-                writeln!(w, "f {} {} {}", t[0] + 1, t[1] + 1, t[2] + 1).map_err(|e| e.to_string())?;
+                writeln!(w, "f {} {} {}", t[0] + 1, t[1] + 1, t[2] + 1)
+                    .map_err(|e| e.to_string())?;
             }
             w.flush().map_err(|e| e.to_string())?;
         }
@@ -280,13 +315,23 @@ pub fn tetrahedralize_external(bin: &str, solid: &TriMesh, edge: f64) -> Result<
             .map_err(|e| format!("failed to run {bin}: {e}"))?;
         if !out.status.success() {
             let stderr = String::from_utf8_lossy(&out.stderr);
-            return Err(format!("{bin} exited with {}: {}", out.status, stderr.trim()));
+            return Err(format!(
+                "{bin} exited with {}: {}",
+                out.status,
+                stderr.trim()
+            ));
         }
-        let bytes = std::fs::read(&output).map_err(|e| format!("cannot read {}: {e}", output.display()))?;
+        let bytes =
+            std::fs::read(&output).map_err(|e| format!("cannot read {}: {e}", output.display()))?;
         let mut mesh = parse_msh(&bytes)?;
         mesh.fix_orientation();
         mesh.tets.retain(|t| {
-            let p = [mesh.verts[t[0] as usize], mesh.verts[t[1] as usize], mesh.verts[t[2] as usize], mesh.verts[t[3] as usize]];
+            let p = [
+                mesh.verts[t[0] as usize],
+                mesh.verts[t[1] as usize],
+                mesh.verts[t[2] as usize],
+                mesh.verts[t[3] as usize],
+            ];
             tet_signed_volume(&p) > 0.0
         });
         mesh.remove_unreferenced();
@@ -335,7 +380,12 @@ impl<'a> Cursor<'a> {
 }
 
 fn nums<T: std::str::FromStr>(l: &str) -> Result<Vec<T>, String> {
-    l.split_whitespace().map(|t| t.parse::<T>().map_err(|_| format!("bad number '{t}' in msh"))).collect()
+    l.split_whitespace()
+        .map(|t| {
+            t.parse::<T>()
+                .map_err(|_| format!("bad number '{t}' in msh"))
+        })
+        .collect()
 }
 
 /// Parses a Gmsh `.msh` file (2.x ASCII/binary, 4.0/4.1 ASCII), returning
@@ -376,7 +426,11 @@ pub fn parse_msh(bytes: &[u8]) -> Result<TetMesh, String> {
             }
             "$Nodes" => {
                 if version < 4.0 {
-                    let n: usize = c.nonempty_line().ok_or("truncated $Nodes")?.parse().map_err(|_| "bad node count")?;
+                    let n: usize = c
+                        .nonempty_line()
+                        .ok_or("truncated $Nodes")?
+                        .parse()
+                        .map_err(|_| "bad node count")?;
                     node_tags.reserve(n);
                     node_pos.reserve(n);
                     if binary {
@@ -412,11 +466,13 @@ pub fn parse_msh(bytes: &[u8]) -> Result<TetMesh, String> {
                         if version >= 4.1 {
                             let mut tags = Vec::with_capacity(nn);
                             for _ in 0..nn {
-                                let t: Vec<u64> = nums(c.nonempty_line().ok_or("truncated node tags")?)?;
+                                let t: Vec<u64> =
+                                    nums(c.nonempty_line().ok_or("truncated node tags")?)?;
                                 tags.push(*t.first().ok_or("bad node tag")?);
                             }
                             for t in tags {
-                                let v: Vec<f64> = nums(c.nonempty_line().ok_or("truncated node coords")?)?;
+                                let v: Vec<f64> =
+                                    nums(c.nonempty_line().ok_or("truncated node coords")?)?;
                                 if v.len() < 3 {
                                     return Err("bad node coords".into());
                                 }
@@ -425,7 +481,8 @@ pub fn parse_msh(bytes: &[u8]) -> Result<TetMesh, String> {
                             }
                         } else {
                             for _ in 0..nn {
-                                let v: Vec<f64> = nums(c.nonempty_line().ok_or("truncated nodes")?)?;
+                                let v: Vec<f64> =
+                                    nums(c.nonempty_line().ok_or("truncated nodes")?)?;
                                 if v.len() < 4 {
                                     return Err("bad node line".into());
                                 }
@@ -440,14 +497,19 @@ pub fn parse_msh(bytes: &[u8]) -> Result<TetMesh, String> {
             }
             "$Elements" => {
                 if version < 4.0 {
-                    let n: usize = c.nonempty_line().ok_or("truncated $Elements")?.parse().map_err(|_| "bad element count")?;
+                    let n: usize = c
+                        .nonempty_line()
+                        .ok_or("truncated $Elements")?
+                        .parse()
+                        .map_err(|_| "bad element count")?;
                     if binary {
                         let mut read = 0;
                         while read < n {
                             let ty = read_i32(&mut c, swap)?;
                             let cnt = read_i32(&mut c, swap)? as usize;
                             let ntags = read_i32(&mut c, swap)? as usize;
-                            let nn = nodes_per_element(ty).ok_or(format!("unknown msh element type {ty}"))?;
+                            let nn = nodes_per_element(ty)
+                                .ok_or(format!("unknown msh element type {ty}"))?;
                             for _ in 0..cnt {
                                 let _id = read_i32(&mut c, swap)?;
                                 for _ in 0..ntags {
@@ -487,7 +549,8 @@ pub fn parse_msh(bytes: &[u8]) -> Result<TetMesh, String> {
                     let h: Vec<u64> = nums(c.nonempty_line().ok_or("truncated $Elements")?)?;
                     let nblocks = *h.first().ok_or("bad $Elements header")? as usize;
                     for _ in 0..nblocks {
-                        let bh: Vec<i64> = nums(c.nonempty_line().ok_or("truncated element block")?)?;
+                        let bh: Vec<i64> =
+                            nums(c.nonempty_line().ok_or("truncated element block")?)?;
                         if bh.len() < 4 {
                             return Err("bad element block header".into());
                         }
@@ -533,7 +596,10 @@ pub fn parse_msh(bytes: &[u8]) -> Result<TetMesh, String> {
     for t in &tets_tagged {
         tets.push([lookup(t[0])?, lookup(t[1])?, lookup(t[2])?, lookup(t[3])?]);
     }
-    Ok(TetMesh { verts: node_pos, tets })
+    Ok(TetMesh {
+        verts: node_pos,
+        tets,
+    })
 }
 
 fn nodes_per_element(ty: i32) -> Option<usize> {
@@ -579,14 +645,22 @@ fn skip_to_binary(c: &mut Cursor, end: &str) -> Result<(), String> {
 fn read_i32(c: &mut Cursor, swap: bool) -> Result<i32, String> {
     let b = c.take(4)?;
     let a = [b[0], b[1], b[2], b[3]];
-    Ok(if swap { i32::from_be_bytes(a) } else { i32::from_le_bytes(a) })
+    Ok(if swap {
+        i32::from_be_bytes(a)
+    } else {
+        i32::from_le_bytes(a)
+    })
 }
 
 fn read_f64(c: &mut Cursor, swap: bool) -> Result<f64, String> {
     let b = c.take(8)?;
     let mut a = [0u8; 8];
     a.copy_from_slice(b);
-    Ok(if swap { f64::from_be_bytes(a) } else { f64::from_le_bytes(a) })
+    Ok(if swap {
+        f64::from_be_bytes(a)
+    } else {
+        f64::from_le_bytes(a)
+    })
 }
 
 #[cfg(test)]
@@ -602,7 +676,12 @@ mod tests {
         let mut b: Vec<u8> = b"$MeshFormat\n2.2 1 8\n".to_vec();
         b.extend_from_slice(&1i32.to_le_bytes());
         b.extend_from_slice(b"\n$EndMeshFormat\n$Nodes\n4\n");
-        let p = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        let p = [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ];
         for (i, q) in p.iter().enumerate() {
             b.extend_from_slice(&((i + 1) as i32).to_le_bytes());
             for v in q {

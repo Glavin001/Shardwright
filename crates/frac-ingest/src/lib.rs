@@ -43,9 +43,15 @@ pub struct IngestOut {
 }
 
 /// Resolve a part's library material.
-pub fn resolve_material(part: &InputPart, meta: &PartMeta, lib: &MaterialLibrary) -> Result<MaterialId, String> {
+pub fn resolve_material(
+    part: &InputPart,
+    meta: &PartMeta,
+    lib: &MaterialLibrary,
+) -> Result<MaterialId, String> {
     if let Some(m) = &meta.material {
-        return lib.material_id(m).ok_or_else(|| format!("part '{}': unknown material '{m}'", part.name));
+        return lib
+            .material_id(m)
+            .ok_or_else(|| format!("part '{}': unknown material '{m}'", part.name));
     }
     // dominant source slot through the mapping table, or a slot named like a library material
     let mut counts = vec![0usize; part.material_names.len().max(1)];
@@ -68,17 +74,29 @@ pub fn resolve_material(part: &InputPart, meta: &PartMeta, lib: &MaterialLibrary
             }
         }
     }
-    Err(format!("part '{}': cannot resolve a library material (set `material` in metadata)", part.name))
+    Err(format!(
+        "part '{}': cannot resolve a library material (set `material` in metadata)",
+        part.name
+    ))
 }
 
 /// Stage 0: weld, validate, and solidify every part.
-pub fn ingest(scene: &InputScene, meta: &AuthoringMeta, lib: &MaterialLibrary, s: &IngestSettings) -> IngestOut {
+pub fn ingest(
+    scene: &InputScene,
+    meta: &AuthoringMeta,
+    lib: &MaterialLibrary,
+    s: &IngestSettings,
+) -> IngestOut {
     let parts: Vec<IngestedPart> = scene
         .parts
         .par_iter()
         .map(|p| {
             let pm = meta.for_part(&p.name, &p.extras);
-            let role = pm.component_role.as_deref().and_then(ComponentRole::from_name).unwrap_or_default();
+            let role = pm
+                .component_role
+                .as_deref()
+                .and_then(ComponentRole::from_name)
+                .unwrap_or_default();
             let material = match resolve_material(p, &pm, lib) {
                 Ok(m) => m,
                 Err(e) => {
@@ -108,7 +126,11 @@ pub fn ingest(scene: &InputScene, meta: &AuthoringMeta, lib: &MaterialLibrary, s
             if parts[i].failed.is_some() || parts[j].failed.is_some() {
                 continue;
             }
-            if !parts[i].aabb.expanded(s.contact_tolerance).overlaps(&parts[j].aabb) {
+            if !parts[i]
+                .aabb
+                .expanded(s.contact_tolerance)
+                .overlaps(&parts[j].aabb)
+            {
                 continue;
             }
             if solids_within(&parts[i].solid, &parts[j].solid, s.contact_tolerance) {
@@ -125,7 +147,11 @@ pub fn ingest(scene: &InputScene, meta: &AuthoringMeta, lib: &MaterialLibrary, s
             warnings.push(format!("part '{}': {w}", p.name));
         }
     }
-    IngestOut { parts, contacts, warnings }
+    IngestOut {
+        parts,
+        contacts,
+        warnings,
+    }
 }
 
 fn corner_attrs(p: &InputPart, keep: &[usize]) -> SurfaceAttributes {
@@ -136,14 +162,27 @@ fn corner_attrs(p: &InputPart, keep: &[usize]) -> SurfaceAttributes {
     SurfaceAttributes {
         normals,
         uvs: p.uvs.as_ref().map(|u| keep.iter().map(|&t| u[t]).collect()),
-        tangents: p.tangents.as_ref().map(|u| keep.iter().map(|&t| u[t]).collect()),
-        material_slot: Some(keep.iter().map(|&t| p.material_slot.get(t).copied().unwrap_or(0)).collect()),
+        tangents: p
+            .tangents
+            .as_ref()
+            .map(|u| keep.iter().map(|&t| u[t]).collect()),
+        material_slot: Some(
+            keep.iter()
+                .map(|&t| p.material_slot.get(t).copied().unwrap_or(0))
+                .collect(),
+        ),
     }
 }
 
 /// Weld + validate; reconstruct with the generalized winding number when the
 /// input is not a clean closed manifold.
-pub fn repair_part(p: &InputPart, meta: PartMeta, material: MaterialId, role: ComponentRole, s: &IngestSettings) -> IngestedPart {
+pub fn repair_part(
+    p: &InputPart,
+    meta: PartMeta,
+    material: MaterialId,
+    role: ComponentRole,
+    s: &IngestSettings,
+) -> IngestedPart {
     let mut warnings = Vec::new();
     let diag = p.mesh.aabb().diagonal().max(1e-12);
     // weld positions, keep per-triangle mapping to input triangles
@@ -186,10 +225,21 @@ pub fn repair_part(p: &InputPart, meta: PartMeta, material: MaterialId, role: Co
             warnings.push("inverted orientation fixed".into());
         }
         if vol <= 0.0 {
-            return IngestedPart { failed: Some("zero volume".into()), warnings, ..base };
+            return IngestedPart {
+                failed: Some("zero volume".into()),
+                warnings,
+                ..base
+            };
         }
         let aabb = solid.aabb();
-        return IngestedPart { solid, surface, volume: vol, aabb, warnings, ..base };
+        return IngestedPart {
+            solid,
+            surface,
+            volume: vol,
+            aabb,
+            warnings,
+            ..base
+        };
     }
     match solidify::solidify(&p.mesh, s.solidify_resolution) {
         Ok(solid) => {
@@ -197,10 +247,25 @@ pub fn repair_part(p: &InputPart, meta: PartMeta, material: MaterialId, role: Co
             let aabb = solid.aabb();
             let all: Vec<usize> = (0..p.mesh.tris.len()).collect();
             let rs = (p.mesh.clone(), corner_attrs(p, &all));
-            warnings.push(format!("reconstructed solid ({} tris) from non-watertight input", solid.tris.len()));
-            IngestedPart { solid, reconstructed: true, render_surface: Some(rs), volume: vol, aabb, warnings, ..base }
+            warnings.push(format!(
+                "reconstructed solid ({} tris) from non-watertight input",
+                solid.tris.len()
+            ));
+            IngestedPart {
+                solid,
+                reconstructed: true,
+                render_surface: Some(rs),
+                volume: vol,
+                aabb,
+                warnings,
+                ..base
+            }
         }
-        Err(e) => IngestedPart { failed: Some(format!("solidification failed: {e}")), warnings, ..base },
+        Err(e) => IngestedPart {
+            failed: Some(format!("solidification failed: {e}")),
+            warnings,
+            ..base
+        },
     }
 }
 
@@ -224,12 +289,20 @@ fn flip_corners(s: &mut SurfaceAttributes) {
 /// mesh and, for each output triangle, its input triangle index.
 pub fn weld_keep_map(m: &TriMesh, eps: f64) -> (TriMesh, Vec<usize>) {
     // reuse TriMesh::weld but track triangles by recomputing the remap
-    let w = if eps > 0.0 { weld_remap(m, eps) } else { weld_remap(m, 0.0) };
+    let w = if eps > 0.0 {
+        weld_remap(m, eps)
+    } else {
+        weld_remap(m, 0.0)
+    };
     let (verts, remap) = w;
     let mut tris = Vec::new();
     let mut keep = Vec::new();
     for (i, t) in m.tris.iter().enumerate() {
-        let nt = [remap[t[0] as usize], remap[t[1] as usize], remap[t[2] as usize]];
+        let nt = [
+            remap[t[0] as usize],
+            remap[t[1] as usize],
+            remap[t[2] as usize],
+        ];
         if nt[0] == nt[1] || nt[1] == nt[2] || nt[0] == nt[2] {
             continue;
         }
@@ -242,7 +315,14 @@ pub fn weld_keep_map(m: &TriMesh, eps: f64) -> (TriMesh, Vec<usize>) {
     let mut t2 = Vec::new();
     for (j, t) in out.tris.iter().enumerate() {
         let deg = {
-            let mm = TriMesh { verts: vec![out.verts[t[0] as usize], out.verts[t[1] as usize], out.verts[t[2] as usize]], tris: vec![[0, 1, 2]] };
+            let mm = TriMesh {
+                verts: vec![
+                    out.verts[t[0] as usize],
+                    out.verts[t[1] as usize],
+                    out.verts[t[2] as usize],
+                ],
+                tris: vec![[0, 1, 2]],
+            };
             mm.is_degenerate(0)
         };
         if !deg {
@@ -269,7 +349,13 @@ fn weld_remap(m: &TriMesh, eps: f64) -> (Vec<DVec3>, Vec<u32>) {
         }
         return (verts, remap);
     }
-    let key = |v: DVec3| [(v.x / eps).floor() as i64, (v.y / eps).floor() as i64, (v.z / eps).floor() as i64];
+    let key = |v: DVec3| {
+        [
+            (v.x / eps).floor() as i64,
+            (v.y / eps).floor() as i64,
+            (v.z / eps).floor() as i64,
+        ]
+    };
     let mut grid: BTreeMap<[i64; 3], Vec<u32>> = BTreeMap::new();
     for (i, &v) in m.verts.iter().enumerate() {
         let k = key(v);
@@ -307,7 +393,12 @@ pub fn solids_within(a: &TriMesh, b: &TriMesh, tol: f64) -> bool {
     // vertex-to-surface distance both ways (adequate for faceted contacts),
     // plus containment (interpenetration)
     let close = |m: &TriMesh, q: &MeshQuery| {
-        m.verts.iter().any(|&v| q.closest_point(v).map(|c| c.1 <= tol * tol).unwrap_or(false) || q.contains(v))
+        m.verts.iter().any(|&v| {
+            q.closest_point(v)
+                .map(|c| c.1 <= tol * tol)
+                .unwrap_or(false)
+                || q.contains(v)
+        })
     };
     if close(a, &qb) {
         return true;

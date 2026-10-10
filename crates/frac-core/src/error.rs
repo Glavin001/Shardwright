@@ -36,7 +36,11 @@ pub struct FracError {
 
 impl FracError {
     pub fn new(stage: Stage, context: impl Into<String>, message: impl Into<String>) -> Self {
-        FracError { stage, context: context.into(), message: message.into() }
+        FracError {
+            stage,
+            context: context.into(),
+            message: message.into(),
+        }
     }
 }
 

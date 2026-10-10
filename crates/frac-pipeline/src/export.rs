@@ -21,15 +21,26 @@ pub fn render_refs(asset: &mut Asset, render: &RenderOut) {
                 next += 1;
             }
         }
-        f.render = RenderRefs { gltf_node: fi as i32, lod_meshes: lods };
+        f.render = RenderRefs {
+            gltf_node: fi as i32,
+            lod_meshes: lods,
+        };
     }
 }
 
 /// The f32 glTF scene. With `consume`, each fragment's f64 render meshes are
 /// moved out of `render` and freed as they are converted, so the two
 /// representations of a building-scale asset are never alive at once.
-pub fn render_scene(asset: &Asset, render: &mut RenderOut, lib: &MaterialLibrary, consume: bool) -> RenderScene {
-    let mut scene = RenderScene { name: asset.meta.name.clone(), ..Default::default() };
+pub fn render_scene(
+    asset: &Asset,
+    render: &mut RenderOut,
+    lib: &MaterialLibrary,
+    consume: bool,
+) -> RenderScene {
+    let mut scene = RenderScene {
+        name: asset.meta.name.clone(),
+        ..Default::default()
+    };
     // two render materials per library material: exterior, interior
     let mut mat_slot: BTreeMap<MaterialId, (u32, u32)> = BTreeMap::new();
     for comp in &asset.components {
@@ -44,7 +55,10 @@ pub fn render_scene(asset: &Asset, render: &mut RenderOut, lib: &MaterialLibrary
                 double_sided: false,
             });
             scene.materials.push(RenderMaterial {
-                name: m.interior_render_material.clone().unwrap_or_else(|| format!("{}_interior", m.id)),
+                name: m
+                    .interior_render_material
+                    .clone()
+                    .unwrap_or_else(|| format!("{}_interior", m.id)),
                 base_color: m.interior_color.unwrap_or([0.6, 0.6, 0.6, 1.0]),
                 metallic: 0.0,
                 roughness: 0.95,
@@ -54,7 +68,13 @@ pub fn render_scene(asset: &Asset, render: &mut RenderOut, lib: &MaterialLibrary
         });
     }
     let rebar_mat = scene.materials.len() as u32;
-    scene.materials.push(RenderMaterial { name: "rebar".into(), base_color: [0.35, 0.25, 0.2, 1.0], metallic: 0.8, roughness: 0.6, double_sided: false });
+    scene.materials.push(RenderMaterial {
+        name: "rebar".into(),
+        base_color: [0.35, 0.25, 0.2, 1.0],
+        metallic: 0.8,
+        roughness: 0.6,
+        double_sided: false,
+    });
     let h = &asset.hierarchy;
     let nf = h.fragments.len();
     for fi in 0..nf {
@@ -62,14 +82,24 @@ pub fn render_scene(asset: &Asset, render: &mut RenderOut, lib: &MaterialLibrary
         let (ext_m, int_m) = mat_slot[&asset.components[f.component.idx()].material];
         let origin = f.mass.com;
         let mut lods = Vec::new();
-        let fms = if consume { std::mem::take(&mut render.fragments[fi]) } else { render.fragments[fi].clone() };
+        let fms = if consume {
+            std::mem::take(&mut render.fragments[fi])
+        } else {
+            render.fragments[fi].clone()
+        };
         for (li, fm) in fms.into_iter().enumerate() {
             let mut prims = Vec::new();
             if !fm.ext_indices.is_empty() {
-                prims.push(RenderPrimitive { material: ext_m, indices: fm.ext_indices });
+                prims.push(RenderPrimitive {
+                    material: ext_m,
+                    indices: fm.ext_indices,
+                });
             }
             if !fm.int_indices.is_empty() {
-                prims.push(RenderPrimitive { material: int_m, indices: fm.int_indices });
+                prims.push(RenderPrimitive {
+                    material: int_m,
+                    indices: fm.int_indices,
+                });
             }
             if prims.is_empty() {
                 continue;
@@ -77,8 +107,16 @@ pub fn render_scene(asset: &Asset, render: &mut RenderOut, lib: &MaterialLibrary
             let mi = scene.meshes.len() as u32;
             scene.meshes.push(RenderMesh {
                 name: format!("frag_{}_lod{}", f.id.0, li),
-                positions: fm.positions.iter().map(|p| (*p - origin).as_vec3().to_array()).collect(),
-                normals: fm.normals.iter().map(|n| n.normalize_or_zero().to_array()).collect(),
+                positions: fm
+                    .positions
+                    .iter()
+                    .map(|p| (*p - origin).as_vec3().to_array())
+                    .collect(),
+                normals: fm
+                    .normals
+                    .iter()
+                    .map(|n| n.normalize_or_zero().to_array())
+                    .collect(),
                 uvs: Some(fm.uvs),
                 tangents: None,
                 primitives: prims,
@@ -86,7 +124,10 @@ pub fn render_scene(asset: &Asset, render: &mut RenderOut, lib: &MaterialLibrary
             lods.push(mi);
         }
         debug_assert_eq!(lods, f.render.lod_meshes);
-        let parent_com = f.parent.map(|p| h.fragments[p.idx()].mass.com).unwrap_or(glam::DVec3::ZERO);
+        let parent_com = f
+            .parent
+            .map(|p| h.fragments[p.idx()].mass.com)
+            .unwrap_or(glam::DVec3::ZERO);
         let children: Vec<u32> = f.children.clone().collect();
         scene.nodes.push(RenderNode {
             name: format!("frag_{}_L{}", f.id.0, f.level),
@@ -113,11 +154,18 @@ pub fn render_scene(asset: &Asset, render: &mut RenderOut, lib: &MaterialLibrary
         let mi = scene.meshes.len() as u32;
         scene.meshes.push(RenderMesh {
             name: format!("rebar_{}", st.interface.0),
-            positions: st.positions.iter().map(|p| (*p - origin).as_vec3().to_array()).collect(),
+            positions: st
+                .positions
+                .iter()
+                .map(|p| (*p - origin).as_vec3().to_array())
+                .collect(),
             normals: st.normals.iter().map(|n| n.to_array()).collect(),
             uvs: None,
             tangents: None,
-            primitives: vec![RenderPrimitive { material: rebar_mat, indices: st.indices.clone() }],
+            primitives: vec![RenderPrimitive {
+                material: rebar_mat,
+                indices: st.indices.clone(),
+            }],
         });
         scene.nodes.push(RenderNode {
             name: format!("rebar_{}", st.interface.0),

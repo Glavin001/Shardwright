@@ -10,7 +10,7 @@
 //! * face loops contain every complex vertex lying on their boundary.
 
 use crate::delaunay::{Delaunay, NONE};
-use crate::planes::{vor_id, BoxPlanes, LineKey, PlaneId, PlaneSystem, VoronoiPlanes, P3};
+use crate::planes::{BoxPlanes, LineKey, P3, PlaneId, PlaneSystem, VoronoiPlanes, vor_id};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug)]
@@ -79,8 +79,14 @@ impl Complex {
     /// interest is the box `[lo, hi]` (guards never influence it).
     pub fn voronoi(seeds: &[P3], lo: P3, hi: P3) -> Result<Complex, String> {
         let n = seeds.len();
-        let center = [(lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5];
-        let diag = ((hi[0] - lo[0]).powi(2) + (hi[1] - lo[1]).powi(2) + (hi[2] - lo[2]).powi(2)).sqrt().max(1e-9);
+        let center = [
+            (lo[0] + hi[0]) * 0.5,
+            (lo[1] + hi[1]) * 0.5,
+            (lo[2] + hi[2]) * 0.5,
+        ];
+        let diag = ((hi[0] - lo[0]).powi(2) + (hi[1] - lo[1]).powi(2) + (hi[2] - lo[2]).powi(2))
+            .sqrt()
+            .max(1e-9);
         // guard points: Fibonacci sphere at 3x diagonal (generic position)
         let ng = 48;
         let mut guards = Vec::with_capacity(ng);
@@ -89,12 +95,24 @@ impl Complex {
             let r = (1.0 - z * z).sqrt();
             let a = k as f64 * 2.399963229728653 + 0.1234;
             let rad = 3.0 * diag;
-            guards.push([center[0] + rad * r * libm::cos(a), center[1] + rad * r * libm::sin(a), center[2] + rad * z]);
+            guards.push([
+                center[0] + rad * r * libm::cos(a),
+                center[1] + rad * r * libm::sin(a),
+                center[2] + rad * z,
+            ]);
         }
         // insertion order: guards first, then seeds in Morton order
-        let bb = frac_geom::Aabb { min: glam::DVec3::from_array(lo), max: glam::DVec3::from_array(hi) };
+        let bb = frac_geom::Aabb {
+            min: glam::DVec3::from_array(lo),
+            max: glam::DVec3::from_array(hi),
+        };
         let mut order: Vec<usize> = (0..n).collect();
-        order.sort_by_key(|&i| (frac_geom::morton3(glam::DVec3::from_array(seeds[i]), &bb), i));
+        order.sort_by_key(|&i| {
+            (
+                frac_geom::morton3(glam::DVec3::from_array(seeds[i]), &bb),
+                i,
+            )
+        });
         let mut pts: Vec<P3> = guards.clone();
         pts.extend(order.iter().map(|&i| seeds[i]));
         let dt = Delaunay::build(&pts, center, diag * 4.0)?;
@@ -105,7 +123,9 @@ impl Complex {
             cell_of[base + k] = i as u32;
         }
         // Plane system indexed by dt point indices (ranks = dt indices).
-        let planes = PlaneSystem::Voronoi(VoronoiPlanes { seeds: dt.points.clone() });
+        let planes = PlaneSystem::Voronoi(VoronoiPlanes {
+            seeds: dt.points.clone(),
+        });
         let vt = dt.vertex_tet();
         // complex vertices = tets used; map tet -> vertex id
         let mut tet_vert: BTreeMap<u32, u32> = BTreeMap::new();
@@ -151,7 +171,10 @@ impl Complex {
                     continue;
                 }
                 // ring of tets around edge (a, b), CCW about s_b - s_a
-                let t0 = *star.iter().find(|&&t| dt.tets[t as usize].contains(&pj)).unwrap();
+                let t0 = *star
+                    .iter()
+                    .find(|&&t| dt.tets[t as usize].contains(&pj))
+                    .unwrap();
                 let mut ring: Vec<u32> = Vec::new();
                 let mut t = t0;
                 loop {
@@ -162,7 +185,11 @@ impl Complex {
                     let pos_b = tv.iter().position(|&x| x == b).unwrap();
                     let others: Vec<usize> = (0..4).filter(|&s| s != pos_a && s != pos_b).collect();
                     let perm = [pos_a, pos_b, others[0], others[1]];
-                    let (sk, _sl) = if perm_parity(perm) { (others[0], others[1]) } else { (others[1], others[0]) };
+                    let (sk, _sl) = if perm_parity(perm) {
+                        (others[0], others[1])
+                    } else {
+                        (others[1], others[0])
+                    };
                     // next tet: across face opposite k
                     let nt = dt.neigh[t as usize][sk];
                     if nt == NONE {
@@ -198,7 +225,8 @@ impl Complex {
                         let sa = dt.tets[ta as usize];
                         let sb = dt.tets[tb as usize];
                         // shared triangle
-                        let shared: Vec<u32> = sa.iter().copied().filter(|x| sb.contains(x)).collect();
+                        let shared: Vec<u32> =
+                            sa.iter().copied().filter(|x| sb.contains(x)).collect();
                         if shared.len() != 3 {
                             return Err("voronoi: ring tets do not share a face".into());
                         }
@@ -210,7 +238,11 @@ impl Complex {
                         let i0 = tri[0];
                         let end_a = (vor_id(i0, ka), if i0 < ka { 1 } else { -1 });
                         let end_b = (vor_id(i0, kb), if i0 < kb { 1 } else { -1 });
-                        let (v, end) = if va <= vb { ([va, vb], [end_a, end_b]) } else { ([vb, va], [end_b, end_a]) };
+                        let (v, end) = if va <= vb {
+                            ([va, vb], [end_a, end_b])
+                        } else {
+                            ([vb, va], [end_b, end_a])
+                        };
                         edges.push(CEdge { line, v, end });
                         edge_of.insert(key, (edges.len() - 1) as u32);
                         (edges.len() - 1) as u32
@@ -219,13 +251,25 @@ impl Complex {
                 }
                 let ca = cell_of[a as usize];
                 let cb = cell_of[b as usize];
-                faces.push(CFace { plane: vor_id(a, b), cells: [ca, cb], loop_verts, loop_edges });
+                faces.push(CFace {
+                    plane: vor_id(a, b),
+                    cells: [ca, cb],
+                    loop_verts,
+                    loop_edges,
+                });
                 let f = (faces.len() - 1) as u32;
                 face_of.insert((a, b), f);
                 cells[c].faces.push(f);
             }
         }
-        let mut cx = Complex { planes, verts, edges, faces, cells, sites };
+        let mut cx = Complex {
+            planes,
+            verts,
+            edges,
+            faces,
+            cells,
+            sites,
+        };
         cx.finish_aabbs();
         Ok(cx)
     }
@@ -256,7 +300,11 @@ impl Complex {
                 cells[i].halfspaces.push((pl, -1));
                 cells[i].halfspaces.push((ph, 1));
             }
-            sites.push([(lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5]);
+            sites.push([
+                (lo[0] + hi[0]) * 0.5,
+                (lo[1] + hi[1]) * 0.5,
+                (lo[2] + hi[2]) * 0.5,
+            ]);
         }
         // faces: pairs touching on a plane. Index boxes by (axis, lo) and (axis, hi).
         struct RawFace {
@@ -289,7 +337,13 @@ impl Complex {
                         let l2 = [la[u].max(lb[u]), la[w].max(lb[w])];
                         let h2 = [ha[u].min(hb[u]), ha[w].min(hb[w])];
                         if l2[0] < h2[0] && l2[1] < h2[1] {
-                            raw.push(RawFace { ax: ax as u8, off, lo2: l2, hi2: h2, cells: [a, b] });
+                            raw.push(RawFace {
+                                ax: ax as u8,
+                                off,
+                                lo2: l2,
+                                hi2: h2,
+                                cells: [a, b],
+                            });
                         }
                     }
                 }
@@ -300,17 +354,41 @@ impl Complex {
             // any part of them.
             for (i, (lo, hi)) in boxes.iter().enumerate() {
                 for (side, off) in [(0usize, lo[ax]), (1usize, hi[ax])] {
-                    let covered = raw.iter().any(|f| f.ax as usize == ax && f.off == off && f.cells[1 - side] == i as u32);
+                    let covered = raw.iter().any(|f| {
+                        f.ax as usize == ax && f.off == off && f.cells[1 - side] == i as u32
+                    });
                     if !covered {
-                        let cellsp = if side == 0 { [NONE, i as u32] } else { [i as u32, NONE] };
-                        raw.push(RawFace { ax: ax as u8, off, lo2: [lo[u], lo[w]], hi2: [hi[u], hi[w]], cells: cellsp });
+                        let cellsp = if side == 0 {
+                            [NONE, i as u32]
+                        } else {
+                            [i as u32, NONE]
+                        };
+                        raw.push(RawFace {
+                            ax: ax as u8,
+                            off,
+                            lo2: [lo[u], lo[w]],
+                            hi2: [hi[u], hi[w]],
+                            cells: cellsp,
+                        });
                     }
                 }
             }
         }
         raw.sort_by(|a, b| {
-            (a.ax, a.off.to_bits(), a.cells, a.lo2[0].to_bits(), a.lo2[1].to_bits())
-                .cmp(&(b.ax, b.off.to_bits(), b.cells, b.lo2[0].to_bits(), b.lo2[1].to_bits()))
+            (
+                a.ax,
+                a.off.to_bits(),
+                a.cells,
+                a.lo2[0].to_bits(),
+                a.lo2[1].to_bits(),
+            )
+                .cmp(&(
+                    b.ax,
+                    b.off.to_bits(),
+                    b.cells,
+                    b.lo2[0].to_bits(),
+                    b.lo2[1].to_bits(),
+                ))
         });
         // complex vertices: all face corners
         let mut vert_of: BTreeMap<[u64; 3], u32> = BTreeMap::new();
@@ -324,7 +402,12 @@ impl Complex {
             p
         };
         for f in &raw {
-            for (cu, cw) in [(f.lo2[0], f.lo2[1]), (f.hi2[0], f.lo2[1]), (f.hi2[0], f.hi2[1]), (f.lo2[0], f.hi2[1])] {
+            for (cu, cw) in [
+                (f.lo2[0], f.lo2[1]),
+                (f.hi2[0], f.lo2[1]),
+                (f.hi2[0], f.hi2[1]),
+                (f.lo2[0], f.hi2[1]),
+            ] {
                 let p = corner(f, cu, cw);
                 let k = [p[0].to_bits(), p[1].to_bits(), p[2].to_bits()];
                 vert_of.entry(k).or_insert_with(|| {
@@ -338,7 +421,10 @@ impl Complex {
         for (i, p) in verts.iter().enumerate() {
             for ax in 0..3usize {
                 let (u, w) = ((ax + 1) % 3, (ax + 2) % 3);
-                on_line.entry((ax as u8, p[u].to_bits(), p[w].to_bits())).or_default().push((p[ax], i as u32));
+                on_line
+                    .entry((ax as u8, p[u].to_bits(), p[w].to_bits()))
+                    .or_default()
+                    .push((p[ax], i as u32));
             }
         }
         for v in on_line.values_mut() {
@@ -352,7 +438,12 @@ impl Complex {
             let (u, w) = ((ax + 1) % 3, (ax + 2) % 3);
             let fplane = get_plane(f.ax, f.off, &mut bp);
             // CCW about +axis in (u, w) coordinates: (lo,lo)->(hi,lo)->(hi,hi)->(lo,hi)
-            let cs = [(f.lo2[0], f.lo2[1]), (f.hi2[0], f.lo2[1]), (f.hi2[0], f.hi2[1]), (f.lo2[0], f.hi2[1])];
+            let cs = [
+                (f.lo2[0], f.lo2[1]),
+                (f.hi2[0], f.lo2[1]),
+                (f.hi2[0], f.hi2[1]),
+                (f.lo2[0], f.hi2[1]),
+            ];
             let mut loop_verts = Vec::new();
             let mut loop_edges = Vec::new();
             for k in 0..4 {
@@ -363,34 +454,54 @@ impl Complex {
                 let (fu, fw) = ((lax + 1) % 3, (lax + 2) % 3);
                 let list = &on_line[&(lax as u8, a[fu].to_bits(), a[fw].to_bits())];
                 let (t0, t1) = (a[lax], b[lax]);
-                let mut seg: Vec<(f64, u32)> =
-                    list.iter().copied().filter(|&(t, _)| t >= t0.min(t1) && t <= t0.max(t1)).collect();
+                let mut seg: Vec<(f64, u32)> = list
+                    .iter()
+                    .copied()
+                    .filter(|&(t, _)| t >= t0.min(t1) && t <= t0.max(t1))
+                    .collect();
                 if t0 > t1 {
                     seg.reverse();
                 }
                 // other plane through this edge line (perpendicular to face, constant coord)
                 let other_ax = if lax == u { w } else { u };
                 let other_plane = get_plane(other_ax as u8, a[other_ax], &mut bp);
-                let line = if fplane < other_plane { LineKey(fplane, other_plane) } else { LineKey(other_plane, fplane) };
+                let line = if fplane < other_plane {
+                    LineKey(fplane, other_plane)
+                } else {
+                    LineKey(other_plane, fplane)
+                };
                 for s in 0..seg.len() - 1 {
                     let (va, vb) = (seg[s].1, seg[s + 1].1);
                     loop_verts.push(va);
                     let key = (va.min(vb), va.max(vb));
                     let eid = *edge_of.entry(key).or_insert_with(|| {
                         let (pa, pb) = (verts[key.0 as usize], verts[key.1 as usize]);
-                        let (lo_v, hi_v) = if pa[lax] < pb[lax] { (key.0, key.1) } else { (key.1, key.0) };
+                        let (lo_v, hi_v) = if pa[lax] < pb[lax] {
+                            (key.0, key.1)
+                        } else {
+                            (key.1, key.0)
+                        };
                         let plo = verts[lo_v as usize][lax];
                         let phi = verts[hi_v as usize][lax];
                         let e_lo = (get_plane(lax as u8, plo, &mut bp), -1i8);
                         let e_hi = (get_plane(lax as u8, phi, &mut bp), 1i8);
-                        let (v, end) = if key.0 == lo_v { ([key.0, key.1], [e_lo, e_hi]) } else { ([key.0, key.1], [e_hi, e_lo]) };
+                        let (v, end) = if key.0 == lo_v {
+                            ([key.0, key.1], [e_lo, e_hi])
+                        } else {
+                            ([key.0, key.1], [e_hi, e_lo])
+                        };
                         edges.push(CEdge { line, v, end });
                         (edges.len() - 1) as u32
                     });
                     loop_edges.push(eid);
                 }
             }
-            faces.push(CFace { plane: fplane, cells: f.cells, loop_verts, loop_edges });
+            faces.push(CFace {
+                plane: fplane,
+                cells: f.cells,
+                loop_verts,
+                loop_edges,
+            });
         }
         for (fi, f) in faces.iter().enumerate() {
             for &c in &f.cells {
@@ -402,8 +513,10 @@ impl Complex {
         // facet subdivisions: lines of face edges that run through the
         // interior of a cell's facet (i.e. not along the cell's own planes)
         for ci in 0..n {
-            let own: std::collections::BTreeSet<PlaneId> = cells[ci].halfspaces.iter().map(|h| h.0).collect();
-            let mut by_plane: BTreeMap<PlaneId, Vec<(PlaneId, [(PlaneId, i8); 2])>> = BTreeMap::new();
+            let own: std::collections::BTreeSet<PlaneId> =
+                cells[ci].halfspaces.iter().map(|h| h.0).collect();
+            let mut by_plane: BTreeMap<PlaneId, Vec<(PlaneId, [(PlaneId, i8); 2])>> =
+                BTreeMap::new();
             for &f in &cells[ci].faces {
                 let fc = &faces[f as usize];
                 for &e in &fc.loop_edges {
@@ -422,7 +535,14 @@ impl Complex {
             }
         }
         let _ = boxes;
-        let mut cx = Complex { planes: PlaneSystem::Boxes(bp), verts, edges, faces, cells, sites };
+        let mut cx = Complex {
+            planes: PlaneSystem::Boxes(bp),
+            verts,
+            edges,
+            faces,
+            cells,
+            sites,
+        };
         cx.finish_aabbs();
         Ok(cx)
     }
@@ -446,7 +566,11 @@ mod tests {
     use super::*;
 
     fn face_area(cx: &Complex, f: &CFace) -> glam::DVec3 {
-        let pts: Vec<glam::DVec3> = f.loop_verts.iter().map(|&v| glam::DVec3::from_array(cx.verts[v as usize])).collect();
+        let pts: Vec<glam::DVec3> = f
+            .loop_verts
+            .iter()
+            .map(|&v| glam::DVec3::from_array(cx.verts[v as usize]))
+            .collect();
         frac_geom::polygon::newell(&pts)
     }
 
@@ -454,7 +578,15 @@ mod tests {
     fn voronoi_cells_partition_box_volume() {
         use rand::{Rng, SeedableRng};
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(11);
-        let seeds: Vec<P3> = (0..200).map(|_| [rng.gen_range(0.0..1.0), rng.gen_range(0.0..1.0), rng.gen_range(0.0..1.0)]).collect();
+        let seeds: Vec<P3> = (0..200)
+            .map(|_| {
+                [
+                    rng.gen_range(0.0..1.0),
+                    rng.gen_range(0.0..1.0),
+                    rng.gen_range(0.0..1.0),
+                ]
+            })
+            .collect();
         let cx = Complex::voronoi(&seeds, [0.0; 3], [1.0; 3]).unwrap();
         // every face loop is CCW about its plane normal
         for f in &cx.faces {

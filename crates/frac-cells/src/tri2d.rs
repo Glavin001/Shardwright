@@ -110,11 +110,15 @@ fn bridge(pts: &[[f64; 2]], loops: &[Vec<usize>]) -> Vec<usize> {
 }
 
 fn fan(l: &[usize]) -> Vec<[usize; 3]> {
-    (1..l.len().saturating_sub(1)).map(|k| [l[0], l[k], l[k + 1]]).filter(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2]).collect()
+    (1..l.len().saturating_sub(1))
+        .map(|k| [l[0], l[k], l[k + 1]])
+        .filter(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2])
+        .collect()
 }
 
 fn cdt(pts: &[[f64; 2]], loops: &[Vec<usize>]) -> Option<Vec<[usize; 3]>> {
-    let mut tri: ConstrainedDelaunayTriangulation<Point2<f64>> = ConstrainedDelaunayTriangulation::new();
+    let mut tri: ConstrainedDelaunayTriangulation<Point2<f64>> =
+        ConstrainedDelaunayTriangulation::new();
     let mut handle: BTreeMap<usize, FixedVertexHandle> = BTreeMap::new();
     let mut back: BTreeMap<usize, usize> = BTreeMap::new();
     for l in loops {
@@ -187,7 +191,11 @@ fn cdt(pts: &[[f64; 2]], loops: &[Vec<usize>]) -> Option<Vec<[usize; 3]>> {
             continue;
         }
         let vs = f.vertices();
-        let ids = [back[&vs[0].fix().index()], back[&vs[1].fix().index()], back[&vs[2].fix().index()]];
+        let ids = [
+            back[&vs[0].fix().index()],
+            back[&vs[1].fix().index()],
+            back[&vs[2].fix().index()],
+        ];
         out.push(ids);
     }
     // sanity: area must match polygon area
@@ -231,7 +239,11 @@ fn earcut(pts: &[[f64; 2]], loops: &[Vec<usize>]) -> Vec<[usize; 3]> {
                 .chunks(3)
                 .map(|c| {
                     let t = [map[c[0]], map[c[1]], map[c[2]]];
-                    if signed_area(pts, &t) < 0.0 { [t[0], t[2], t[1]] } else { t }
+                    if signed_area(pts, &t) < 0.0 {
+                        [t[0], t[2], t[1]]
+                    } else {
+                        t
+                    }
                 })
                 .collect();
             out.sort_unstable();
@@ -250,7 +262,16 @@ mod tests {
     use super::*;
     #[test]
     fn square_with_hole() {
-        let pts = vec![[0., 0.], [4., 0.], [4., 4.], [0., 4.], [1., 1.], [1., 3.], [3., 3.], [3., 1.]];
+        let pts = vec![
+            [0., 0.],
+            [4., 0.],
+            [4., 4.],
+            [0., 4.],
+            [1., 1.],
+            [1., 3.],
+            [3., 3.],
+            [3., 1.],
+        ];
         let t = triangulate(&pts, &[vec![0, 1, 2, 3], vec![4, 5, 6, 7]]);
         let a: f64 = t.iter().map(|t| signed_area(&pts, &t[..])).sum();
         assert!((a - 12.0).abs() < 1e-12);

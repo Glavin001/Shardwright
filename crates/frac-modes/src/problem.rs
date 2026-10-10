@@ -3,7 +3,7 @@
 use crate::ModesInput;
 use frac_fem::analysis::free_dof_map;
 use frac_fem::sparse::CsrMatrix;
-use frac_fem::{assemble_lumped_mass, assemble_stiffness, rigid_modes, TetMesh};
+use frac_fem::{TetMesh, assemble_lumped_mass, assemble_stiffness, rigid_modes};
 use std::ops::Range;
 
 /// Regularization added to the quadratic term in both solvers:
@@ -71,7 +71,11 @@ impl Dsu {
 fn tri_area(p: [[f64; 3]; 3]) -> f64 {
     let e1 = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
     let e2 = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
-    let cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    let cr = [
+        e1[1] * e2[2] - e1[2] * e2[1],
+        e1[2] * e2[0] - e1[0] * e2[2],
+        e1[0] * e2[1] - e1[1] * e2[0],
+    ];
     0.5 * (cr[0] * cr[0] + cr[1] * cr[1] + cr[2] * cr[2]).sqrt()
 }
 
@@ -99,7 +103,10 @@ pub(crate) struct NodeInfo {
 }
 
 #[cfg(test)]
-pub(crate) fn build(input: &ModesInput, timings: &mut Vec<(String, f64)>) -> Result<Problem, String> {
+pub(crate) fn build(
+    input: &ModesInput,
+    timings: &mut Vec<(String, f64)>,
+) -> Result<Problem, String> {
     build_full(input, timings, false).map(|(p, _)| p)
 }
 
@@ -113,7 +120,10 @@ pub(crate) fn eigen_clusters(lambdas: &[f64]) -> Vec<Vec<usize>> {
     (0..lambdas.len())
         .map(|j| {
             (0..lambdas.len())
-                .filter(|&l| (lambdas[l] - lambdas[j]).abs() <= DEGENERATE_REL_GAP * lambdas[j].abs().max(lambdas[l].abs()))
+                .filter(|&l| {
+                    (lambdas[l] - lambdas[j]).abs()
+                        <= DEGENERATE_REL_GAP * lambdas[j].abs().max(lambdas[l].abs())
+                })
                 .collect()
         })
         .collect()
@@ -160,8 +170,14 @@ pub(crate) fn build_full(
     let (evals, evecs) = if translational {
         (Vec::new(), Vec::new())
     } else {
-        let (evals, evecs) =
-            frac_fem::analysis::eigenmodes_tol(mesh, input.tet_material, input.anchored_vertices, p.k, p.seed, 1e-6)?;
+        let (evals, evecs) = frac_fem::analysis::eigenmodes_tol(
+            mesh,
+            input.tet_material,
+            input.anchored_vertices,
+            p.k,
+            p.seed,
+            1e-6,
+        )?;
         if evals.is_empty() {
             return Err("no non-rigid eigenmodes found on the continuous mesh".into());
         }
@@ -200,7 +216,11 @@ pub(crate) fn build_full(
             let c2 = input.tet_cell[faces[i + 1].1 as usize];
             if c1 != c2 {
                 let (ca, cb) = if c1 < c2 { (c1, c2) } else { (c2, c1) };
-                faults.push(Fault { verts: faces[i].0, ca, cb });
+                faults.push(Fault {
+                    verts: faces[i].0,
+                    ca,
+                    cb,
+                });
             }
         }
         i = j;
@@ -282,7 +302,10 @@ pub(crate) fn build_full(
 
     // exploded mesh
     let ex = TetMesh {
-        verts: node_vertex.iter().map(|&v| mesh.verts[v as usize]).collect(),
+        verts: node_vertex
+            .iter()
+            .map(|&v| mesh.verts[v as usize])
+            .collect(),
         tets: mesh
             .tets
             .iter()
@@ -302,8 +325,9 @@ pub(crate) fn build_full(
     for &a in input.anchored_vertices {
         anchored[a as usize] = true;
     }
-    let fixed_nodes: Vec<u32> =
-        (0..n_nodes as u32).filter(|&nd| anchored[node_vertex[nd as usize] as usize]).collect();
+    let fixed_nodes: Vec<u32> = (0..n_nodes as u32)
+        .filter(|&nd| anchored[node_vertex[nd as usize] as usize])
+        .collect();
     let (map, n) = free_dof_map(n_nodes, &fixed_nodes);
     if n == 0 {
         return Err("all DOFs are anchored".into());
@@ -356,7 +380,8 @@ pub(crate) fn build_full(
     // drop exact zeros (merged copies) to keep the operator lean
     let b_all = prune(&b_all);
 
-    let (active, b_act, rows_act, lam_act) = active_groups(&b_all, &rows_all, &group_weight, p.omega);
+    let (active, b_act, rows_act, lam_act) =
+        active_groups(&b_all, &rows_all, &group_weight, p.omega);
 
     // ---- rigid-mode rows (unanchored) ----
     let mut rigid_rows = Vec::new();
@@ -384,7 +409,10 @@ pub(crate) fn build_full(
                 basis.push(v);
             }
         }
-        rigid_rows = basis.iter().map(|q| (0..n).map(|i| m[i] * q[i]).collect()).collect();
+        rigid_rows = basis
+            .iter()
+            .map(|q| (0..n).map(|i| m[i] * q[i]).collect())
+            .collect();
     }
 
     // ---- initial vectors ----
@@ -412,7 +440,9 @@ pub(crate) fn build_full(
         n_super: n_super as usize,
         anchored_super: Vec::new(),
         anchored_pos: Vec::new(),
-        pair_dof: (0..pairs.len()).map(|k| map[3 * node_id[k] as usize]).collect(),
+        pair_dof: (0..pairs.len())
+            .map(|k| map[3 * node_id[k] as usize])
+            .collect(),
         pairs: pairs.clone(),
     };
     for nd in 0..n_nodes {
@@ -427,26 +457,29 @@ pub(crate) fn build_full(
         }
     }
     timings.push(("assemble".into(), t1.elapsed().as_secs_f64() * 1e3));
-    Ok((Problem {
-        n,
-        q,
-        m,
-        groups,
-        group_area,
-        group_weight,
-        b_all,
-        rows_all,
-        active,
-        b_act,
-        rows_act,
-        lam_act,
-        rigid_rows,
-        init_cluster: eigen_clusters(&evals[..init.len().min(evals.len())]),
-        eigenvalues: evals,
-        init,
-        length_scale,
-        prolong: None,
-    }, info))
+    Ok((
+        Problem {
+            n,
+            q,
+            m,
+            groups,
+            group_area,
+            group_weight,
+            b_all,
+            rows_all,
+            active,
+            b_act,
+            rows_act,
+            lam_act,
+            rigid_rows,
+            init_cluster: eigen_clusters(&evals[..init.len().min(evals.len())]),
+            eigenvalues: evals,
+            init,
+            length_scale,
+            prolong: None,
+        },
+        info,
+    ))
 }
 
 /// Stacks the rows of the active groups (0 < w < ∞).
@@ -495,7 +528,13 @@ pub(crate) fn prune(a: &CsrMatrix) -> CsrMatrix {
         }
         row_ptr[i + 1] = col_idx.len();
     }
-    CsrMatrix { n_rows: a.n_rows, n_cols: a.n_cols, row_ptr, col_idx, vals }
+    CsrMatrix {
+        n_rows: a.n_rows,
+        n_cols: a.n_cols,
+        row_ptr,
+        col_idx,
+        vals,
+    }
 }
 
 impl Problem {
@@ -517,7 +556,10 @@ impl Problem {
     /// `‖B̂_g u‖` for all groups.
     pub fn group_norms(&self, u: &[f64]) -> Vec<f64> {
         let bu = self.b_all.mul(u);
-        self.rows_all.iter().map(|r| bu[r.clone()].iter().map(|x| x * x).sum::<f64>().sqrt()).collect()
+        self.rows_all
+            .iter()
+            .map(|r| bu[r.clone()].iter().map(|x| x * x).sum::<f64>().sqrt())
+            .collect()
     }
 }
 
@@ -537,7 +579,12 @@ pub(crate) struct LaplacianInit {
     pub cluster: Vec<Vec<usize>>,
 }
 
-pub(crate) fn laplacian_init(input: &ModesInput, info: &NodeInfo, m: &[f64], n: usize) -> Result<LaplacianInit, String> {
+pub(crate) fn laplacian_init(
+    input: &ModesInput,
+    info: &NodeInfo,
+    m: &[f64],
+    n: usize,
+) -> Result<LaplacianInit, String> {
     let mesh = input.mesh;
     let nv = mesh.verts.len();
     let mut fixed = vec![false; nv];
@@ -556,7 +603,9 @@ pub(crate) fn laplacian_init(input: &ModesInput, info: &NodeInfo, m: &[f64], n: 
     let mut mass = vec![0.0; nf];
     for t in 0..mesh.tets.len() {
         let tt = mesh.tets[t];
-        let Some((g, vol)) = frac_fem::element::tet_gradients(&mesh.tet_points(t)) else { continue };
+        let Some((g, vol)) = frac_fem::element::tet_gradients(&mesh.tet_points(t)) else {
+            continue;
+        };
         let vol = vol.abs();
         for a in 0..4 {
             let ia = map[tt[a] as usize];
@@ -567,7 +616,11 @@ pub(crate) fn laplacian_init(input: &ModesInput, info: &NodeInfo, m: &[f64], n: 
             for b in 0..4 {
                 let ib = map[tt[b] as usize];
                 if ib != usize::MAX {
-                    trip.push((ia, ib, vol * (g[a][0] * g[b][0] + g[a][1] * g[b][1] + g[a][2] * g[b][2])));
+                    trip.push((
+                        ia,
+                        ib,
+                        vol * (g[a][0] * g[b][0] + g[a][1] * g[b][1] + g[a][2] * g[b][2]),
+                    ));
                 }
             }
         }
@@ -576,8 +629,17 @@ pub(crate) fn laplacian_init(input: &ModesInput, info: &NodeInfo, m: &[f64], n: 
         return Err("vertex without volume in the Laplacian initialization".into());
     }
     let lap = CsrMatrix::from_triplets(nf, nf, trip);
-    let defl = if input.anchored_vertices.is_empty() { vec![vec![1.0; nf]] } else { Vec::new() };
-    let opts = frac_fem::eigen::EigenOptions { n, seed: input.params.seed, tol: 1e-6, ..Default::default() };
+    let defl = if input.anchored_vertices.is_empty() {
+        vec![vec![1.0; nf]]
+    } else {
+        Vec::new()
+    };
+    let opts = frac_fem::eigen::EigenOptions {
+        n,
+        seed: input.params.seed,
+        tol: 1e-6,
+        ..Default::default()
+    };
     let res = frac_fem::eigen::smallest_eigenpairs(&lap, &mass, &defl, &opts)?;
     let mut init = Vec::with_capacity(res.vectors.len());
     let mut origin = Vec::with_capacity(res.vectors.len()); // scalar eigenvector index
@@ -597,7 +659,18 @@ pub(crate) fn laplacian_init(input: &ModesInput, info: &NodeInfo, m: &[f64], n: 
         }
     }
     let scalar_cluster = eigen_clusters(&res.values);
-    let cluster = origin.iter().map(|&si| (0..origin.len()).filter(|&j| scalar_cluster[si].contains(&origin[j])).collect()).collect();
+    let cluster = origin
+        .iter()
+        .map(|&si| {
+            (0..origin.len())
+                .filter(|&j| scalar_cluster[si].contains(&origin[j]))
+                .collect()
+        })
+        .collect();
     let eigenvalues = origin.iter().map(|&si| res.values[si]).collect();
-    Ok(LaplacianInit { init, eigenvalues, cluster })
+    Ok(LaplacianInit {
+        init,
+        eigenvalues,
+        cluster,
+    })
 }

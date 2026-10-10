@@ -31,7 +31,12 @@ pub struct AreaIntegrals {
 impl Default for AreaIntegrals {
     // NB: glam's `DMat3::default()` is the identity, so spell out zero.
     fn default() -> Self {
-        AreaIntegrals { area: 0.0, area_vec: DVec3::ZERO, first: DVec3::ZERO, second: DMat3::ZERO }
+        AreaIntegrals {
+            area: 0.0,
+            area_vec: DVec3::ZERO,
+            first: DVec3::ZERO,
+            second: DMat3::ZERO,
+        }
     }
 }
 
@@ -43,7 +48,11 @@ impl AreaIntegrals {
         self.second += o.second;
     }
     pub fn centroid(&self) -> DVec3 {
-        if self.area > 0.0 { self.first / self.area } else { DVec3::ZERO }
+        if self.area > 0.0 {
+            self.first / self.area
+        } else {
+            DVec3::ZERO
+        }
     }
     /// Second moment about the centroid: `∫ (x-c)(x-c)ᵀ dA`.
     pub fn central_second(&self) -> DMat3 {
@@ -94,7 +103,12 @@ pub fn triangle_integrals(p0: DVec3, p1: DVec3, p2: DVec3) -> AreaIntegrals {
     let a = av.length();
     let s = p0 + p1 + p2;
     let m = outer(p0, p0) + outer(p1, p1) + outer(p2, p2) + outer(s, s);
-    AreaIntegrals { area: a, area_vec: av, first: s * (a / 3.0), second: m * (a / 12.0) }
+    AreaIntegrals {
+        area: a,
+        area_vec: av,
+        first: s * (a / 3.0),
+        second: m * (a / 12.0),
+    }
 }
 
 /// Exact 2D projection for triangulating a planar polygon with normal `n`:

@@ -5,7 +5,7 @@
 //! A tetrahedron `(a, b, c, d)` is *positively oriented* iff
 //! `orient3d(a, b, c, d) > 0`.
 
-use crate::exact::{det2, det3, Expansion, Field, F64E};
+use crate::exact::{Expansion, F64E, Field, det2, det3};
 use crate::exact_sign;
 
 pub type P3 = [f64; 3];
@@ -47,7 +47,9 @@ pub fn orient2d(a: &P2, b: &P2, c: &P2) -> i8 {
 /// have zero orientation).
 pub fn collinear3(a: &P3, b: &P3, c: &P3) -> bool {
     let pr = |v: &P3, i: usize, j: usize| [v[i], v[j]];
-    [(0, 1), (1, 2), (0, 2)].iter().all(|&(i, j)| orient2d(&pr(a, i, j), &pr(b, i, j), &pr(c, i, j)) == 0)
+    [(0, 1), (1, 2), (0, 2)]
+        .iter()
+        .all(|&(i, j)| orient2d(&pr(a, i, j), &pr(b, i, j), &pr(c, i, j)) == 0)
 }
 
 /// det4 of rows `[p - e, l]` for p in a..d, with the last column given.
@@ -71,7 +73,11 @@ fn lifted_det<F: Field>(rows: &[[F; 3]; 4], last: &[F; 4]) -> F {
         let minor = det3(&m);
         // sign (-1)^(i+3)
         let term = last[i].mul(&minor);
-        acc = if (i + 3) % 2 == 0 { acc.add(&term) } else { acc.sub(&term) };
+        acc = if (i + 3) % 2 == 0 {
+            acc.add(&term)
+        } else {
+            acc.sub(&term)
+        };
     }
     acc
 }
@@ -79,7 +85,12 @@ fn lifted_det<F: Field>(rows: &[[F; 3]; 4], last: &[F; 4]) -> F {
 fn insphere_val<F: Field>(a: &P3, b: &P3, c: &P3, d: &P3, e: &P3) -> F {
     let rows = [d3::<F>(a, e), d3::<F>(b, e), d3::<F>(c, e), d3::<F>(d, e)];
     let lift = |r: &[F; 3]| r[0].mul(&r[0]).add(&r[1].mul(&r[1])).add(&r[2].mul(&r[2]));
-    let last = [lift(&rows[0]), lift(&rows[1]), lift(&rows[2]), lift(&rows[3])];
+    let last = [
+        lift(&rows[0]),
+        lift(&rows[1]),
+        lift(&rows[2]),
+        lift(&rows[3]),
+    ];
     lifted_det(&rows, &last).neg()
 }
 

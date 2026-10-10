@@ -16,26 +16,53 @@ struct Part {
 }
 
 fn part(name: &str, mesh: TriMesh, material: &str) -> Part {
-    Part { name: name.into(), mesh, material: material.into(), meta: PartMeta { material: Some(material.into()), ..Default::default() } }
+    Part {
+        name: name.into(),
+        mesh,
+        material: material.into(),
+        meta: PartMeta {
+            material: Some(material.into()),
+            ..Default::default()
+        },
+    }
 }
 
 thread_local! {
     static ONLY: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-fn write_asset(dir: &Path, name: &str, parts: Vec<Part>, connections: Vec<ConnectionSpec>, ground: Option<f64>) -> Result<(), String> {
+fn write_asset(
+    dir: &Path,
+    name: &str,
+    parts: Vec<Part>,
+    connections: Vec<ConnectionSpec>,
+    ground: Option<f64>,
+) -> Result<(), String> {
     if ONLY.with(|o| !o.borrow().is_empty() && !o.borrow().iter().any(|n| n == name)) {
         return Ok(());
     }
-    let mut scene = RenderScene { name: name.into(), ..Default::default() };
+    let mut scene = RenderScene {
+        name: name.into(),
+        ..Default::default()
+    };
     let mut mats: Vec<String> = Vec::new();
-    let mut meta = AuthoringMeta { connections, ground_height: ground, ..Default::default() };
+    let mut meta = AuthoringMeta {
+        connections,
+        ground_height: ground,
+        ..Default::default()
+    };
     for p in &parts {
         let mi = match mats.iter().position(|m| *m == p.material) {
             Some(i) => i,
             None => {
                 mats.push(p.material.clone());
-                scene.materials.push(RenderMaterial { name: p.material.clone(), base_color: [0.7, 0.7, 0.7, 1.0], metallic: 0.0, roughness: 0.8, double_sided: false });
+                scene.materials.push(RenderMaterial {
+                    name: p.material.clone(),
+                    base_color: [0.7, 0.7, 0.7, 1.0],
+                    metallic: 0.0,
+                    roughness: 0.8,
+                    double_sided: false,
+                });
                 mats.len() - 1
             }
         };
@@ -52,15 +79,44 @@ fn write_asset(dir: &Path, name: &str, parts: Vec<Part>, connections: Vec<Connec
                 normals.push(n.as_vec3().to_array());
             }
         }
-        let uvs = positions.iter().map(|p: &[f32; 3]| [p[0] + p[2], p[1]]).collect();
-        scene.meshes.push(RenderMesh { name: p.name.clone(), positions, normals, uvs: Some(uvs), tangents: None, primitives: vec![RenderPrimitive { material: mi as u32, indices }] });
-        scene.nodes.push(RenderNode { name: p.name.clone(), parent: None, translation: [0.0; 3], mesh_lods: vec![(scene.meshes.len() - 1) as u32], extras: json!({}) });
+        let uvs = positions
+            .iter()
+            .map(|p: &[f32; 3]| [p[0] + p[2], p[1]])
+            .collect();
+        scene.meshes.push(RenderMesh {
+            name: p.name.clone(),
+            positions,
+            normals,
+            uvs: Some(uvs),
+            tangents: None,
+            primitives: vec![RenderPrimitive {
+                material: mi as u32,
+                indices,
+            }],
+        });
+        scene.nodes.push(RenderNode {
+            name: p.name.clone(),
+            parent: None,
+            translation: [0.0; 3],
+            mesh_lods: vec![(scene.meshes.len() - 1) as u32],
+            extras: json!({}),
+        });
         meta.parts.insert(p.name.clone(), p.meta.clone());
     }
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let glb = frac_io::write_glb(&scene, &GltfOptions { meshopt_compression: false }).map_err(|e| e.to_string())?;
+    let glb = frac_io::write_glb(
+        &scene,
+        &GltfOptions {
+            meshopt_compression: false,
+        },
+    )
+    .map_err(|e| e.to_string())?;
     std::fs::write(dir.join(format!("{name}.glb")), glb).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join(format!("{name}.glb.meta.json")), serde_json::to_string_pretty(&meta).unwrap()).map_err(|e| e.to_string())?;
+    std::fs::write(
+        dir.join(format!("{name}.glb.meta.json")),
+        serde_json::to_string_pretty(&meta).unwrap(),
+    )
+    .map_err(|e| e.to_string())?;
     println!("wrote {name} ({} parts)", parts.len());
     Ok(())
 }
@@ -87,14 +143,35 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
     // primitive (cuboid) frame building, structurally sound by construction
     {
         let (parts, conns) = crate::buildings::FrameBuilding::default().build();
-        let parts = parts.into_iter().map(|p| Part { name: p.name, mesh: p.mesh, material: p.material, meta: p.meta }).collect();
+        let parts = parts
+            .into_iter()
+            .map(|p| Part {
+                name: p.name,
+                mesh: p.mesh,
+                material: p.material,
+                meta: p.meta,
+            })
+            .collect();
         write_asset(dir, "building_v0", parts, conns, Some(0.0))?;
     }
     // larger multi-storey frame building (5 storeys, 3 x 2 bays)
     {
-        let b = crate::buildings::FrameBuilding { bays_x: 3, bays_z: 2, floors: 5, ..Default::default() };
+        let b = crate::buildings::FrameBuilding {
+            bays_x: 3,
+            bays_z: 2,
+            floors: 5,
+            ..Default::default()
+        };
         let (parts, conns) = b.build();
-        let parts = parts.into_iter().map(|p| Part { name: p.name, mesh: p.mesh, material: p.material, meta: p.meta }).collect();
+        let parts = parts
+            .into_iter()
+            .map(|p| Part {
+                name: p.name,
+                mesh: p.mesh,
+                material: p.material,
+                meta: p.meta,
+            })
+            .collect();
         write_asset(dir, "building_v1", parts, conns, Some(0.0))?;
     }
     // 1. ceramic bowl (thin curved shell)
@@ -116,15 +193,29 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
         }
         prof.push([0.0, t]);
         let m = revolve(&prof, 48);
-        write_asset(dir, "ceramic_bowl", vec![part("bowl", m, "ceramic")], vec![], None)?;
+        write_asset(
+            dir,
+            "ceramic_bowl",
+            vec![part("bowl", m, "ceramic")],
+            vec![],
+            None,
+        )?;
     }
     // 2. glass panes
     {
-        let mut p = part("pane", box_at(DVec3::new(0.0, 0.0, 0.0), DVec3::new(1.0, 1.2, 0.006)), "glass_annealed");
+        let mut p = part(
+            "pane",
+            box_at(DVec3::new(0.0, 0.0, 0.0), DVec3::new(1.0, 1.2, 0.006)),
+            "glass_annealed",
+        );
         p.meta.anchor_below = Some(0.0);
         p.meta.impact_center = Some([0.45, 0.65, 0.003]);
         write_asset(dir, "glass_annealed_pane", vec![p], vec![], None)?;
-        let mut p = part("pane", box_at(DVec3::new(0.0, 0.0, 0.0), DVec3::new(0.8, 1.0, 0.008)), "glass_tempered");
+        let mut p = part(
+            "pane",
+            box_at(DVec3::new(0.0, 0.0, 0.0), DVec3::new(0.8, 1.0, 0.008)),
+            "glass_tempered",
+        );
         p.meta.anchor_below = Some(0.0);
         write_asset(dir, "glass_tempered_pane", vec![p], vec![], None)?;
     }
@@ -133,7 +224,9 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
         let m = wall(0.0, 4.0, 0.0, 3.0, 0.0, 0.215, &[[1.4, 1.0, 2.6, 2.2]]);
         let mut p = part("wall", m, "brick_clay");
         p.meta.anchor_below = Some(0.0);
-        p.meta.masonry_layout = Some(json!({"brick": [0.215, 0.065, 0.1025], "bond": "stretcher", "mortar": 0.01, "half_split_fraction": 0.2, "chip_fraction": 0.05}));
+        p.meta.masonry_layout = Some(
+            json!({"brick": [0.215, 0.065, 0.1025], "bond": "stretcher", "mortar": 0.01, "half_split_fraction": 0.2, "chip_fraction": 0.05}),
+        );
         write_asset(dir, "brick_wall_window", vec![p], vec![], Some(0.0))?;
     }
     // 4. reinforced concrete column
@@ -142,7 +235,10 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
         let mut p = part("column", m, "concrete_c30");
         p.meta.anchor_below = Some(0.0);
         for (x, z) in [(-0.15, -0.15), (0.15, -0.15), (0.15, 0.15), (-0.15, 0.15)] {
-            p.meta.rebar.push(RebarSpec { points: vec![[x, -0.1, z], [x, 3.1, z]], diameter: 0.02 });
+            p.meta.rebar.push(RebarSpec {
+                points: vec![[x, -0.1, z], [x, 3.1, z]],
+                diameter: 0.02,
+            });
         }
         // spec §17 sizes the RC column at ~5k fine cells; 16 fine cells per
         // analysis cell (~1.5k) is as fine as the dense reference bond
@@ -153,20 +249,35 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
     }
     // 5. timber beam
     {
-        let mut p = part("beam", box_at(DVec3::new(0.0, 0.0, 0.0), DVec3::new(4.0, 0.3, 0.15)), "pine");
+        let mut p = part(
+            "beam",
+            box_at(DVec3::new(0.0, 0.0, 0.0), DVec3::new(4.0, 0.3, 0.15)),
+            "pine",
+        );
         p.meta.grain = Some([1.0, 0.0, 0.0]);
         write_asset(dir, "timber_beam", vec![p], vec![], None)?;
     }
     // 6. RC slab on 4 columns
     {
         let mut parts = Vec::new();
-        for (i, (x, z)) in [(0.0, 0.0), (3.7, 0.0), (3.7, 3.7), (0.0, 3.7)].iter().enumerate() {
-            let mut c = part(&format!("column_{i}"), box_at(DVec3::new(*x, 0.0, *z), DVec3::new(x + 0.3, 3.0, z + 0.3)), "concrete_c30");
+        for (i, (x, z)) in [(0.0, 0.0), (3.7, 0.0), (3.7, 3.7), (0.0, 3.7)]
+            .iter()
+            .enumerate()
+        {
+            let mut c = part(
+                &format!("column_{i}"),
+                box_at(DVec3::new(*x, 0.0, *z), DVec3::new(x + 0.3, 3.0, z + 0.3)),
+                "concrete_c30",
+            );
             c.meta.component_role = Some("column".into());
             c.meta.anchor_below = Some(0.0);
             parts.push(c);
         }
-        let mut s = part("slab", box_at(DVec3::new(0.0, 3.0, 0.0), DVec3::new(4.0, 3.2, 4.0)), "concrete_c30");
+        let mut s = part(
+            "slab",
+            box_at(DVec3::new(0.0, 3.0, 0.0), DVec3::new(4.0, 3.2, 4.0)),
+            "concrete_c30",
+        );
         s.meta.component_role = Some("slab".into());
         parts.push(s);
         write_asset(dir, "rc_slab_on_columns", parts, vec![], Some(0.0))?;
@@ -181,7 +292,11 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
             for i in 0..3 {
                 for j in 0..3 {
                     let (x, z) = (i as f64 * span, j as f64 * span);
-                    let mut c = part(&format!("f{floor}_col_{i}{j}"), box_at(DVec3::new(x, y0, z), DVec3::new(x + col, y0 + h, z + col)), "concrete_c30");
+                    let mut c = part(
+                        &format!("f{floor}_col_{i}{j}"),
+                        box_at(DVec3::new(x, y0, z), DVec3::new(x + col, y0 + h, z + col)),
+                        "concrete_c30",
+                    );
                     c.meta.component_role = Some("column".into());
                     parts.push(c);
                 }
@@ -190,27 +305,65 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
             for i in 0..3 {
                 for j in 0..2 {
                     let (x, z) = (i as f64 * span, j as f64 * span);
-                    let mut b = part(&format!("f{floor}_beamz_{i}{j}"), box_at(DVec3::new(x, y0 + h - 0.4, z + col), DVec3::new(x + col, y0 + h, z + span)), "concrete_c30");
+                    let mut b = part(
+                        &format!("f{floor}_beamz_{i}{j}"),
+                        box_at(
+                            DVec3::new(x, y0 + h - 0.4, z + col),
+                            DVec3::new(x + col, y0 + h, z + span),
+                        ),
+                        "concrete_c30",
+                    );
                     b.meta.component_role = Some("beam".into());
                     parts.push(b);
-                    let mut b = part(&format!("f{floor}_beamx_{j}{i}"), box_at(DVec3::new(z + col, y0 + h - 0.4, x), DVec3::new(z + span, y0 + h, x + col)), "concrete_c30");
+                    let mut b = part(
+                        &format!("f{floor}_beamx_{j}{i}"),
+                        box_at(
+                            DVec3::new(z + col, y0 + h - 0.4, x),
+                            DVec3::new(z + span, y0 + h, x + col),
+                        ),
+                        "concrete_c30",
+                    );
                     b.meta.component_role = Some("beam".into());
                     parts.push(b);
                 }
             }
-            let mut s = part(&format!("f{floor}_slab"), box_at(DVec3::new(0.0, y0 + h, 0.0), DVec3::new(2.0 * span + col, y0 + h + slab_t, 2.0 * span + col)), "concrete_c30");
+            let mut s = part(
+                &format!("f{floor}_slab"),
+                box_at(
+                    DVec3::new(0.0, y0 + h, 0.0),
+                    DVec3::new(2.0 * span + col, y0 + h + slab_t, 2.0 * span + col),
+                ),
+                "concrete_c30",
+            );
             s.meta.component_role = Some("slab".into());
             parts.push(s);
             // infill walls on two facades (between columns, below beams)
             for j in 0..2 {
                 let z = j as f64 * span;
-                let mut w = part(&format!("f{floor}_wall_w{j}"), wall_z(z + col, z + span, y0, y0 + h - 0.4, 0.05, 0.25, &[[z + 1.5, y0 + 1.0, z + 2.8, y0 + 2.2]]), "brick_clay");
+                let mut w = part(
+                    &format!("f{floor}_wall_w{j}"),
+                    wall_z(
+                        z + col,
+                        z + span,
+                        y0,
+                        y0 + h - 0.4,
+                        0.05,
+                        0.25,
+                        &[[z + 1.5, y0 + 1.0, z + 2.8, y0 + 2.2]],
+                    ),
+                    "brick_clay",
+                );
                 w.meta.component_role = Some("wall".into());
-                w.meta.masonry_layout = Some(json!({"brick": [0.215, 0.065, 0.1025], "bond": "stretcher", "mortar": 0.01, "half_split_fraction": 0.0, "chip_fraction": 0.0}));
+                w.meta.masonry_layout = Some(
+                    json!({"brick": [0.215, 0.065, 0.1025], "bond": "stretcher", "mortar": 0.01, "half_split_fraction": 0.0, "chip_fraction": 0.0}),
+                );
                 parts.push(w);
             }
             if floor == 0 {
-                for p in parts.iter_mut().filter(|p| p.name.starts_with("f0_col") || p.name.starts_with("f0_wall")) {
+                for p in parts
+                    .iter_mut()
+                    .filter(|p| p.name.starts_with("f0_col") || p.name.starts_with("f0_wall"))
+                {
                     p.meta.anchor_below = Some(0.0);
                 }
             }
@@ -220,16 +373,34 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
     // 8. messy scanned mesh: holes, duplicated faces, overlapping blobs, noise
     {
         let mut m = frac_geom::mesh::icosphere(DVec3::new(0.0, 0.3, 0.0), 0.3, 3);
-        m.append(&frac_geom::mesh::icosphere(DVec3::new(0.2, 0.45, 0.1), 0.18, 3));
+        m.append(&frac_geom::mesh::icosphere(
+            DVec3::new(0.2, 0.45, 0.1),
+            0.18,
+            3,
+        ));
         for (i, v) in m.verts.iter_mut().enumerate() {
             let h = frac_core::stable_hash(&[i as u64, 99]);
-            *v += (*v - DVec3::new(0.0, 0.3, 0.0)).normalize_or_zero() * (frac_core::unit_f64(h) - 0.5) * 0.01;
+            *v += (*v - DVec3::new(0.0, 0.3, 0.0)).normalize_or_zero()
+                * (frac_core::unit_f64(h) - 0.5)
+                * 0.01;
         }
-        let keep: Vec<[u32; 3]> = m.tris.iter().enumerate().filter(|(i, _)| i % 97 != 0).map(|(_, t)| *t).collect();
+        let keep: Vec<[u32; 3]> = m
+            .tris
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| i % 97 != 0)
+            .map(|(_, t)| *t)
+            .collect();
         let dup: Vec<[u32; 3]> = keep.iter().step_by(53).copied().collect();
         m.tris = keep;
         m.tris.extend(dup);
-        write_asset(dir, "messy_scan", vec![part("scan", m, "sandstone")], vec![], None)?;
+        write_asset(
+            dir,
+            "messy_scan",
+            vec![part("scan", m, "sandstone")],
+            vec![],
+            None,
+        )?;
     }
     // held-out set (never tuned on)
     let held = dir.join("held_out");
@@ -246,7 +417,14 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
             outline.push([ri * a.cos(), 1.0 + ri * a.sin()]);
         }
         let mut o2 = vec![[-1.2, 0.0], [-0.9, 0.0]];
-        o2.extend(outline.iter().rev().skip(0).copied().filter(|p| p[1] > 1.0 - 1e-12));
+        o2.extend(
+            outline
+                .iter()
+                .rev()
+                .skip(0)
+                .copied()
+                .filter(|p| p[1] > 1.0 - 1e-12),
+        );
         let arch_loop: Vec<[f64; 2]> = {
             let mut l = vec![[0.9, 0.0], [1.2, 0.0]];
             for k in 0..=24 {
@@ -267,12 +445,36 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
         write_asset(&held, "stone_arch", vec![a], vec![], Some(0.0))?;
         // hollow pipe
         let pipe = revolve(&[[0.15, 0.0], [0.2, 0.0], [0.2, 2.0], [0.15, 2.0]], 32);
-        write_asset(&held, "concrete_pipe", vec![part("pipe", pipe, "concrete_c30")], vec![], None)?;
+        write_asset(
+            &held,
+            "concrete_pipe",
+            vec![part("pipe", pipe, "concrete_c30")],
+            vec![],
+            None,
+        )?;
         // drywall panel with door
-        let mut d = part("drywall", wall(0.0, 2.4, 0.0, 2.5, 0.0, 0.0125, &[[0.8, 0.3, 1.7, 2.1]]), "drywall");
+        let mut d = part(
+            "drywall",
+            wall(0.0, 2.4, 0.0, 2.5, 0.0, 0.0125, &[[0.8, 0.3, 1.7, 2.1]]),
+            "drywall",
+        );
         d.meta.anchor_below = Some(0.0);
-        write_asset(&held, "drywall_door", vec![d], vec![ConnectionSpec { a: "drywall".into(), b: "drywall".into(), kind: "adhesive".into(), interface_material: None }], Some(0.0))?;
+        write_asset(
+            &held,
+            "drywall_door",
+            vec![d],
+            vec![ConnectionSpec {
+                a: "drywall".into(),
+                b: "drywall".into(),
+                kind: "adhesive".into(),
+                interface_material: None,
+            }],
+            Some(0.0),
+        )?;
     }
-    let _ = BoxVolume { min: [0.0; 3], max: [0.0; 3] };
+    let _ = BoxVolume {
+        min: [0.0; 3],
+        max: [0.0; 3],
+    };
     Ok(())
 }

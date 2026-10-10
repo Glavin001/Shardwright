@@ -2,7 +2,19 @@ use serde::{Deserialize, Serialize};
 
 macro_rules! id_type {
     ($name:ident, $t:ty) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+        #[derive(
+            Clone,
+            Copy,
+            Debug,
+            PartialEq,
+            Eq,
+            PartialOrd,
+            Ord,
+            Hash,
+            Serialize,
+            Deserialize,
+            Default,
+        )]
         #[serde(transparent)]
         pub struct $name(pub $t);
         impl $name {

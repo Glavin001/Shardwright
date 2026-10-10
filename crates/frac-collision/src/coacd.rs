@@ -60,16 +60,16 @@
 //! samples are a deterministic low-discrepancy pattern; parts are processed
 //! in parallel but collected in index order.
 
-use frac_geom::hull::{convex_hull_fast, ConvexPolytope, HalfSpace};
+use frac_geom::hull::{ConvexPolytope, HalfSpace, convex_hull_fast};
 use frac_geom::inside::MeshQuery;
 use frac_geom::{Aabb, DVec3, TriMesh};
-use rand::seq::SliceRandom;
 use rand::SeedableRng;
+use rand::seq::SliceRandom;
 use rand_chacha::ChaCha8Rng;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, Ordering as AO};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering as AO};
 
 /// Profiling counters (`FRAC_PROFILE`): merged hulls evaluated, cumulative
 /// CPU ns per cost component, out-term evaluations, clips.
@@ -210,7 +210,10 @@ pub struct Frame {
 impl Frame {
     pub fn of(bbox: &Aabb) -> Frame {
         let len = bbox.extent().max_element().max(1e-300);
-        Frame { mid: bbox.center(), half: 0.5 * len }
+        Frame {
+            mid: bbox.center(),
+            half: 0.5 * len,
+        }
     }
     pub fn to_norm(&self, p: DVec3) -> DVec3 {
         (p - self.mid) / self.half
@@ -223,7 +226,15 @@ impl Frame {
             faces: p
                 .faces
                 .iter()
-                .map(|(h, f)| (HalfSpace { n: h.n, d: h.d * self.half + h.n.dot(self.mid) }, f.iter().map(|&q| self.to_world(q)).collect()))
+                .map(|(h, f)| {
+                    (
+                        HalfSpace {
+                            n: h.n,
+                            d: h.d * self.half + h.n.dot(self.mid),
+                        },
+                        f.iter().map(|&q| self.to_world(q)).collect(),
+                    )
+                })
                 .collect(),
         }
     }
@@ -262,7 +273,18 @@ fn clip_inner(s: &Solid, pl: &Plane, exact_caps: bool) -> Option<(Solid, Solid, 
     let scale = m.aabb().diagonal().max(1e-300);
     let eps = 1e-12 * scale;
     let dist: Vec<f64> = m.verts.iter().map(|&p| pl.dist(p)).collect();
-    let sg: Vec<i8> = dist.iter().map(|&d| if d > eps { 1 } else if d < -eps { -1 } else { 0 }).collect();
+    let sg: Vec<i8> = dist
+        .iter()
+        .map(|&d| {
+            if d > eps {
+                1
+            } else if d < -eps {
+                -1
+            } else {
+                0
+            }
+        })
+        .collect();
     if sg.iter().all(|&x| x >= 0) && sg.iter().any(|&x| x > 0) {
         return Some((s.clone(), Solid::default(), 0.0));
     }
@@ -285,7 +307,11 @@ fn clip_inner(s: &Solid, pl: &Plane, exact_caps: bool) -> Option<(Solid, Solid, 
     // per side: triangles over global ids (orig < nv <= cut)
     let mut side_tris: [Vec<[u32; 3]>; 2] = [Vec::new(), Vec::new()]; // 0 = pos, 1 = neg
     let mut side_cap: [Vec<bool>; 2] = [Vec::new(), Vec::new()];
-    let push = |side_tris: &mut [Vec<[u32; 3]>; 2], side_cap: &mut [Vec<bool>; 2], si: usize, poly: &[u32], cap: bool| {
+    let push = |side_tris: &mut [Vec<[u32; 3]>; 2],
+                side_cap: &mut [Vec<bool>; 2],
+                si: usize,
+                poly: &[u32],
+                cap: bool| {
         for k in 1..poly.len().saturating_sub(1) {
             let t = [poly[0], poly[k], poly[k + 1]];
             if t[0] != t[1] && t[1] != t[2] && t[0] != t[2] {
@@ -302,7 +328,11 @@ fn clip_inner(s: &Solid, pl: &Plane, exact_caps: bool) -> Option<(Solid, Solid, 
         if !has_p && !has_n {
             // coplanar triangle: belongs to the side it bounds
             let [a, b, c] = m.tri_points(ti);
-            let side = if (b - a).cross(c - a).dot(pl.n) > 0.0 { 1 } else { 0 };
+            let side = if (b - a).cross(c - a).dot(pl.n) > 0.0 {
+                1
+            } else {
+                0
+            };
             push(&mut side_tris, &mut side_cap, side, t, cap);
         } else if !has_n {
             push(&mut side_tris, &mut side_cap, 0, t, cap);
@@ -335,7 +365,13 @@ fn clip_inner(s: &Solid, pl: &Plane, exact_caps: bool) -> Option<(Solid, Solid, 
             push(&mut side_tris, &mut side_cap, 1, &np[..inn], cap);
         }
     }
-    let pos_of = |g: u32| -> DVec3 { if (g as usize) < nv { m.verts[g as usize] } else { cut_pts[g as usize - nv] } };
+    let pos_of = |g: u32| -> DVec3 {
+        if (g as usize) < nv {
+            m.verts[g as usize]
+        } else {
+            cut_pts[g as usize - nv]
+        }
+    };
     let on_plane = |g: u32| -> bool { (g as usize) >= nv || sg[g as usize] == 0 };
     let mut out: Vec<Solid> = Vec::with_capacity(2);
     let mut cap_area = 0.0;
@@ -382,7 +418,10 @@ fn clip_inner(s: &Solid, pl: &Plane, exact_caps: bool) -> Option<(Solid, Solid, 
         bedges.sort_unstable();
         if !exact_caps {
             if !bedges.is_empty() {
-                let c = bedges.iter().fold(DVec3::ZERO, |acc, e| acc + verts[e.0 as usize]) / bedges.len() as f64;
+                let c = bedges
+                    .iter()
+                    .fold(DVec3::ZERO, |acc, e| acc + verts[e.0 as usize])
+                    / bedges.len() as f64;
                 let c = c - pl.n * pl.dist(c);
                 verts.push(c);
                 let ci = (verts.len() - 1) as u32;
@@ -391,7 +430,10 @@ fn clip_inner(s: &Solid, pl: &Plane, exact_caps: bool) -> Option<(Solid, Solid, 
                     caps.push(true);
                 }
             }
-            out.push(Solid { mesh: TriMesh { verts, tris }, cap: caps });
+            out.push(Solid {
+                mesh: TriMesh { verts, tris },
+                cap: caps,
+            });
             continue;
         }
         let mut next: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
@@ -408,7 +450,9 @@ fn clip_inner(s: &Solid, pl: &Plane, exact_caps: bool) -> Option<(Solid, Solid, 
             let mut cur = start;
             let mut guard = 0usize;
             loop {
-                let Some(outs) = next.get_mut(&cur) else { break };
+                let Some(outs) = next.get_mut(&cur) else {
+                    break;
+                };
                 if outs.is_empty() {
                     break;
                 }
@@ -452,11 +496,16 @@ fn clip_inner(s: &Solid, pl: &Plane, exact_caps: bool) -> Option<(Solid, Solid, 
             let mut groups: Vec<Vec<usize>> = outers.iter().map(|&o| vec![o]).collect();
             for h in (0..loops.len()).filter(|&i| areas[i] <= 0.0) {
                 // smallest outer containing the hole
-                let q = loops[h].iter().map(|&i| p2(i)).fold([0.0, 0.0], |a, b| [a[0] + b[0], a[1] + b[1]]);
+                let q = loops[h]
+                    .iter()
+                    .map(|&i| p2(i))
+                    .fold([0.0, 0.0], |a, b| [a[0] + b[0], a[1] + b[1]]);
                 let q = [q[0] / loops[h].len() as f64, q[1] / loops[h].len() as f64];
                 let mut best: Option<usize> = None;
                 for (gi, &o) in outers.iter().enumerate() {
-                    if point_in_loop(q, &loops[o].iter().map(|&i| p2(i)).collect::<Vec<_>>()) && best.map(|b| areas[outers[b]] > areas[o]).unwrap_or(true) {
+                    if point_in_loop(q, &loops[o].iter().map(|&i| p2(i)).collect::<Vec<_>>())
+                        && best.map(|b| areas[outers[b]] > areas[o]).unwrap_or(true)
+                    {
                         best = Some(gi);
                     }
                 }
@@ -500,7 +549,10 @@ fn clip_inner(s: &Solid, pl: &Plane, exact_caps: bool) -> Option<(Solid, Solid, 
                 }
             }
         }
-        out.push(Solid { mesh: TriMesh { verts, tris }, cap: caps });
+        out.push(Solid {
+            mesh: TriMesh { verts, tris },
+            cap: caps,
+        });
     }
     let neg = out.pop().unwrap();
     let pos = out.pop().unwrap();
@@ -513,7 +565,9 @@ fn point_in_loop(q: [f64; 2], l: &[[f64; 2]]) -> bool {
     let mut j = n - 1;
     for i in 0..n {
         let (a, b) = (l[i], l[j]);
-        if (a[1] > q[1]) != (b[1] > q[1]) && q[0] < (b[0] - a[0]) * (q[1] - a[1]) / (b[1] - a[1]) + a[0] {
+        if (a[1] > q[1]) != (b[1] > q[1])
+            && q[0] < (b[0] - a[0]) * (q[1] - a[1]) / (b[1] - a[1]) + a[0]
+        {
             inside = !inside;
         }
         j = i;
@@ -539,7 +593,11 @@ pub fn hull(points: &[DVec3]) -> Option<Ch> {
     if poly.is_empty() {
         return None;
     }
-    Some(Ch { pts: m.verts, poly, volume })
+    Some(Ch {
+        pts: m.verts,
+        poly,
+        volume,
+    })
 }
 
 /// Like [`hull`] but with one face per hull triangle (no coplanar-face
@@ -562,7 +620,11 @@ pub fn hull_tri(points: &[DVec3]) -> Option<Ch> {
     if poly.is_empty() {
         return None;
     }
-    Some(Ch { pts: m.verts, poly, volume })
+    Some(Ch {
+        pts: m.verts,
+        poly,
+        volume,
+    })
 }
 
 /// Convex polytope with at most `max_v` vertices inside `poly`: the hull of
@@ -591,10 +653,17 @@ pub fn greedy_subset(poly: &ConvexPolytope, max_v: usize, eps: f64) -> ConvexPol
     let max_v = if max_v == 0 { usize::MAX } else { max_v.max(4) };
     let mut chosen: Vec<usize> = Vec::new();
     for k in 0..3 {
-        let lo = (0..vs.len()).min_by(|&a, &b| vs[a][k].total_cmp(&vs[b][k]).then(a.cmp(&b))).unwrap();
-        let hi = (0..vs.len()).max_by(|&a, &b| vs[a][k].total_cmp(&vs[b][k]).then(b.cmp(&a))).unwrap();
+        let lo = (0..vs.len())
+            .min_by(|&a, &b| vs[a][k].total_cmp(&vs[b][k]).then(a.cmp(&b)))
+            .unwrap();
+        let hi = (0..vs.len())
+            .max_by(|&a, &b| vs[a][k].total_cmp(&vs[b][k]).then(b.cmp(&a)))
+            .unwrap();
         for i in [lo, hi] {
-            if !chosen.iter().any(|&c| c == i || (vs[c] - vs[i]).length() <= eps) {
+            if !chosen
+                .iter()
+                .any(|&c| c == i || (vs[c] - vs[i]).length() <= eps)
+            {
                 chosen.push(i);
             }
         }
@@ -623,7 +692,11 @@ pub fn greedy_subset(poly: &ConvexPolytope, max_v: usize, eps: f64) -> ConvexPol
                             bf = k;
                         }
                     }
-                    if bf != usize::MAX && per_face[bf].map(|(j, dj)| bd > dj || (bd == dj && i < j)).unwrap_or(true) {
+                    if bf != usize::MAX
+                        && per_face[bf]
+                            .map(|(j, dj)| bd > dj || (bd == dj && i < j))
+                            .unwrap_or(true)
+                    {
                         per_face[bf] = Some((i, bd));
                     }
                 }
@@ -636,7 +709,15 @@ pub fn greedy_subset(poly: &ConvexPolytope, max_v: usize, eps: f64) -> ConvexPol
             }
             None => (0..vs.len())
                 .filter(|&i| !is_chosen[i])
-                .map(|i| (i, chosen.iter().map(|&c| (vs[i] - vs[c]).length()).fold(f64::INFINITY, f64::min)))
+                .map(|i| {
+                    (
+                        i,
+                        chosen
+                            .iter()
+                            .map(|&c| (vs[i] - vs[c]).length())
+                            .fold(f64::INFINITY, f64::min),
+                    )
+                })
                 .filter(|x| x.1 > eps)
                 .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
                 .map(|x| vec![x.0])
@@ -677,7 +758,9 @@ pub fn stored_hull_is_convex(verts: &[DVec3], faces: &[Vec<u32>]) -> bool {
 /// Hull volume only (MCTS rewards need nothing else).
 fn hull_volume(points: &[DVec3]) -> f64 {
     let t0 = std::time::Instant::now();
-    let r = convex_hull_fast(points).map(|m| m.signed_volume().max(0.0)).unwrap_or(0.0);
+    let r = convex_hull_fast(points)
+        .map(|m| m.signed_volume().max(0.0))
+        .unwrap_or(0.0);
     T_HV.fetch_add(t0.elapsed().as_nanos() as u64, AO::Relaxed);
     r
 }
@@ -711,7 +794,10 @@ pub fn tri_samples(a: DVec3, b: DVec3, c: DVec3, n: usize, out: &mut Vec<DVec3>)
 /// Distance from a point inside a convex polytope to its boundary.
 #[inline]
 pub fn inside_depth(poly: &ConvexPolytope, p: DVec3) -> f64 {
-    poly.faces.iter().map(|(h, _)| h.d - h.n.dot(p)).fold(f64::INFINITY, f64::min)
+    poly.faces
+        .iter()
+        .map(|(h, _)| h.d - h.n.dot(p))
+        .fold(f64::INFINITY, f64::min)
 }
 
 /// True when some triangle of the query mesh lies within `r` of `p`.
@@ -753,9 +839,14 @@ pub struct Signer {
 impl Signer {
     pub fn new(m: &TriMesh) -> Signer {
         let mut vn = vec![DVec3::ZERO; m.verts.len()];
-        let mut en: std::collections::HashMap<(u32, u32), DVec3> = std::collections::HashMap::with_capacity(m.tris.len() * 3 / 2);
+        let mut en: std::collections::HashMap<(u32, u32), DVec3> =
+            std::collections::HashMap::with_capacity(m.tris.len() * 3 / 2);
         for t in &m.tris {
-            let p = [m.verts[t[0] as usize], m.verts[t[1] as usize], m.verts[t[2] as usize]];
+            let p = [
+                m.verts[t[0] as usize],
+                m.verts[t[1] as usize],
+                m.verts[t[2] as usize],
+            ];
             let n = (p[1] - p[0]).cross(p[2] - p[0]).normalize_or_zero();
             for k in 0..3 {
                 let (a, b, c) = (p[k], p[(k + 1) % 3], p[(k + 2) % 3]);
@@ -781,7 +872,11 @@ impl Signer {
             return None;
         }
         let cp = frac_geom::inside::closest_point_triangle(p, a, b, c);
-        let w = [(b - cp).cross(c - cp).dot(n) / nn, (c - cp).cross(a - cp).dot(n) / nn, (a - cp).cross(b - cp).dot(n) / nn];
+        let w = [
+            (b - cp).cross(c - cp).dot(n) / nn,
+            (c - cp).cross(a - cp).dot(n) / nn,
+            (a - cp).cross(b - cp).dot(n) / nn,
+        ];
         let eps = 1e-9;
         let zero: Vec<usize> = (0..3).filter(|&k| w[k] <= eps).collect();
         let pn = match zero.len() {
@@ -846,7 +941,8 @@ pub fn hb(part: &Solid, ch: &Ch, density: f64, cap: f64) -> f64 {
         }
         let n = nv / (2.0 * ar);
         for (fi, (h, _)) in ch.poly.faces.iter().enumerate() {
-            if h.n.dot(n) > 1.0 - 1e-9 && [a, b, c].iter().all(|p| (h.n.dot(*p) - h.d).abs() <= eps) {
+            if h.n.dot(n) > 1.0 - 1e-9 && [a, b, c].iter().all(|p| (h.n.dot(*p) - h.d).abs() <= eps)
+            {
                 covered[fi] += ar;
                 on_hull[t] = true;
                 break;
@@ -914,8 +1010,18 @@ pub fn h_cost(part: &Solid, ch: &Ch, p: &CoacdParams, cap: f64) -> f64 {
         return r;
     }
     match p.hb {
-        HbMode::Exact => r.max(hb(part, ch, density_for(part.mesh.area(), p.resolution), cap)),
-        HbMode::Upstream => r.max(hb_upstream(&part.mesh, &ch.poly.to_mesh(), p.resolution, p.seed)),
+        HbMode::Exact => r.max(hb(
+            part,
+            ch,
+            density_for(part.mesh.area(), p.resolution),
+            cap,
+        )),
+        HbMode::Upstream => r.max(hb_upstream(
+            &part.mesh,
+            &ch.poly.to_mesh(),
+            p.resolution,
+            p.seed,
+        )),
     }
 }
 
@@ -929,12 +1035,19 @@ fn upstream_samples(m: &TriMesh, resolution: u32, rng: &mut ChaCha8Rng) -> (Vec<
 
 /// [`upstream_samples`] with a fractional resolution and a triangle filter
 /// (upstream skips the triangles on the two hulls' common face).
-fn upstream_samples_f(m: &TriMesh, resolution: f64, rng: &mut ChaCha8Rng, keep: &dyn Fn(usize) -> bool) -> (Vec<DVec3>, Vec<u32>) {
+fn upstream_samples_f(
+    m: &TriMesh,
+    resolution: f64,
+    rng: &mut ChaCha8Rng,
+    keep: &dyn Fn(usize) -> bool,
+) -> (Vec<DVec3>, Vec<u32>) {
     use rand::Rng;
-    let a_obj: f64 = (0..m.tris.len()).map(|t| {
-        let [a, b, c] = m.tri_points(t);
-        0.5 * (b - a).cross(c - a).length()
-    }).sum();
+    let a_obj: f64 = (0..m.tris.len())
+        .map(|t| {
+            let [a, b, c] = m.tri_points(t);
+            0.5 * (b - a).cross(c - a).length()
+        })
+        .sum();
     let r = (1000.0f64).max(resolution * a_obj);
     let nt = m.tris.len();
     let (mut pts, mut ids) = (Vec::new(), Vec::new());
@@ -944,7 +1057,11 @@ fn upstream_samples_f(m: &TriMesh, resolution: f64, rng: &mut ChaCha8Rng, keep: 
         }
         let [a, b, c] = m.tri_points(t);
         let area = 0.5 * (b - a).cross(c - a).length();
-        let every = if (nt as f64) > r { (nt as f64 / r).floor().max(1.0) as usize } else { 2 };
+        let every = if (nt as f64) > r {
+            (nt as f64 / r).floor().max(1.0) as usize
+        } else {
+            2
+        };
         let n = ((t % every == 0) as usize).max((r / a_obj.max(1e-300) * area) as usize);
         for _ in 0..n {
             let (x, y): (f64, f64) = (rng.gen_range(0.0..1.0), rng.gen_range(0.0..1.0));
@@ -992,15 +1109,30 @@ pub fn hb_upstream(a: &TriMesh, b: &TriMesh, resolution: u32, seed: u64) -> f64 
 
 /// Upstream `face_hausdorff_distance`: for every sample, the distance to the
 /// triangles of its 10 nearest samples on the other surface; the maximum.
-fn face_hausdorff(a: &TriMesh, sa: &[DVec3], ia: &[u32], b: &TriMesh, sb: &[DVec3], ib: &[u32]) -> f64 {
+fn face_hausdorff(
+    a: &TriMesh,
+    sa: &[DVec3],
+    ia: &[u32],
+    b: &TriMesh,
+    sb: &[DVec3],
+    ib: &[u32],
+) -> f64 {
     if sa.is_empty() || sb.is_empty() {
         return f64::INFINITY;
     }
-    let tree = |s: &[DVec3]| frac_geom::bvh::Bvh::build(&s.iter().map(|&q| Aabb::from_points([&q])).collect::<Vec<_>>());
+    let tree = |s: &[DVec3]| {
+        frac_geom::bvh::Bvh::build(
+            &s.iter()
+                .map(|&q| Aabb::from_points([&q]))
+                .collect::<Vec<_>>(),
+        )
+    };
     let (ta, tb) = (tree(sa), tree(sb));
     let mut cmax: f64 = 0.0;
     let mut nn = Vec::new();
-    for (from, (tree_to, samples_to, ids_to, mesh_to)) in [(sb, (&ta, sa, ia, a)), (sa, (&tb, sb, ib, b))] {
+    for (from, (tree_to, samples_to, ids_to, mesh_to)) in
+        [(sb, (&ta, sa, ia, a)), (sa, (&tb, sb, ib, b))]
+    {
         for &x in from.iter() {
             knn10(tree_to, samples_to, x, &mut nn);
             let mut cmin = f64::INFINITY;
@@ -1056,7 +1188,11 @@ impl MPart {
     fn new(solid: Arc<Solid>, nodes: u32, rng: &mut ChaCha8Rng) -> MPart {
         let mut moves = axis_planes(&solid.mesh.aabb(), nodes);
         moves.shuffle(rng);
-        MPart { solid, moves, next: 0 }
+        MPart {
+            solid,
+            moves,
+            next: 0,
+        }
     }
 }
 
@@ -1086,7 +1222,14 @@ impl State {
         hmax
     }
     /// Replace the worst part by the two halves of a cut.
-    fn apply_cut(&mut self, pos: Solid, neg: Solid, plane: Plane, p: &CoacdParams, rng: &mut ChaCha8Rng) {
+    fn apply_cut(
+        &mut self,
+        pos: Solid,
+        neg: Solid,
+        plane: Plane,
+        p: &CoacdParams,
+        rng: &mut ChaCha8Rng,
+    ) {
         let w = self.worst;
         let mut parts = Vec::with_capacity(self.parts.len() + 1);
         let mut costs = Vec::with_capacity(self.parts.len() + 1);
@@ -1147,7 +1290,11 @@ fn next_state(tree: &mut [Node], ni: usize, p: &CoacdParams, rng: &mut ChaCha8Rn
 fn best_child(tree: &[Node], ni: usize, explore: bool, initial_cost: f64) -> Option<usize> {
     let mut best = f64::INFINITY;
     let mut out = None;
-    let c = if explore { initial_cost / 2f64.sqrt() } else { 0.0 };
+    let c = if explore {
+        initial_cost / 2f64.sqrt()
+    } else {
+        0.0
+    };
     for &ch in &tree[ni].children {
         let right = 2.0 * libm::log(tree[ni].visits) / tree[ch].visits;
         let score = tree[ch].quality - c * right.sqrt();
@@ -1163,7 +1310,9 @@ fn best_child(tree: &[Node], ni: usize, explore: bool, initial_cost: f64) -> Opt
 fn best_rv_plane(s: &Solid, planes: &[Plane], k: f64) -> Option<(Plane, Solid, Solid)> {
     let mut best: Option<(f64, Plane, Solid, Solid)> = None;
     for pl in planes {
-        let Some((pos, neg, _)) = clip_fast(s, pl) else { continue };
+        let Some((pos, neg, _)) = clip_fast(s, pl) else {
+            continue;
+        };
         if pos.is_empty() || neg.is_empty() {
             continue;
         }
@@ -1176,7 +1325,12 @@ fn best_rv_plane(s: &Solid, planes: &[Plane], k: f64) -> Option<(Plane, Solid, S
 }
 
 /// `default_policy`: greedy random-cut rollout to the maximum depth.
-fn default_policy(state: &State, p: &CoacdParams, path: &mut Vec<Plane>, rng: &mut ChaCha8Rng) -> f64 {
+fn default_policy(
+    state: &State,
+    p: &CoacdParams,
+    path: &mut Vec<Plane>,
+    rng: &mut ChaCha8Rng,
+) -> f64 {
     let mut st = state.clone();
     while !st.terminal(p) {
         let s = st.parts[st.worst].solid.clone();
@@ -1184,7 +1338,9 @@ fn default_policy(state: &State, p: &CoacdParams, path: &mut Vec<Plane>, rng: &m
         if planes.is_empty() {
             break;
         }
-        let Some((pl, pos, neg)) = best_rv_plane(&s, &planes, p.rv_k) else { break };
+        let Some((pl, pos, neg)) = best_rv_plane(&s, &planes, p.rv_k) else {
+            break;
+        };
         path.push(pl);
         st.apply_cut(pos, neg, pl, p, rng);
         let r = st.reward();
@@ -1196,10 +1352,30 @@ fn default_policy(state: &State, p: &CoacdParams, path: &mut Vec<Plane>, rng: &m
 
 /// `MonteCarloTreeSearch`: returns the best first plane, its quality and the
 /// best path (deepest plane first, as upstream).
-fn mcts(solid: Arc<Solid>, p: &CoacdParams, rng: &mut ChaCha8Rng) -> Option<(Plane, f64, Vec<Plane>)> {
+fn mcts(
+    solid: Arc<Solid>,
+    p: &CoacdParams,
+    rng: &mut ChaCha8Rng,
+) -> Option<(Plane, f64, Vec<Plane>)> {
     let root_part = MPart::new(solid.clone(), p.mcts_nodes, rng);
-    let st = State { parts: vec![root_part], costs: vec![f64::INFINITY], worst: 0, round: 0, cost: 0.0, value: Plane { n: DVec3::ZERO, d: 0.0 } };
-    let mut tree = vec![Node { children: Vec::new(), parent: None, visits: 0.0, quality: f64::INFINITY, state: st }];
+    let st = State {
+        parts: vec![root_part],
+        costs: vec![f64::INFINITY],
+        worst: 0,
+        round: 0,
+        cost: 0.0,
+        value: Plane {
+            n: DVec3::ZERO,
+            d: 0.0,
+        },
+    };
+    let mut tree = vec![Node {
+        children: Vec::new(),
+        parent: None,
+        visits: 0.0,
+        quality: f64::INFINITY,
+        state: st,
+    }];
     let initial_cost = rv_solid(&solid, p.rv_k) / p.mcts_depth as f64;
     let mut best_path: Vec<Plane> = Vec::new();
     for _ in 0..p.mcts_iterations {
@@ -1209,7 +1385,8 @@ fn mcts(solid: Arc<Solid>, p: &CoacdParams, rng: &mut ChaCha8Rng) -> Option<(Pla
             if tree[ni].state.terminal(p) {
                 break;
             }
-            let all = tree[ni].children.len() == tree[ni].state.parts[tree[ni].state.worst].moves.len();
+            let all =
+                tree[ni].children.len() == tree[ni].state.parts[tree[ni].state.worst].moves.len();
             if all {
                 match best_child(&tree, ni, true, initial_cost) {
                     Some(c) => ni = c,
@@ -1217,7 +1394,13 @@ fn mcts(solid: Arc<Solid>, p: &CoacdParams, rng: &mut ChaCha8Rng) -> Option<(Pla
                 }
             } else {
                 let ns = next_state(&mut tree, ni, p, rng);
-                tree.push(Node { children: Vec::new(), parent: Some(ni), visits: 0.0, quality: f64::INFINITY, state: ns });
+                tree.push(Node {
+                    children: Vec::new(),
+                    parent: Some(ni),
+                    visits: 0.0,
+                    quality: f64::INFINITY,
+                    state: ns,
+                });
                 let c = tree.len() - 1;
                 tree[ni].children.push(c);
                 ni = c;
@@ -1245,7 +1428,9 @@ fn mcts(solid: Arc<Solid>, p: &CoacdParams, rng: &mut ChaCha8Rng) -> Option<(Pla
 
 /// `clip_by_path`: mean worst-part Rv along the path with a new first plane.
 fn clip_by_path(m: &Solid, p: &CoacdParams, first: &Plane, path: &[Plane]) -> f64 {
-    let Some((pos, neg, _)) = clip_fast(m, first) else { return f64::INFINITY };
+    let Some((pos, neg, _)) = clip_fast(m, first) else {
+        return f64::INFINITY;
+    };
     let pc = rv_solid(&pos, p.rv_k);
     let nc = rv_solid(&neg, p.rv_k);
     let mut scores = vec![pc, nc];
@@ -1254,7 +1439,9 @@ fn clip_by_path(m: &Solid, p: &CoacdParams, first: &Plane, path: &[Plane]) -> f6
     let mut final_cost = pc.max(nc);
     let n = path.len();
     for i in 1..n {
-        let Some((a, b, _)) = clip_fast(&parts[worst], &path[n - 1 - i]) else { return f64::INFINITY };
+        let Some((a, b, _)) = clip_fast(&parts[worst], &path[n - 1 - i]) else {
+            return f64::INFINITY;
+        };
         let (ca, cb) = (rv_solid(&a, p.rv_k), rv_solid(&b, p.rv_k));
         parts.remove(worst);
         scores.remove(worst);
@@ -1333,11 +1520,21 @@ enum Outcome {
 
 fn process_part(s: Solid, p: &CoacdParams, allow_cut: bool) -> Outcome {
     let mut rng = ChaCha8Rng::seed_from_u64(p.seed);
-    let Some(ch) = hull(&s.mesh.verts) else { return Outcome::Drop };
-    let cap = if allow_cut { p.threshold } else { f64::INFINITY };
+    let Some(ch) = hull(&s.mesh.verts) else {
+        return Outcome::Drop;
+    };
+    let cap = if allow_cut {
+        p.threshold
+    } else {
+        f64::INFINITY
+    };
     let h = h_cost(&s, &ch, p, cap);
     if h <= p.threshold || !allow_cut {
-        let cost = if h <= p.threshold || cap.is_infinite() { h } else { h_cost(&s, &ch, p, f64::INFINITY) };
+        let cost = if h <= p.threshold || cap.is_infinite() {
+            h
+        } else {
+            h_cost(&s, &ch, p, f64::INFINITY)
+        };
         return Outcome::Done(Box::new(CutPart { solid: s, ch, cost }));
     }
     let arc = Arc::new(s);
@@ -1350,7 +1547,10 @@ fn process_part(s: Solid, p: &CoacdParams, allow_cut: bool) -> Outcome {
     // degenerate cut sections (pinched loops through vertices) can defeat
     // the cap triangulation: retry with slightly offset planes
     for k in [0.0, 1e-4, -1e-4, 3e-4, -3e-4, 1e-3, -1e-3] {
-        let pl = Plane { n: plane.n, d: plane.d + k };
+        let pl = Plane {
+            n: plane.n,
+            d: plane.d + k,
+        };
         if let Some((pos, neg, _)) = clip(&arc, &pl) {
             if !pos.is_empty() && !neg.is_empty() {
                 return Outcome::Split(pos, neg);
@@ -1371,7 +1571,11 @@ pub fn cut(input: Solid, p: &CoacdParams) -> Vec<CutPart> {
     while !pool.is_empty() {
         // each cut adds one part; stop cutting at `max_parts`
         let base = done.len() + pool.len();
-        let res: Vec<Outcome> = pool.into_par_iter().enumerate().map(|(i, s)| process_part(s, p, base + i < p.max_parts)).collect();
+        let res: Vec<Outcome> = pool
+            .into_par_iter()
+            .enumerate()
+            .map(|(i, s)| process_part(s, p, base + i < p.max_parts))
+            .collect();
         let mut next = Vec::new();
         for r in res {
             match r {
@@ -1404,11 +1608,19 @@ fn upstream_merge_cost(a: &Piece, b: &Piece, ch: &Ch, k: f64, resolution: f64, s
     }
     // common face (`ComputeOverlapFace`): a face plane of `a` with `b` on
     // its other side; triangles on it (within 1e-3) are not sampled
-    let overlap = a.poly.faces.iter().map(|(h, _)| *h).find(|h| b.pts.iter().all(|q| h.dist(*q) >= -1e-8));
+    let overlap = a
+        .poly
+        .faces
+        .iter()
+        .map(|(h, _)| *h)
+        .find(|h| b.pts.iter().all(|q| h.dist(*q) >= -1e-8));
     let mut src = a.poly.to_mesh();
     let na = src.tris.len();
     src.append(&b.poly.to_mesh());
-    let (aa, ab) = (src.submesh_area(0..na), src.submesh_area(na..src.tris.len()));
+    let (aa, ab) = (
+        src.submesh_area(0..na),
+        src.submesh_area(na..src.tris.len()),
+    );
     let keep = |t: usize| -> bool {
         match overlap {
             Some(h) => !src.tri_points(t).iter().all(|x| h.dist(*x).abs() <= 1e-3),
@@ -1419,8 +1631,16 @@ fn upstream_merge_cost(a: &Piece, b: &Piece, ch: &Ch, k: f64, resolution: f64, s
     // per hull: resolution split by area (upstream ExtractPointSet(cvx1, cvx2))
     let (mut sa, mut ia) = (Vec::new(), Vec::new());
     for (range, area) in [(0..na, aa), (na..src.tris.len(), ab)] {
-        let sub = TriMesh { verts: src.verts.clone(), tris: src.tris[range.clone()].to_vec() };
-        let (p, i) = upstream_samples_f(&sub, resolution * area / (aa + ab).max(1e-300), &mut rng, &|t| keep(t + range.start));
+        let sub = TriMesh {
+            verts: src.verts.clone(),
+            tris: src.tris[range.clone()].to_vec(),
+        };
+        let (p, i) = upstream_samples_f(
+            &sub,
+            resolution * area / (aa + ab).max(1e-300),
+            &mut rng,
+            &|t| keep(t + range.start),
+        );
         sa.extend(p);
         ia.extend(i.into_iter().map(|t| t + range.start as u32));
     }
@@ -1475,7 +1695,17 @@ pub struct Piece {
 impl Piece {
     pub fn new(ch: Ch, vol: f64, samples: Vec<DVec3>, tags: Vec<u32>) -> Piece {
         let bbox = Aabb::from_points(ch.pts.iter());
-        Piece { poly: ch.poly, pts: ch.pts, bbox, vol, own: 0.0, samples, tags, keys: Vec::new(), halo: Vec::new() }
+        Piece {
+            poly: ch.poly,
+            pts: ch.pts,
+            bbox,
+            vol,
+            own: 0.0,
+            samples,
+            tags,
+            keys: Vec::new(),
+            halo: Vec::new(),
+        }
     }
     pub fn hull_volume(&self) -> f64 {
         self.poly.volume()
@@ -1530,11 +1760,19 @@ pub fn covered_volume(poly: &ConvexPolytope, bbox: &Aabb, foreign: &[Foreign]) -
             continue;
         }
         // separated by a face plane of the hull: nothing covered
-        if poly.faces.iter().any(|(h, _)| f.pts.iter().all(|q| h.n.dot(*q) - h.d >= 0.0)) {
+        if poly
+            .faces
+            .iter()
+            .any(|(h, _)| f.pts.iter().all(|q| h.n.dot(*q) - h.d >= 0.0))
+        {
             continue;
         }
         let inside = f.pts.iter().all(|q| in_poly(poly, *q, 0.0));
-        let c = if inside { f.pvol } else { clip_all_cutting(f.poly, &poly.halfspaces()).volume() };
+        let c = if inside {
+            f.pvol
+        } else {
+            clip_all_cutting(f.poly, &poly.halfspaces()).volume()
+        };
         v += c * f.scale;
     }
     v
@@ -1569,7 +1807,10 @@ fn split_polygon(poly: &[DVec3], h: &HalfSpace, tol: f64) -> (Vec<DVec3>, Vec<DV
             neg.push(x);
         }
     }
-    (if pos.len() >= 3 { pos } else { Vec::new() }, if neg.len() >= 3 { neg } else { Vec::new() })
+    (
+        if pos.len() >= 3 { pos } else { Vec::new() },
+        if neg.len() >= 3 { neg } else { Vec::new() },
+    )
 }
 
 /// The parts of a convex polygon outside all the given convex polytopes,
@@ -1643,7 +1884,13 @@ impl MergeCtx<'_> {
     /// lies entirely inside the solid when its centroid is inside at depth
     /// `≥ ρ`. The result is within half the `spacing` of the true maximum.
     /// Stops above `cap`.
-    fn out_term(&self, poly: &ConvexPolytope, skip: &[&ConvexPolytope], start: f64, cap: f64) -> f64 {
+    fn out_term(
+        &self,
+        poly: &ConvexPolytope,
+        skip: &[&ConvexPolytope],
+        start: f64,
+        cap: f64,
+    ) -> f64 {
         let mut worst = start;
         let tol = 1e-9 * self.q.bbox.diagonal();
         // the hull surface inside the skipped polytopes is excluded exactly:
@@ -1656,40 +1903,48 @@ impl MergeCtx<'_> {
         let mut heap: std::collections::BinaryHeap<BbTri> = std::collections::BinaryHeap::new();
         let evals = std::cell::Cell::new(0usize);
         let max_evals = self.max_tri_samples * 4;
-        let visit = |tri: [DVec3; 3], worst: &mut f64, heap: &mut std::collections::BinaryHeap<BbTri>| {
-            let [a, b, c] = tri;
-            let g = (a + b + c) / 3.0;
-            let rho = (a - g).length().max((b - g).length()).max((c - g).length());
-            let near = if *worst - rho > 0.0 { farther_than(self.q, g, *worst - rho) } else { self.q.closest_point(g).map(|(_, d2, t)| (t, d2)) };
-            let Some((t, d2)) = near else { return };
-            evals.set(evals.get() + 1);
-            N_EVAL.fetch_add(1, AO::Relaxed);
-            let d = d2.sqrt();
-            // inside centroid: fully inside when deeper than ρ; otherwise any
-            // outside point of the triangle is within ρ of the surface (the
-            // segment to the centroid crosses it). The (costly) side test is
-            // only needed when it can change the maximum or prune.
-            let ub = if d > *worst || d >= rho {
-                let outside = self.signer.and_then(|sg| sg.outside(self.q.mesh, g, t)).unwrap_or_else(|| is_outside(self.q, g, t));
-                if outside && d > *worst {
-                    *worst = d;
-                }
-                if outside {
-                    d + rho
-                } else if d >= rho {
-                    return;
+        let visit =
+            |tri: [DVec3; 3], worst: &mut f64, heap: &mut std::collections::BinaryHeap<BbTri>| {
+                let [a, b, c] = tri;
+                let g = (a + b + c) / 3.0;
+                let rho = (a - g).length().max((b - g).length()).max((c - g).length());
+                let near = if *worst - rho > 0.0 {
+                    farther_than(self.q, g, *worst - rho)
                 } else {
-                    rho
+                    self.q.closest_point(g).map(|(_, d2, t)| (t, d2))
+                };
+                let Some((t, d2)) = near else { return };
+                evals.set(evals.get() + 1);
+                N_EVAL.fetch_add(1, AO::Relaxed);
+                let d = d2.sqrt();
+                // inside centroid: fully inside when deeper than ρ; otherwise any
+                // outside point of the triangle is within ρ of the surface (the
+                // segment to the centroid crosses it). The (costly) side test is
+                // only needed when it can change the maximum or prune.
+                let ub = if d > *worst || d >= rho {
+                    let outside = self
+                        .signer
+                        .and_then(|sg| sg.outside(self.q.mesh, g, t))
+                        .unwrap_or_else(|| is_outside(self.q, g, t));
+                    if outside && d > *worst {
+                        *worst = d;
+                    }
+                    if outside {
+                        d + rho
+                    } else if d >= rho {
+                        return;
+                    } else {
+                        rho
+                    }
+                } else {
+                    d + rho
+                };
+                // ε-optimal: regions that cannot beat the current maximum by more
+                // than half the spacing are not refined
+                if ub > *worst + 0.5 * self.spacing && rho > 0.5 * self.spacing {
+                    heap.push(BbTri { ub, tri });
                 }
-            } else {
-                d + rho
             };
-            // ε-optimal: regions that cannot beat the current maximum by more
-            // than half the spacing are not refined
-            if ub > *worst + 0.5 * self.spacing && rho > 0.5 * self.spacing {
-                heap.push(BbTri { ub, tri });
-            }
-        };
         for f in &regions {
             for k in 1..f.len().saturating_sub(1) {
                 visit([f[0], f[k], f[k + 1]], &mut worst, &mut heap);
@@ -1747,7 +2002,11 @@ impl MergeCtx<'_> {
         let i = Self::in_term(&pc.poly, &[&pc.samples]);
         let mut c = r.max(i);
         if self.intrusion_k > 0.0 && !self.foreign.is_empty() {
-            c = c.max(rv(covered_volume(&pc.poly, &pc.bbox, &self.foreign), 0.0, self.intrusion_k));
+            c = c.max(rv(
+                covered_volume(&pc.poly, &pc.bbox, &self.foreign),
+                0.0,
+                self.intrusion_k,
+            ));
         }
         let o = self.out_term(&pc.poly, &[], c, f64::INFINITY);
         c.max(o)
@@ -1756,7 +2015,11 @@ impl MergeCtx<'_> {
     /// Cost of merging two pieces and the merged hull (stops above `cap`).
     pub fn pair_cost(&self, a: &Piece, b: &Piece, cap: f64) -> Option<(f64, Ch)> {
         let (c1, ch) = self.stage1(a, b)?;
-        let c = if c1 > cap { c1 } else { self.stage2(a, b, &ch, c1, cap) };
+        let c = if c1 > cap {
+            c1
+        } else {
+            self.stage2(a, b, &ch, c1, cap)
+        };
         Some((c, ch))
     }
 
@@ -1770,7 +2033,10 @@ impl MergeCtx<'_> {
         T_HULLC.fetch_add(t0.elapsed().as_nanos() as u64, AO::Relaxed);
         if let Some(density) = self.upstream_density {
             // exact in this mode: stage 2 returns it unchanged
-            return Some((upstream_merge_cost(a, b, &ch, self.rv_k, density, self.seed), ch));
+            return Some((
+                upstream_merge_cost(a, b, &ch, self.rv_k, density, self.seed),
+                ch,
+            ));
         }
         let base = a.own.max(b.own);
         let r = rv(a.vol + b.vol, ch.volume, self.rv_k);
@@ -1844,7 +2110,8 @@ struct KeyIndex {
 
 impl KeyIndex {
     fn new<'a>(pieces: impl Iterator<Item = (usize, &'a Piece)>) -> Option<KeyIndex> {
-        let mut by_key: std::collections::HashMap<u32, Vec<usize>> = std::collections::HashMap::new();
+        let mut by_key: std::collections::HashMap<u32, Vec<usize>> =
+            std::collections::HashMap::new();
         for (i, pc) in pieces {
             if pc.keys.is_empty() || pc.halo.is_empty() {
                 return None;
@@ -1857,7 +2124,12 @@ impl KeyIndex {
     }
     /// Pieces owning a key of `halo` (sorted, unique).
     fn candidates(&self, halo: &[u32]) -> Vec<usize> {
-        let mut v: Vec<usize> = halo.iter().filter_map(|k| self.by_key.get(k)).flatten().copied().collect();
+        let mut v: Vec<usize> = halo
+            .iter()
+            .filter_map(|k| self.by_key.get(k))
+            .flatten()
+            .copied()
+            .collect();
         v.sort_unstable();
         v.dedup();
         v
@@ -1895,14 +2167,28 @@ fn merged_piece(a: &Piece, b: &Piece, ch: Ch, cost: f64) -> Piece {
     // candidate hulls have triangle faces: rebuild with merged faces
     let ch = hull(&ch.pts).unwrap_or(ch);
     let bbox = Aabb::from_points(ch.pts.iter());
-    Piece { poly: ch.poly, pts: ch.pts, bbox, vol: a.vol + b.vol, own: cost, samples, tags, keys: sorted_union(&a.keys, &b.keys), halo: sorted_union(&a.halo, &b.halo) }
+    Piece {
+        poly: ch.poly,
+        pts: ch.pts,
+        bbox,
+        vol: a.vol + b.vol,
+        own: cost,
+        samples,
+        tags,
+        keys: sorted_union(&a.keys, &b.keys),
+        halo: sorted_union(&a.halo, &b.halo),
+    }
 }
 
 /// Cheap pre-merging for fragments with very many pieces: greedily merge
 /// the adjacent pair whose bounding box grows least (box volume excess,
 /// no hull or distance evaluation) until `target` pieces remain; merged
 /// hulls are computed once per merge. Deterministic (ties by ids).
-pub fn coarsen(pieces: Vec<Piece>, target: usize, adjacent: &(dyn Fn(&Piece, &Piece) -> bool + Sync)) -> Vec<Piece> {
+pub fn coarsen(
+    pieces: Vec<Piece>,
+    target: usize,
+    adjacent: &(dyn Fn(&Piece, &Piece) -> bool + Sync),
+) -> Vec<Piece> {
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
     if pieces.len() <= target {
@@ -1918,7 +2204,10 @@ pub fn coarsen(pieces: Vec<Piece>, target: usize, adjacent: &(dyn Fn(&Piece, &Pi
     }
     impl Ord for Key {
         fn cmp(&self, o: &Self) -> std::cmp::Ordering {
-            self.0.total_cmp(&o.0).then(self.1.cmp(&o.1)).then(self.2.cmp(&o.2))
+            self.0
+                .total_cmp(&o.0)
+                .then(self.1.cmp(&o.1))
+                .then(self.2.cmp(&o.2))
         }
     }
     let excess = |a: &Piece, b: &Piece| -> f64 {
@@ -1931,8 +2220,22 @@ pub fn coarsen(pieces: Vec<Piece>, target: usize, adjacent: &(dyn Fn(&Piece, &Pi
     };
     // Groups are merged on their boxes, volumes and adjacency keys only
     // (light pieces); hulls are built once per final group.
-    let light = |pc: &Piece| Piece { poly: ConvexPolytope::default(), pts: Vec::new(), bbox: pc.bbox, vol: pc.vol, own: pc.own, samples: Vec::new(), tags: Vec::new(), keys: pc.keys.clone(), halo: pc.halo.clone() };
-    let mut alive: BTreeMap<usize, (Piece, Vec<usize>)> = pieces.iter().enumerate().map(|(i, pc)| (i, (light(pc), vec![i]))).collect();
+    let light = |pc: &Piece| Piece {
+        poly: ConvexPolytope::default(),
+        pts: Vec::new(),
+        bbox: pc.bbox,
+        vol: pc.vol,
+        own: pc.own,
+        samples: Vec::new(),
+        tags: Vec::new(),
+        keys: pc.keys.clone(),
+        halo: pc.halo.clone(),
+    };
+    let mut alive: BTreeMap<usize, (Piece, Vec<usize>)> = pieces
+        .iter()
+        .enumerate()
+        .map(|(i, pc)| (i, (light(pc), vec![i])))
+        .collect();
     let mut next_id = alive.len();
     let mut heap: BinaryHeap<Reverse<Key>> = BinaryHeap::new();
     let ids: Vec<usize> = alive.keys().copied().collect();
@@ -1942,10 +2245,18 @@ pub fn coarsen(pieces: Vec<Piece>, target: usize, adjacent: &(dyn Fn(&Piece, &Pi
         .enumerate()
         .map(|(k, &i)| {
             let cands: Vec<usize> = match &index {
-                Some(ix) => ix.candidates(&alive[&i].0.halo).into_iter().filter(|&j| j > i).collect(),
+                Some(ix) => ix
+                    .candidates(&alive[&i].0.halo)
+                    .into_iter()
+                    .filter(|&j| j > i)
+                    .collect(),
                 None => ids[k + 1..].to_vec(),
             };
-            cands.into_iter().filter(|&j| adjacent(&alive[&i].0, &alive[&j].0)).map(|j| Key(excess(&alive[&i].0, &alive[&j].0), i, j)).collect()
+            cands
+                .into_iter()
+                .filter(|&j| adjacent(&alive[&i].0, &alive[&j].0))
+                .map(|j| Key(excess(&alive[&i].0, &alive[&j].0), i, j))
+                .collect()
         })
         .collect();
     for v in found {
@@ -1954,7 +2265,9 @@ pub fn coarsen(pieces: Vec<Piece>, target: usize, adjacent: &(dyn Fn(&Piece, &Pi
         }
     }
     while alive.len() > target {
-        let Some(Reverse(Key(_, i, j))) = heap.pop() else { break };
+        let Some(Reverse(Key(_, i, j))) = heap.pop() else {
+            break;
+        };
         if !alive.contains_key(&i) || !alive.contains_key(&j) {
             continue;
         }
@@ -1977,11 +2290,23 @@ pub fn coarsen(pieces: Vec<Piece>, target: usize, adjacent: &(dyn Fn(&Piece, &Pi
         let others: Vec<usize> = match index.as_mut() {
             Some(ix) => {
                 ix.merge(i, j, nid, &m.keys);
-                ix.candidates(&m.halo).into_iter().filter(|o| alive.contains_key(o)).collect()
+                ix.candidates(&m.halo)
+                    .into_iter()
+                    .filter(|o| alive.contains_key(o))
+                    .collect()
             }
             None => alive.keys().copied().collect(),
         };
-        let keys: Vec<Option<Key>> = others.iter().map(|&o| if adjacent(&alive[&o].0, &m) { Some(Key(excess(&alive[&o].0, &m), o, nid)) } else { None }).collect();
+        let keys: Vec<Option<Key>> = others
+            .iter()
+            .map(|&o| {
+                if adjacent(&alive[&o].0, &m) {
+                    Some(Key(excess(&alive[&o].0, &m), o, nid))
+                } else {
+                    None
+                }
+            })
+            .collect();
         for k in keys.into_iter().flatten() {
             heap.push(Reverse(k));
         }
@@ -1996,16 +2321,35 @@ pub fn coarsen(pieces: Vec<Piece>, target: usize, adjacent: &(dyn Fn(&Piece, &Pi
             if members.len() == 1 {
                 return vec![pieces[members[0]].clone()];
             }
-            let pts: Vec<DVec3> = members.iter().flat_map(|&k| pieces[k].pts.iter().copied()).collect();
+            let pts: Vec<DVec3> = members
+                .iter()
+                .flat_map(|&k| pieces[k].pts.iter().copied())
+                .collect();
             let Some(ch) = hull(&pts) else {
                 return members.iter().map(|&k| pieces[k].clone()).collect();
             };
-            let mut tags: Vec<u32> = members.iter().flat_map(|&k| pieces[k].tags.iter().copied()).collect();
+            let mut tags: Vec<u32> = members
+                .iter()
+                .flat_map(|&k| pieces[k].tags.iter().copied())
+                .collect();
             tags.sort_unstable();
-            let samples: Vec<DVec3> = members.iter().flat_map(|&k| pieces[k].samples.iter().copied()).collect();
+            let samples: Vec<DVec3> = members
+                .iter()
+                .flat_map(|&k| pieces[k].samples.iter().copied())
+                .collect();
             let bbox = Aabb::from_points(ch.pts.iter());
             let own = g.own.max(rv(g.vol, ch.volume, 0.3));
-            vec![Piece { poly: ch.poly, pts: ch.pts, bbox, vol: g.vol, own, samples, tags, keys: g.keys.clone(), halo: g.halo.clone() }]
+            vec![Piece {
+                poly: ch.poly,
+                pts: ch.pts,
+                bbox,
+                vol: g.vol,
+                own,
+                samples,
+                tags,
+                keys: g.keys.clone(),
+                halo: g.halo.clone(),
+            }]
         })
         .collect();
     built.into_iter().flatten().collect()
@@ -2024,7 +2368,14 @@ pub struct MergeResult {
 /// when the count is within `budget` and the cheapest cost exceeds
 /// `threshold`. Candidate pairs are those accepted by `adjacent`; when no
 /// candidate remains above the budget, all pairs become candidates.
-pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: usize, carry_cap: usize, adjacent: &(dyn Fn(&Piece, &Piece) -> bool + Sync)) -> MergeResult {
+pub fn greedy_merge(
+    pieces: Vec<Piece>,
+    ctx: &MergeCtx,
+    threshold: f64,
+    budget: usize,
+    carry_cap: usize,
+    adjacent: &(dyn Fn(&Piece, &Piece) -> bool + Sync),
+) -> MergeResult {
     // Lazy evaluation: every candidate pair holds a lower bound of its cost
     // that is refined in stages (0: max of the parts' own costs; 1: merged
     // hull, Rv and the covered-surface term; 2: exact, with the hull-surface
@@ -2044,7 +2395,10 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
     }
     impl Ord for Key {
         fn cmp(&self, o: &Self) -> std::cmp::Ordering {
-            self.0.total_cmp(&o.0).then(self.1.cmp(&o.1)).then(self.2.cmp(&o.2))
+            self.0
+                .total_cmp(&o.0)
+                .then(self.1.cmp(&o.1))
+                .then(self.2.cmp(&o.2))
         }
     }
     struct Entry {
@@ -2065,12 +2419,27 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
     let mut cache: BTreeMap<(usize, usize), Entry> = BTreeMap::new();
     let mut heap: BinaryHeap<Reverse<Key>> = BinaryHeap::new();
     let mut all_pairs = false;
-    let add_pairs = |alive: &BTreeMap<usize, Piece>, cache: &mut BTreeMap<(usize, usize), Entry>, heap: &mut BinaryHeap<Reverse<Key>>, pairs: Vec<(usize, usize)>, all: bool| {
-        let ok: Vec<bool> = pairs.par_iter().map(|&(i, j)| all || adjacent(&alive[&i], &alive[&j])).collect();
+    let add_pairs = |alive: &BTreeMap<usize, Piece>,
+                     cache: &mut BTreeMap<(usize, usize), Entry>,
+                     heap: &mut BinaryHeap<Reverse<Key>>,
+                     pairs: Vec<(usize, usize)>,
+                     all: bool| {
+        let ok: Vec<bool> = pairs
+            .par_iter()
+            .map(|&(i, j)| all || adjacent(&alive[&i], &alive[&j]))
+            .collect();
         for (pr, ok) in pairs.into_iter().zip(ok) {
             if ok && !cache.contains_key(&pr) {
                 let base = alive[&pr.0].own.max(alive[&pr.1].own);
-                cache.insert(pr, Entry { cost: base, stage: 0, ch: None, cheap: false });
+                cache.insert(
+                    pr,
+                    Entry {
+                        cost: base,
+                        stage: 0,
+                        ch: None,
+                        cheap: false,
+                    },
+                );
                 heap.push(Reverse(Key(base, pr.0, pr.1)));
             }
         }
@@ -2078,14 +2447,31 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
     let ids: Vec<usize> = alive.keys().copied().collect();
     let mut index = KeyIndex::new(alive.iter().map(|(&i, pc)| (i, pc)));
     let pairs: Vec<(usize, usize)> = match &index {
-        Some(ix) => ids.iter().flat_map(|&i| ix.candidates(&alive[&i].halo).into_iter().filter(move |&j| j > i).map(move |j| (i, j))).collect(),
-        None => ids.iter().enumerate().flat_map(|(k, &i)| ids[k + 1..].iter().map(move |&j| (i, j))).collect(),
+        Some(ix) => ids
+            .iter()
+            .flat_map(|&i| {
+                ix.candidates(&alive[&i].halo)
+                    .into_iter()
+                    .filter(move |&j| j > i)
+                    .map(move |j| (i, j))
+            })
+            .collect(),
+        None => ids
+            .iter()
+            .enumerate()
+            .flat_map(|(k, &i)| ids[k + 1..].iter().map(move |&j| (i, j)))
+            .collect(),
     };
     add_pairs(&alive, &mut cache, &mut heap, pairs, false);
     let batch_min = ctx.batch.max(1);
     let mut carry: Option<Vec<Piece>> = None;
     // a heap key is current when it matches its cache entry
-    let current = |cache: &BTreeMap<(usize, usize), Entry>, k: &Key| cache.get(&(k.1, k.2)).map(|e| e.cost.total_cmp(&k.0).is_eq()).unwrap_or(false);
+    let current = |cache: &BTreeMap<(usize, usize), Entry>, k: &Key| {
+        cache
+            .get(&(k.1, k.2))
+            .map(|e| e.cost.total_cmp(&k.0).is_eq())
+            .unwrap_or(false)
+    };
     loop {
         if alive.len() <= 1 {
             break;
@@ -2100,7 +2486,11 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
             if alive.len() > budget && !all_pairs {
                 all_pairs = true;
                 let ids: Vec<usize> = alive.keys().copied().collect();
-                let pairs: Vec<(usize, usize)> = ids.iter().enumerate().flat_map(|(k, &i)| ids[k + 1..].iter().map(move |&j| (i, j))).collect();
+                let pairs: Vec<(usize, usize)> = ids
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(k, &i)| ids[k + 1..].iter().map(move |&j| (i, j)))
+                    .collect();
                 add_pairs(&alive, &mut cache, &mut heap, pairs, true);
                 continue;
             }
@@ -2185,7 +2575,11 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
         let b = alive.remove(&j).unwrap();
         // drop the cache entries of the merged pieces (their heap keys
         // become stale)
-        let dead: Vec<(usize, usize)> = cache.keys().filter(|k| k.0 == i || k.1 == i || k.0 == j || k.1 == j).copied().collect();
+        let dead: Vec<(usize, usize)> = cache
+            .keys()
+            .filter(|k| k.0 == i || k.1 == i || k.0 == j || k.1 == j)
+            .copied()
+            .collect();
         for k in dead {
             cache.remove(&k);
         }
@@ -2195,7 +2589,11 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
         let pairs: Vec<(usize, usize)> = match index.as_mut() {
             Some(ix) if !all_pairs => {
                 ix.merge(i, j, nid, &m.keys);
-                ix.candidates(&m.halo).into_iter().filter(|o| alive.contains_key(o)).map(|o| (o, nid)).collect()
+                ix.candidates(&m.halo)
+                    .into_iter()
+                    .filter(|o| alive.contains_key(o))
+                    .map(|o| (o, nid))
+                    .collect()
             }
             _ => alive.keys().map(|&o| (o, nid)).collect(),
         };
@@ -2213,7 +2611,10 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
 /// Decompose a closed mesh (world coordinates). Returns convex hulls in
 /// world coordinates, deterministic for a given input and parameters.
 pub fn decompose(mesh: &TriMesh, p: &CoacdParams) -> Vec<ConvexPolytope> {
-    decompose_detailed(mesh, p).into_iter().map(|(h, _)| h).collect()
+    decompose_detailed(mesh, p)
+        .into_iter()
+        .map(|(h, _)| h)
+        .collect()
 }
 
 /// Like [`decompose`], also returning each hull's concavity (normalized).
@@ -2223,10 +2624,17 @@ pub fn decompose_detailed(mesh: &TriMesh, p: &CoacdParams) -> Vec<(ConvexPolytop
     }
     let frame = Frame::of(&mesh.aabb());
     let nm = mesh.transformed(|v| frame.to_norm(v));
-    let nm = if nm.signed_volume() < 0.0 { nm.flipped() } else { nm };
+    let nm = if nm.signed_volume() < 0.0 {
+        nm.flipped()
+    } else {
+        nm
+    };
     let parts = cut(Solid::new(nm.clone()), p);
     if !p.merge || parts.len() <= 1 {
-        return parts.into_iter().map(|c| (frame.polytope_to_world(&c.ch.poly), c.cost)).collect();
+        return parts
+            .into_iter()
+            .map(|c| (frame.polytope_to_world(&c.ch.poly), c.cost))
+            .collect();
     }
     let q = MeshQuery::new(&nm);
     let density = density_for(nm.area(), p.resolution);
@@ -2253,17 +2661,33 @@ pub fn decompose_detailed(mesh: &TriMesh, p: &CoacdParams) -> Vec<(ConvexPolytop
         MergeCost::Upstream => Some((p.resolution + 2000) as f64),
         MergeCost::CollisionAware => None,
     };
-    let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: 1.0 / (p.resolution.max(1) as f64).sqrt(), rv_k: p.rv_k, max_tri_samples: 4096, foreign: Vec::new(), intrusion_k: 0.0, upstream_density, seed: p.seed, batch: 8 };
+    let ctx = MergeCtx {
+        q: &q,
+        signer: Some(&signer),
+        spacing: 1.0 / (p.resolution.max(1) as f64).sqrt(),
+        rv_k: p.rv_k,
+        max_tri_samples: 4096,
+        foreign: Vec::new(),
+        intrusion_k: 0.0,
+        upstream_density,
+        seed: p.seed,
+        batch: 8,
+    };
     // upstream: only hulls closer than 0.01 (normalized vertex distance)
     let adjacent = |a: &Piece, b: &Piece| -> bool {
         if !a.bbox.expanded(0.01).overlaps(&b.bbox) {
             return false;
         }
-        a.pts.iter().any(|x| b.pts.iter().any(|y| (*x - *y).length_squared() < 1e-4))
+        a.pts
+            .iter()
+            .any(|x| b.pts.iter().any(|y| (*x - *y).length_squared() < 1e-4))
     };
     let budget = p.max_convex_hull.unwrap_or(usize::MAX);
     let r = greedy_merge(pieces, &ctx, p.threshold, budget, usize::MAX, &adjacent);
-    r.pieces.into_iter().map(|pc| (frame.polytope_to_world(&pc.poly), pc.own)).collect()
+    r.pieces
+        .into_iter()
+        .map(|pc| (frame.polytope_to_world(&pc.poly), pc.own))
+        .collect()
 }
 
 #[cfg(test)]
@@ -2285,14 +2709,22 @@ mod tests {
             v.sort_by(f64::total_cmp);
             v.dedup();
         }
-        let inside = |p: DVec3| boxes.iter().any(|(lo, hi)| p.cmpgt(*lo).all() && p.cmplt(*hi).all());
+        let inside = |p: DVec3| {
+            boxes
+                .iter()
+                .any(|(lo, hi)| p.cmpgt(*lo).all() && p.cmplt(*hi).all())
+        };
         let (nx, ny, nz) = (xs.len() - 1, ys.len() - 1, zs.len() - 1);
         let filled = |i: isize, j: isize, k: isize| -> bool {
             if i < 0 || j < 0 || k < 0 || i >= nx as isize || j >= ny as isize || k >= nz as isize {
                 return false;
             }
             let (i, j, k) = (i as usize, j as usize, k as usize);
-            inside(DVec3::new((xs[i] + xs[i + 1]) * 0.5, (ys[j] + ys[j + 1]) * 0.5, (zs[k] + zs[k + 1]) * 0.5))
+            inside(DVec3::new(
+                (xs[i] + xs[i + 1]) * 0.5,
+                (ys[j] + ys[j + 1]) * 0.5,
+                (zs[k] + zs[k + 1]) * 0.5,
+            ))
         };
         let mut m = TriMesh::default();
         for i in 0..nx as isize {
@@ -2306,9 +2738,17 @@ mod tests {
                     let b = box_mesh(lo, hi);
                     // keep only faces not shared with a filled neighbour
                     for t in &b.tris {
-                        let [p, q, r] = [b.verts[t[0] as usize], b.verts[t[1] as usize], b.verts[t[2] as usize]];
+                        let [p, q, r] = [
+                            b.verts[t[0] as usize],
+                            b.verts[t[1] as usize],
+                            b.verts[t[2] as usize],
+                        ];
                         let n = (q - p).cross(r - p).normalize();
-                        let d = (n.x.round() as isize, n.y.round() as isize, n.z.round() as isize);
+                        let d = (
+                            n.x.round() as isize,
+                            n.y.round() as isize,
+                            n.z.round() as isize,
+                        );
                         if !filled(i + d.0, j + d.1, k + d.2) {
                             let base = m.verts.len() as u32;
                             m.verts.extend([p, q, r]);
@@ -2322,7 +2762,10 @@ mod tests {
     }
 
     pub(crate) fn l_shape() -> TriMesh {
-        union_boxes(&[(DVec3::ZERO, DVec3::new(2.0, 1.0, 1.0)), (DVec3::ZERO, DVec3::new(1.0, 2.0, 1.0))])
+        union_boxes(&[
+            (DVec3::ZERO, DVec3::new(2.0, 1.0, 1.0)),
+            (DVec3::ZERO, DVec3::new(1.0, 2.0, 1.0)),
+        ])
     }
 
     pub(crate) fn u_shape() -> TriMesh {
@@ -2368,12 +2811,30 @@ mod tests {
 
     #[test]
     fn clip_conserves_volume_and_closes() {
-        let shapes = [l_shape(), u_shape(), ring(), notched_box(), frac_geom::mesh::icosphere(DVec3::new(0.1, 0.2, 0.3), 1.0, 2)];
+        let shapes = [
+            l_shape(),
+            u_shape(),
+            ring(),
+            notched_box(),
+            frac_geom::mesh::icosphere(DVec3::new(0.1, 0.2, 0.3), 1.0, 2),
+        ];
         let planes = [
-            Plane { n: DVec3::X, d: -0.5 },
-            Plane { n: DVec3::new(1.0, 1.0, 0.3).normalize(), d: -1.2 },
-            Plane { n: DVec3::Y, d: -1.0 }, // through existing vertices / faces
-            Plane { n: DVec3::new(-0.3, 0.8, -0.52).normalize(), d: 0.1 },
+            Plane {
+                n: DVec3::X,
+                d: -0.5,
+            },
+            Plane {
+                n: DVec3::new(1.0, 1.0, 0.3).normalize(),
+                d: -1.2,
+            },
+            Plane {
+                n: DVec3::Y,
+                d: -1.0,
+            }, // through existing vertices / faces
+            Plane {
+                n: DVec3::new(-0.3, 0.8, -0.52).normalize(),
+                d: 0.1,
+            },
         ];
         for m in &shapes {
             let v = m.signed_volume();
@@ -2400,11 +2861,25 @@ mod tests {
     fn clip_ring_cap_with_two_loops() {
         // cutting the ring across both bars yields two cap loops per side
         let m = ring();
-        let (pos, neg, area) = clip(&Solid::new(m.clone()), &Plane { n: DVec3::X, d: -1.5 }).unwrap();
+        let (pos, neg, area) = clip(
+            &Solid::new(m.clone()),
+            &Plane {
+                n: DVec3::X,
+                d: -1.5,
+            },
+        )
+        .unwrap();
         assert!((area - 2.0).abs() < 1e-9, "cap area {area}");
         assert!((pos.volume() - 4.0).abs() < 1e-9 && (neg.volume() - 4.0).abs() < 1e-9);
         // cut through the hole along z: one loop with a hole
-        let (pos, neg, area) = clip(&Solid::new(m), &Plane { n: DVec3::Z, d: -0.5 }).unwrap();
+        let (pos, neg, area) = clip(
+            &Solid::new(m),
+            &Plane {
+                n: DVec3::Z,
+                d: -0.5,
+            },
+        )
+        .unwrap();
         assert!((area - 8.0).abs() < 1e-9, "annulus cap area {area}");
         assert!(closed(&pos.mesh) && closed(&neg.mesh));
     }
@@ -2437,7 +2912,10 @@ mod tests {
             let ch = hull(&nm.verts).unwrap();
             let fast = hb(&s, &ch, 20000.0, f64::INFINITY);
             let brute = hb_brute(&nm, &ch);
-            assert!((fast - brute).abs() <= 0.02 * brute + 1e-3, "fast {fast} brute {brute}");
+            assert!(
+                (fast - brute).abs() <= 0.02 * brute + 1e-3,
+                "fast {fast} brute {brute}"
+            );
             // the exact answer for the notched box: notch depth 1 (of 4) = 0.5 normalized
             let _ = brute;
         }
@@ -2448,13 +2926,22 @@ mod tests {
     }
 
     fn params(th: f64) -> CoacdParams {
-        CoacdParams { threshold: th, mcts_iterations: 60, seed: 7, ..Default::default() }
+        CoacdParams {
+            threshold: th,
+            mcts_iterations: 60,
+            seed: 7,
+            ..Default::default()
+        }
     }
 
     fn check_decomp(m: &TriMesh, hulls: &[ConvexPolytope], max_conc: f64) {
         // hulls cover the solid
         let total: f64 = hulls.iter().map(|h| h.volume()).sum();
-        assert!(total >= m.signed_volume() * (1.0 - 1e-6), "hull volume {total} < {}", m.signed_volume());
+        assert!(
+            total >= m.signed_volume() * (1.0 - 1e-6),
+            "hull volume {total} < {}",
+            m.signed_volume()
+        );
         let _ = max_conc;
     }
 
@@ -2479,10 +2966,20 @@ mod tests {
     fn ring_four_hulls() {
         let m = ring();
         let h = decompose_detailed(&m, &params(0.05));
-        assert!(h.len() >= 4 && h.len() <= 5, "ring -> 4 hulls, got {}", h.len());
+        assert!(
+            h.len() >= 4 && h.len() <= 5,
+            "ring -> 4 hulls, got {}",
+            h.len()
+        );
         assert!(h.iter().all(|x| x.1 <= 0.05));
         // budget of 2 still works (concavity above threshold)
-        let h2 = decompose(&m, &CoacdParams { max_convex_hull: Some(2), ..params(0.05) });
+        let h2 = decompose(
+            &m,
+            &CoacdParams {
+                max_convex_hull: Some(2),
+                ..params(0.05)
+            },
+        );
         assert_eq!(h2.len(), 2);
     }
 
@@ -2490,7 +2987,11 @@ mod tests {
     fn notched_box_hulls() {
         let m = notched_box();
         let h = decompose_detailed(&m, &params(0.05));
-        assert!(h.len() >= 2 && h.len() <= 3, "notched box -> 2-3 hulls, got {}", h.len());
+        assert!(
+            h.len() >= 2 && h.len() <= 3,
+            "notched box -> 2-3 hulls, got {}",
+            h.len()
+        );
         assert!(h.iter().all(|x| x.1 <= 0.05));
         // loose threshold: a single hull (notch depth 0.5 normalized)
         let h1 = decompose(&m, &params(0.6));
@@ -2504,8 +3005,16 @@ mod tests {
         let b = decompose(&m, &params(0.03));
         assert_eq!(a.len(), b.len());
         for (x, y) in a.iter().zip(&b) {
-            let vx: Vec<[u64; 3]> = x.vertices().iter().map(|p| [p.x.to_bits(), p.y.to_bits(), p.z.to_bits()]).collect();
-            let vy: Vec<[u64; 3]> = y.vertices().iter().map(|p| [p.x.to_bits(), p.y.to_bits(), p.z.to_bits()]).collect();
+            let vx: Vec<[u64; 3]> = x
+                .vertices()
+                .iter()
+                .map(|p| [p.x.to_bits(), p.y.to_bits(), p.z.to_bits()])
+                .collect();
+            let vy: Vec<[u64; 3]> = y
+                .vertices()
+                .iter()
+                .map(|p| [p.x.to_bits(), p.y.to_bits(), p.z.to_bits()])
+                .collect();
             assert_eq!(vx, vy);
         }
     }
@@ -2532,14 +3041,26 @@ mod bench {
         for _ in 0..1000 {
             v += hull_volume(&pts);
         }
-        eprintln!("hull volume of {} pts: {:?} each ({v})", pts.len(), t.elapsed() / 1000);
+        eprintln!(
+            "hull volume of {} pts: {:?} each ({v})",
+            pts.len(),
+            t.elapsed() / 1000
+        );
         // merge candidates: two random convex cells (~20 vertices each)
         use rand::Rng;
         let mut rng = ChaCha8Rng::seed_from_u64(3);
         let cells: Vec<Vec<DVec3>> = (0..200)
             .map(|k| {
                 let c = DVec3::new((k % 10) as f64, (k / 10) as f64 * 0.7, 0.0);
-                let raw: Vec<DVec3> = (0..60).map(|_| c + DVec3::new(rng.gen_range(-0.6..0.6), rng.gen_range(-0.4..0.4), rng.gen_range(-0.3..0.3))).collect();
+                let raw: Vec<DVec3> = (0..60)
+                    .map(|_| {
+                        c + DVec3::new(
+                            rng.gen_range(-0.6..0.6),
+                            rng.gen_range(-0.4..0.4),
+                            rng.gen_range(-0.3..0.3),
+                        )
+                    })
+                    .collect();
                 hull(&raw).unwrap().pts
             })
             .collect();
@@ -2553,7 +3074,11 @@ mod bench {
                 n += hull_tri(&pts).map(|h| h.poly.faces.len()).unwrap_or(0);
             }
         }
-        eprintln!("hull_tri of 2 cells ({} vertices avg): {:?} each ({n})", 2 * nv / cells.len(), t.elapsed() / (20 * (cells.len() as u32 - 1)));
+        eprintln!(
+            "hull_tri of 2 cells ({} vertices avg): {:?} each ({n})",
+            2 * nv / cells.len(),
+            t.elapsed() / (20 * (cells.len() as u32 - 1))
+        );
         let t = std::time::Instant::now();
         for k in 0..cells.len() - 1 {
             let mut pts = cells[k].clone();
@@ -2562,7 +3087,10 @@ mod bench {
                 n += convex_hull_fast(&pts).map(|h| h.tris.len()).unwrap_or(0);
             }
         }
-        eprintln!("quickhull of 2 cells: {:?} each ({n})", t.elapsed() / (20 * (cells.len() as u32 - 1)));
+        eprintln!(
+            "quickhull of 2 cells: {:?} each ({n})",
+            t.elapsed() / (20 * (cells.len() as u32 - 1))
+        );
         let t = std::time::Instant::now();
         for k in 0..cells.len() - 1 {
             let mut pts = cells[k].clone();
@@ -2571,6 +3099,9 @@ mod bench {
                 n += hull(&pts).map(|h| h.poly.faces.len()).unwrap_or(0);
             }
         }
-        eprintln!("hull (merged faces) of 2 cells: {:?} each ({n})", t.elapsed() / (20 * (cells.len() as u32 - 1)));
+        eprintln!(
+            "hull (merged faces) of 2 cells: {:?} each ({n})",
+            t.elapsed() / (20 * (cells.len() as u32 - 1))
+        );
     }
 }

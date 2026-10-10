@@ -52,7 +52,13 @@ fn pct(v: &mut [f64], q: f64) -> f64 {
 }
 
 impl Report {
-    pub fn new(asset: &Asset, render: &RenderOut, timings: Vec<StageTiming>, warnings: Vec<String>, scorecard: frac_validate::Scorecard) -> Report {
+    pub fn new(
+        asset: &Asset,
+        render: &RenderOut,
+        timings: Vec<StageTiming>,
+        warnings: Vec<String>,
+        scorecard: frac_validate::Scorecard,
+    ) -> Report {
         let h = &asset.hierarchy;
         let levels = (0..h.levels)
             .map(|l| {
@@ -64,7 +70,15 @@ impl Report {
                     bonds: asset.level_bonds(l).count(),
                     anchor_bonds: asset.level_bonds(l).filter(|b| b.anchor).count(),
                     hulls: fr.iter().map(|f| f.hulls.len()).sum(),
-                    tris_lod0: fr.iter().map(|f| render.fragments[f.id.idx()].first().map(|m| m.triangle_count()).unwrap_or(0)).sum(),
+                    tris_lod0: fr
+                        .iter()
+                        .map(|f| {
+                            render.fragments[f.id.idx()]
+                                .first()
+                                .map(|m| m.triangle_count())
+                                .unwrap_or(0)
+                        })
+                        .sum(),
                     volume_p10: pct(&mut vols, 0.1),
                     volume_p50: pct(&mut vols, 0.5),
                     volume_p90: pct(&mut vols, 0.9),
@@ -100,13 +114,42 @@ impl Report {
     pub fn to_markdown(&self) -> String {
         let mut s = String::new();
         s += &format!("# Pre-fracture report: {}\n\n", self.name);
-        s += &format!("tool {} · seed {} · variant {} · settings `{}`\n\n", self.tool_version, self.seed, self.variant, &self.settings_hash[..16.min(self.settings_hash.len())]);
-        s += &format!("Components {} · cells {} · analysis cells {} · interfaces {} · total {:.1} s · glb {} KiB · fracphys {} KiB\n\n", self.components, self.cells, self.analysis_cells, self.interfaces, self.total_ms / 1e3, self.payload_bytes.0 / 1024, self.payload_bytes.1 / 1024);
+        s += &format!(
+            "tool {} · seed {} · variant {} · settings `{}`\n\n",
+            self.tool_version,
+            self.seed,
+            self.variant,
+            &self.settings_hash[..16.min(self.settings_hash.len())]
+        );
+        s += &format!(
+            "Components {} · cells {} · analysis cells {} · interfaces {} · total {:.1} s · glb {} KiB · fracphys {} KiB\n\n",
+            self.components,
+            self.cells,
+            self.analysis_cells,
+            self.interfaces,
+            self.total_ms / 1e3,
+            self.payload_bytes.0 / 1024,
+            self.payload_bytes.1 / 1024
+        );
         s += "## Levels\n\n| Level | Fragments | Bonds | Anchor bonds | Hulls | Tris (LOD0) | Volume p10 / p50 / p90 (m³) |\n|---|---|---|---|---|---|---|\n";
         for l in &self.levels {
-            s += &format!("| L{} | {} | {} | {} | {} | {} | {:.3e} / {:.3e} / {:.3e} |\n", l.level, l.fragments, l.bonds, l.anchor_bonds, l.hulls, l.tris_lod0, l.volume_p10, l.volume_p50, l.volume_p90);
+            s += &format!(
+                "| L{} | {} | {} | {} | {} | {} | {:.3e} / {:.3e} / {:.3e} |\n",
+                l.level,
+                l.fragments,
+                l.bonds,
+                l.anchor_bonds,
+                l.hulls,
+                l.tris_lod0,
+                l.volume_p10,
+                l.volume_p50,
+                l.volume_p90
+            );
         }
-        s += &format!("\nLevel-1 method per component: {}\n\n", self.level1_methods.join(", "));
+        s += &format!(
+            "\nLevel-1 method per component: {}\n\n",
+            self.level1_methods.join(", ")
+        );
         s += &self.scorecard.to_markdown();
         s += "\n## Timings\n\n| Stage | ms |\n|---|---|\n";
         for t in &self.timings {

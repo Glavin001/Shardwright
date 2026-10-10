@@ -64,7 +64,12 @@ pub struct SearchEffort {
 impl Default for SearchEffort {
     /// Upstream CoACD defaults.
     fn default() -> Self {
-        SearchEffort { mcts_iterations: 150, mcts_depth: 3, mcts_nodes: 20, resolution: 2000 }
+        SearchEffort {
+            mcts_iterations: 150,
+            mcts_depth: 3,
+            mcts_nodes: 20,
+            resolution: 2000,
+        }
     }
 }
 
@@ -147,7 +152,13 @@ pub fn cells_boundary_mesh(asset: &Asset, cells: &[CellId]) -> TriMesh {
                 tris.extend(p.tris.iter().map(|t| [t[0], t[2], t[1]]));
             }
         }
-        out.append(&TriMesh { verts: g.verts.clone(), tris }.compact());
+        out.append(
+            &TriMesh {
+                verts: g.verts.clone(),
+                tris,
+            }
+            .compact(),
+        );
     }
     out
 }
@@ -231,7 +242,8 @@ impl CellIndex {
         sorted.sort_unstable();
         sorted.dedup();
         let inside = |c: CellId| sorted.binary_search(&c).is_ok();
-        let mut index: std::collections::HashMap<(u32, u32), u32> = std::collections::HashMap::new();
+        let mut index: std::collections::HashMap<(u32, u32), u32> =
+            std::collections::HashMap::new();
         let mut verts: Vec<DVec3> = Vec::new();
         let mut tris: Vec<[u32; 3]> = Vec::new();
         let mut owner: Vec<CellId> = Vec::new();
@@ -256,7 +268,11 @@ impl CellIndex {
             }
             for &pi in &self.patch[c.idx()] {
                 let p = &g.patches[pi as usize];
-                let (first, other) = if p.cells.0 == c { (true, p.cells.1) } else { (false, p.cells.0) };
+                let (first, other) = if p.cells.0 == c {
+                    (true, p.cells.1)
+                } else {
+                    (false, p.cells.0)
+                };
                 if inside(other) {
                     continue;
                 }
@@ -306,10 +322,19 @@ fn cell_atoms(asset: &Asset, idx: &CellIndex, cell: CellId, p: &CollisionParams)
         return Vec::new();
     }
     let pts = idx.cell_points(asset, cell);
-    let Some(ch) = coacd::hull(&pts) else { return Vec::new() };
+    let Some(ch) = coacd::hull(&pts) else {
+        return Vec::new();
+    };
     let vol = mesh.signed_volume();
     if ch.volume - vol <= CONVEX_TOL * vol {
-        return vec![Atom { cell, pvol: ch.poly.volume(), poly: ch.poly, pts: ch.pts, vol, own: 0.0 }];
+        return vec![Atom {
+            cell,
+            pvol: ch.poly.volume(),
+            poly: ch.poly,
+            pts: ch.pts,
+            vol,
+            own: 0.0,
+        }];
     }
     let bbox = mesh.aabb();
     let frame = Frame::of(&bbox);
@@ -336,11 +361,25 @@ fn cell_atoms(asset: &Asset, idx: &CellIndex, cell: CellId, p: &CollisionParams)
         .map(|c| {
             let poly = frame.polytope_to_world(&c.ch.poly);
             let pts = c.ch.pts.iter().map(|&q| frame.to_world(q)).collect();
-            Atom { cell, pvol: poly.volume(), poly, pts, vol: c.solid.volume() * h3, own: c.cost * frame.half }
+            Atom {
+                cell,
+                pvol: poly.volume(),
+                poly,
+                pts,
+                vol: c.solid.volume() * h3,
+                own: c.cost * frame.half,
+            }
         })
         .collect();
     if atoms.is_empty() {
-        return vec![Atom { cell, pvol: ch.poly.volume(), poly: ch.poly, pts: ch.pts, vol, own: 0.0 }];
+        return vec![Atom {
+            cell,
+            pvol: ch.poly.volume(),
+            poly: ch.poly,
+            pts: ch.pts,
+            vol,
+            own: 0.0,
+        }];
     }
     atoms
 }
@@ -361,7 +400,12 @@ fn frag_geom(asset: &Asset, idx: &CellIndex, f: &Fragment, p: &CollisionParams) 
     let area = mesh.area();
     // sample spacing: half the threshold, at most ~6000 surface samples
     let spacing = (0.5 * thresh).max((area / 6000.0).sqrt()).max(1e-12);
-    FragGeom { mesh, owner, thresh, spacing }
+    FragGeom {
+        mesh,
+        owner,
+        thresh,
+        spacing,
+    }
 }
 
 /// Distribute fragment-surface samples over pieces (by cell; split cells by
@@ -378,7 +422,9 @@ fn assign_samples(g: &FragGeom, pieces: &mut [Piece], atoms: &[Atom]) {
     }
     let mut buf = Vec::new();
     for t in 0..g.mesh.tris.len() {
-        let Some(cands) = by_cell.get(&g.owner[t]) else { continue };
+        let Some(cands) = by_cell.get(&g.owner[t]) else {
+            continue;
+        };
         let [a, b, c] = g.mesh.tri_points(t);
         let ar = 0.5 * (b - a).cross(c - a).length();
         let n = ((ar / (g.spacing * g.spacing)).ceil() as usize).clamp(1, 64);
@@ -389,7 +435,14 @@ fn assign_samples(g: &FragGeom, pieces: &mut [Piece], atoms: &[Atom]) {
                 cands[0]
             } else {
                 // piece whose hull is closest (deepest inside)
-                *cands.iter().max_by(|&&i, &&j| coacd::inside_depth(&pieces[i].poly, x).total_cmp(&coacd::inside_depth(&pieces[j].poly, x)).then(j.cmp(&i))).unwrap()
+                *cands
+                    .iter()
+                    .max_by(|&&i, &&j| {
+                        coacd::inside_depth(&pieces[i].poly, x)
+                            .total_cmp(&coacd::inside_depth(&pieces[j].poly, x))
+                            .then(j.cmp(&i))
+                    })
+                    .unwrap()
             };
             pieces[k].samples.push(x);
         }
@@ -397,7 +450,11 @@ fn assign_samples(g: &FragGeom, pieces: &mut [Piece], atoms: &[Atom]) {
 }
 
 fn atom_piece(a: &Atom, id: u32, cell_nbrs: &[Vec<CellId>]) -> Piece {
-    let ch = coacd::Ch { poly: a.poly.clone(), pts: a.pts.clone(), volume: a.pvol };
+    let ch = coacd::Ch {
+        poly: a.poly.clone(),
+        pts: a.pts.clone(),
+        volume: a.pvol,
+    };
     let mut pc = Piece::new(ch, a.vol, Vec::new(), vec![id]);
     pc.own = a.own;
     pc.keys = vec![a.cell.0];
@@ -418,7 +475,13 @@ struct FragOut {
 /// Compact a merge result for storage: surface samples are reassigned at
 /// every level, so they are dropped.
 fn frag_out(hulls: Vec<Piece>, carry: Vec<Piece>, max_v: usize) -> FragOut {
-    let hulls = hulls.into_iter().map(|pc| HullRec { poly: coacd::limit_vertices(&pc.poly, max_v), atoms: pc.tags }).collect();
+    let hulls = hulls
+        .into_iter()
+        .map(|pc| HullRec {
+            poly: coacd::limit_vertices(&pc.poly, max_v),
+            atoms: pc.tags,
+        })
+        .collect();
     let carry = carry
         .into_iter()
         .map(|mut pc| {
@@ -438,7 +501,10 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
     // ---- atoms (convex cells, CoACD parts of non-convex cells)
     let ta = std::time::Instant::now();
     let cidx = CellIndex::new(asset);
-    let per_cell: Vec<Vec<Atom>> = (0..asset.cells.len() as u32).into_par_iter().map(|c| cell_atoms(asset, &cidx, CellId(c), p)).collect();
+    let per_cell: Vec<Vec<Atom>> = (0..asset.cells.len() as u32)
+        .into_par_iter()
+        .map(|c| cell_atoms(asset, &cidx, CellId(c), p))
+        .collect();
     let mut atoms: Vec<Atom> = Vec::new();
     let mut atoms_of_cell: Vec<std::ops::Range<u32>> = Vec::with_capacity(per_cell.len());
     for v in per_cell {
@@ -448,7 +514,10 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
     }
     tadd(&T_ATOMS, ta);
     if profile {
-        let cut = atoms_of_cell.iter().filter(|r| r.len() > 1 || (r.len() == 1 && atoms[r.start as usize].own > 0.0)).count();
+        let cut = atoms_of_cell
+            .iter()
+            .filter(|r| r.len() > 1 || (r.len() == 1 && atoms[r.start as usize].own > 0.0))
+            .count();
         eprintln!(
             "collision atoms: {} from {} cells ({} convex, {} decomposed) in {:?} (cpu: {} clips {:.1}s, hull volumes {:.1}s)",
             atoms.len(),
@@ -476,11 +545,16 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
     // ---- bottom-up merging
     let mut outs: Vec<Option<FragOut>> = (0..h.fragments.len()).map(|_| None).collect();
     // coarsest level that needs hulls (coarser ones are not computed)
-    let coarsest = if p.levels.is_empty() { 0 } else { p.levels.iter().copied().min().unwrap_or(0) as usize };
+    let coarsest = if p.levels.is_empty() {
+        0
+    } else {
+        p.levels.iter().copied().min().unwrap_or(0) as usize
+    };
     for level in (coarsest..nl).rev() {
         let tl = std::time::Instant::now();
         let r = h.level_ranges[level].clone();
-        let (n_convex, n_particle, n_decomp) = (AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0));
+        let (n_convex, n_particle, n_decomp) =
+            (AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0));
         // (pieces, ns) per decomposed fragment (FRAC_PROFILE)
         let frag_times: std::sync::Mutex<Vec<(usize, u64)>> = std::sync::Mutex::new(Vec::new());
         // bonded neighbours at this level (hulls must not overlap theirs)
@@ -500,19 +574,29 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                 // single hull of their points (convexity test: hull volume
                 // within a relative 1e-6 of the exact fragment volume)
                 let single = |kind: &AtomicU64| -> Option<FragOut> {
-                    let pts: Vec<DVec3> = cells.iter().flat_map(|&c| cidx.cell_points(asset, c)).collect();
+                    let pts: Vec<DVec3> = cells
+                        .iter()
+                        .flat_map(|&c| cidx.cell_points(asset, c))
+                        .collect();
                     let ch = coacd::hull(&pts)?;
                     let convex = ch.volume - f.mass.volume <= CONVEX_TOL * f.mass.volume;
                     if !(f.particle_candidate || convex) {
                         return None;
                     }
                     kind.fetch_add(1, AO::Relaxed);
-                    let tags: Vec<u32> = cells.iter().flat_map(|&c| atoms_of_cell[c.idx()].clone()).collect();
+                    let tags: Vec<u32> = cells
+                        .iter()
+                        .flat_map(|&c| atoms_of_cell[c.idx()].clone())
+                        .collect();
                     let mut pc = Piece::new(ch, f.mass.volume, Vec::new(), tags);
                     let mut keys: Vec<u32> = cells.iter().map(|c| c.0).collect();
                     keys.sort_unstable();
                     keys.dedup();
-                    let mut halo: Vec<u32> = keys.iter().flat_map(|&c| cell_nbrs[c as usize].iter().map(|n| n.0)).chain(keys.iter().copied()).collect();
+                    let mut halo: Vec<u32> = keys
+                        .iter()
+                        .flat_map(|&c| cell_nbrs[c as usize].iter().map(|n| n.0))
+                        .chain(keys.iter().copied())
+                        .collect();
                     halo.sort_unstable();
                     halo.dedup();
                     pc.keys = keys;
@@ -524,7 +608,11 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                 // (leaf fragments of convex cells are handled exactly by
                 // their atoms; the test matters for unions of cells)
                 if f.particle_candidate || !is_leaf || cells.len() > 1 {
-                    if let Some(o) = single(if f.particle_candidate { &n_particle } else { &n_convex }) {
+                    if let Some(o) = single(if f.particle_candidate {
+                        &n_particle
+                    } else {
+                        &n_convex
+                    }) {
                         return (fi, o);
                     }
                 }
@@ -535,9 +623,21 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                 if convex_cell { &n_convex } else { &n_decomp }.fetch_add(1, AO::Relaxed);
                 let tm = std::time::Instant::now();
                 let mut pieces: Vec<Piece> = if level == nl - 1 || f.children.is_empty() {
-                    cells.iter().flat_map(|&c| atoms_of_cell[c.idx()].clone()).map(|a| atom_piece(&atoms[a as usize], a, &cell_nbrs)).collect()
+                    cells
+                        .iter()
+                        .flat_map(|&c| atoms_of_cell[c.idx()].clone())
+                        .map(|a| atom_piece(&atoms[a as usize], a, &cell_nbrs))
+                        .collect()
                 } else {
-                    f.children.clone().flat_map(|ch| outs[ch as usize].as_ref().map(|o| o.carry.clone()).unwrap_or_default()).collect()
+                    f.children
+                        .clone()
+                        .flat_map(|ch| {
+                            outs[ch as usize]
+                                .as_ref()
+                                .map(|o| o.carry.clone())
+                                .unwrap_or_default()
+                        })
+                        .collect()
                 };
                 // a single piece (e.g. a leaf of one convex cell) is its hull
                 if pieces.len() <= 1 {
@@ -554,36 +654,77 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                     .get(&fi)
                     .map(|ns| {
                         ns.iter()
-                            .flat_map(|&nf| asset.fragment_cells(&h.fragments[nf as usize]).iter().flat_map(|&c| atoms_of_cell[c.idx()].clone()))
+                            .flat_map(|&nf| {
+                                asset
+                                    .fragment_cells(&h.fragments[nf as usize])
+                                    .iter()
+                                    .flat_map(|&c| atoms_of_cell[c.idx()].clone())
+                            })
                             .map(|a| {
                                 let at = &atoms[a as usize];
                                 let pv = at.pvol;
-                                coacd::Foreign { poly: &at.poly, pts: &at.pts, bbox: Aabb::from_points(at.pts.iter()), scale: if pv > 0.0 { at.vol / pv } else { 1.0 }, pvol: pv }
+                                coacd::Foreign {
+                                    poly: &at.poly,
+                                    pts: &at.pts,
+                                    bbox: Aabb::from_points(at.pts.iter()),
+                                    scale: if pv > 0.0 { at.vol / pv } else { 1.0 },
+                                    pvol: pv,
+                                }
                             })
                             .collect()
                     })
                     .unwrap_or_default();
                 let signer = coacd::Signer::new(&g.mesh);
                 tadd(&T_S_QUERY, t1);
-                let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: g.spacing, rv_k: 0.3, max_tri_samples: 256, foreign, intrusion_k: p.intrusion_k, upstream_density: None, seed: p.seed, batch: 1 };
+                let ctx = MergeCtx {
+                    q: &q,
+                    signer: Some(&signer),
+                    spacing: g.spacing,
+                    rv_k: 0.3,
+                    max_tri_samples: 256,
+                    foreign,
+                    intrusion_k: p.intrusion_k,
+                    upstream_density: None,
+                    seed: p.seed,
+                    batch: 1,
+                };
                 // Pieces keep their own costs from the finer level (atoms: from
                 // the cut search): a fragment's surface is a subset of its
                 // children's, so those costs bound the costs at this level.
                 // adjacent: a cell of one piece is (or neighbours) a cell of
                 // the other
-                let adjacent = |a: &Piece, b: &Piece| -> bool { a.bbox.expanded(1e-6 * g.thresh.max(1e-12)).overlaps(&b.bbox) && coacd::sorted_intersects(&a.halo, &b.keys) };
+                let adjacent = |a: &Piece, b: &Piece| -> bool {
+                    a.bbox
+                        .expanded(1e-6 * g.thresh.max(1e-12))
+                        .overlaps(&b.bbox)
+                        && coacd::sorted_intersects(&a.halo, &b.keys)
+                };
                 let budget = p.max_hulls.max(1);
                 // very many pieces (large coarse fragments): cheap pre-merge
                 let limit = budget.saturating_mul(16).max(64);
                 let t1 = std::time::Instant::now();
-                let pieces = if pieces.len() > limit { coacd::coarsen(pieces, limit, &adjacent) } else { pieces };
+                let pieces = if pieces.len() > limit {
+                    coacd::coarsen(pieces, limit, &adjacent)
+                } else {
+                    pieces
+                };
                 tadd(&T_S_COARSEN, t1);
                 let n_in = pieces.len();
                 tadd(&T_SETUP, tmg);
-                let res = coacd::greedy_merge(pieces, &ctx, g.thresh, budget, p.carry_cap.max(budget), &adjacent);
+                let res = coacd::greedy_merge(
+                    pieces,
+                    &ctx,
+                    g.thresh,
+                    budget,
+                    p.carry_cap.max(budget),
+                    &adjacent,
+                );
                 tadd(&T_MERGE, tmg);
                 if profile {
-                    frag_times.lock().unwrap().push((n_in, tm.elapsed().as_nanos() as u64));
+                    frag_times
+                        .lock()
+                        .unwrap()
+                        .push((n_in, tm.elapsed().as_nanos() as u64));
                 }
                 (fi, frag_out(res.pieces, res.carry, p.max_hull_vertices))
             })
@@ -608,7 +749,11 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                 e.2 = e.2.max(t);
             }
             for (b, (n, t, mx)) in buckets {
-                eprintln!("    pieces <= {b}: {n} fragments, cpu {:.1}s, max {:.2}s", t as f64 * 1e-9, mx as f64 * 1e-9);
+                eprintln!(
+                    "    pieces <= {b}: {n} fragments, cpu {:.1}s, max {:.2}s",
+                    t as f64 * 1e-9,
+                    mx as f64 * 1e-9
+                );
             }
             eprintln!(
                 "    setup cpu so far: {:.1}s (samples {:.1}s, queries + neighbours {:.1}s, coarsening {:.1}s)",
@@ -629,8 +774,14 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
             );
         }
         if profile {
-            let (nh, nc) = results.iter().fold((0, 0), |a, (_, o)| (a.0 + o.hulls.len(), a.1 + o.carry.len()));
-            let maxv = results.iter().flat_map(|(_, o)| o.carry.iter().map(|p| p.pts.len())).max().unwrap_or(0);
+            let (nh, nc) = results.iter().fold((0, 0), |a, (_, o)| {
+                (a.0 + o.hulls.len(), a.1 + o.carry.len())
+            });
+            let maxv = results
+                .iter()
+                .flat_map(|(_, o)| o.carry.iter().map(|p| p.pts.len()))
+                .max()
+                .unwrap_or(0);
             eprintln!(
                 "  level {level}: {} fragments ({} convex fast path, {} particles, {} decomposed) -> {nh} hulls, {nc} carried (max {maxv} hull vertices)",
                 results.len(),
@@ -714,7 +865,10 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                         break;
                     }
                     N_O_REBUILD.fetch_add(1, AO::Relaxed);
-                    hull = to_hull(FragmentId(fi as u32), &coacd::greedy_subset(&s, p.max_hull_vertices, eps * scale));
+                    hull = to_hull(
+                        FragmentId(fi as u32),
+                        &coacd::greedy_subset(&s, p.max_hull_vertices, eps * scale),
+                    );
                 }
                 tadd(&T_O_CONVEX, t1);
                 hulls.push(hull);
@@ -756,11 +910,22 @@ fn cap_shrunk(orig: &ConvexPolytope, s: &ConvexPolytope, max_v: usize) -> Convex
     let ov = orig.vertices();
     let mut sum: Vec<(DVec3, usize)> = vec![(DVec3::ZERO, 0); ov.len()];
     for &v in &sv {
-        let k = (0..ov.len()).min_by(|&a, &b| (ov[a] - v).length_squared().total_cmp(&(ov[b] - v).length_squared()).then(a.cmp(&b))).unwrap_or(0);
+        let k = (0..ov.len())
+            .min_by(|&a, &b| {
+                (ov[a] - v)
+                    .length_squared()
+                    .total_cmp(&(ov[b] - v).length_squared())
+                    .then(a.cmp(&b))
+            })
+            .unwrap_or(0);
         sum[k].0 += v;
         sum[k].1 += 1;
     }
-    let cents: Vec<DVec3> = sum.iter().filter(|x| x.1 > 0).map(|x| x.0 / x.1 as f64).collect();
+    let cents: Vec<DVec3> = sum
+        .iter()
+        .filter(|x| x.1 > 0)
+        .map(|x| x.0 / x.1 as f64)
+        .collect();
     match coacd::hull(&cents) {
         Some(h) if h.pts.len() <= max_v => h.poly,
         Some(h) => coacd::limit_vertices(&h.poly, max_v),
@@ -788,10 +953,21 @@ fn project_atoms(atoms: &[Atom], ids: &[u32], n: DVec3) -> Vec<AtomProj> {
     ids.iter()
         .map(|&a| {
             let at = &atoms[a as usize];
-            let (lo, hi) = at.pts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), q| (lo.min(n.dot(*q)), hi.max(n.dot(*q))));
+            let (lo, hi) = at
+                .pts
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), q| {
+                    (lo.min(n.dot(*q)), hi.max(n.dot(*q)))
+                });
             let full = at.pvol;
             let frac = if full > 0.0 { at.vol / full } else { 1.0 };
-            AtomProj { lo, hi, full, frac, id: a }
+            AtomProj {
+                lo,
+                hi,
+                full,
+                frac,
+                id: a,
+            }
         })
         .collect()
 }
@@ -807,7 +983,11 @@ fn cut_loss(atoms: &[Atom], pr: &[AtomProj], n: DVec3, t: f64, above: bool, appr
         } else if (above && p.lo >= t) || (!above && p.hi <= t) {
             p.full
         } else if approx {
-            let u = if above { (p.hi - t) / (p.hi - p.lo) } else { (t - p.lo) / (p.hi - p.lo) };
+            let u = if above {
+                (p.hi - t) / (p.hi - p.lo)
+            } else {
+                (t - p.lo) / (p.hi - p.lo)
+            };
             p.full * u * u * (3.0 - 2.0 * u)
         } else {
             clipped_volume(&atoms[p.id as usize].poly, n, t, above)
@@ -822,7 +1002,9 @@ fn cut_loss(atoms: &[Atom], pr: &[AtomProj], n: DVec3, t: f64, above: bool, appr
 /// point on the plane, so the cap face (which contributes nothing) is
 /// never built.
 fn clipped_volume(poly: &ConvexPolytope, n: DVec3, t: f64, above: bool) -> f64 {
-    let Some(v0) = poly.faces.first().and_then(|f| f.1.first().copied()) else { return 0.0 };
+    let Some(v0) = poly.faces.first().and_then(|f| f.1.first().copied()) else {
+        return 0.0;
+    };
     let sgn = if above { -1.0 } else { 1.0 };
     let r = v0 - n * (n.dot(v0) - t);
     let mut vol = 0.0;
@@ -865,7 +1047,15 @@ fn hull_data(p: &ConvexPolytope) -> HullData {
 /// overlap region and the centroid direction; the offset is searched over
 /// the overlap interval (uniform samples, then golden-section refinement).
 #[allow(clippy::too_many_arguments)]
-fn best_separation(atoms: &[Atom], ha: &HullRec, da: &HullData, hb: &HullRec, db: &HullData, overlap: &ConvexPolytope, extra: &[DVec3]) -> Option<(DVec3, f64, f64)> {
+fn best_separation(
+    atoms: &[Atom],
+    ha: &HullRec,
+    da: &HullData,
+    hb: &HullRec,
+    db: &HullData,
+    overlap: &ConvexPolytope,
+    extra: &[DVec3],
+) -> Option<(DVec3, f64, f64)> {
     let mut cands: Vec<DVec3> = extra.to_vec();
     for (hs, _) in &overlap.faces {
         cands.push(hs.n);
@@ -888,8 +1078,16 @@ fn best_separation(atoms: &[Atom], ha: &HullRec, da: &HullData, hb: &HullRec, db
     // offset search for one normal: uniform samples over the overlap
     // interval, then golden-section refinement around the best one
     let search = |n: DVec3, approx: bool| -> Option<(f64, f64)> {
-        let hi_a = da.verts.iter().map(|q| n.dot(*q)).fold(f64::NEG_INFINITY, f64::max);
-        let lo_b = db.verts.iter().map(|q| n.dot(*q)).fold(f64::INFINITY, f64::min);
+        let hi_a = da
+            .verts
+            .iter()
+            .map(|q| n.dot(*q))
+            .fold(f64::NEG_INFINITY, f64::max);
+        let lo_b = db
+            .verts
+            .iter()
+            .map(|q| n.dot(*q))
+            .fold(f64::INFINITY, f64::min);
         if !(hi_a.is_finite() && lo_b.is_finite()) {
             return None;
         }
@@ -897,9 +1095,17 @@ fn best_separation(atoms: &[Atom], ha: &HullRec, da: &HullData, hb: &HullRec, db
             return Some((0.0, 0.5 * (hi_a + lo_b)));
         }
         // only atoms reaching into the overlap interval can be cut
-        let pa: Vec<AtomProj> = project_atoms(atoms, &ha.atoms, n).into_iter().filter(|p| p.hi > lo_b).collect();
-        let pb: Vec<AtomProj> = project_atoms(atoms, &hb.atoms, n).into_iter().filter(|p| p.lo < hi_a).collect();
-        let loss = |t: f64| cut_loss(atoms, &pa, n, t, true, approx) + cut_loss(atoms, &pb, n, t, false, approx);
+        let pa: Vec<AtomProj> = project_atoms(atoms, &ha.atoms, n)
+            .into_iter()
+            .filter(|p| p.hi > lo_b)
+            .collect();
+        let pb: Vec<AtomProj> = project_atoms(atoms, &hb.atoms, n)
+            .into_iter()
+            .filter(|p| p.lo < hi_a)
+            .collect();
+        let loss = |t: f64| {
+            cut_loss(atoms, &pa, n, t, true, approx) + cut_loss(atoms, &pb, n, t, false, approx)
+        };
         let k = 8;
         let mut best = (f64::INFINITY, lo_b);
         for i in 0..=k {
@@ -934,7 +1140,13 @@ fn best_separation(atoms: &[Atom], ha: &HullRec, da: &HullData, hb: &HullRec, db
     // exactly
     let approx: Vec<Option<(f64, f64)>> = uniq.iter().map(|&n| search(n, true)).collect();
     let mut order: Vec<usize> = (0..uniq.len()).filter(|&i| approx[i].is_some()).collect();
-    order.sort_by(|&i, &j| approx[i].unwrap().0.total_cmp(&approx[j].unwrap().0).then(i.cmp(&j)));
+    order.sort_by(|&i, &j| {
+        approx[i]
+            .unwrap()
+            .0
+            .total_cmp(&approx[j].unwrap().0)
+            .then(i.cmp(&j))
+    });
     order.truncate(3);
     let mut best: Option<(DVec3, f64, f64)> = None;
     for i in order {
@@ -948,24 +1160,44 @@ fn best_separation(atoms: &[Atom], ha: &HullRec, da: &HullData, hb: &HullRec, db
 }
 
 /// Overlap polytope of two hulls if their intersection has volume.
-fn overlap_of(pa: &ConvexPolytope, da: &HullData, pb: &ConvexPolytope, db: &HullData) -> Option<ConvexPolytope> {
+fn overlap_of(
+    pa: &ConvexPolytope,
+    da: &HullData,
+    pb: &ConvexPolytope,
+    db: &HullData,
+) -> Option<ConvexPolytope> {
     if pa.is_empty() || pb.is_empty() || !da.bbox.overlaps(&db.bbox) {
         return None;
     }
     // a face plane of either hull with the other hull on its outer side
     // (touching allowed): no volume in common
     let eps = 1e-12 * da.bbox.union(&db.bbox).diagonal().max(1e-300);
-    let separated = |p: &ConvexPolytope, other: &[DVec3]| p.faces.iter().any(|(h, _)| other.iter().all(|q| h.dist(*q) >= -eps));
+    let separated = |p: &ConvexPolytope, other: &[DVec3]| {
+        p.faces
+            .iter()
+            .any(|(h, _)| other.iter().all(|q| h.dist(*q) >= -eps))
+    };
     if separated(pb, &da.verts) || separated(pa, &db.verts) {
         return None;
     }
     let ov = coacd::clip_all_cutting(pa, &pb.halfspaces());
-    if ov.is_empty() || ov.volume() <= 0.0 { None } else { Some(ov) }
+    if ov.is_empty() || ov.volume() <= 0.0 {
+        None
+    } else {
+        Some(ov)
+    }
 }
 
 /// Plane (normal from A to B, offset) separating two hulls with the least
 /// loss of their own atoms; `None` when they do not overlap.
-fn separating_plane(atoms: &[Atom], ha: &HullRec, da: &HullData, hb: &HullRec, db: &HullData, extra: &[DVec3]) -> Option<(DVec3, f64)> {
+fn separating_plane(
+    atoms: &[Atom],
+    ha: &HullRec,
+    da: &HullData,
+    hb: &HullRec,
+    db: &HullData,
+    extra: &[DVec3],
+) -> Option<(DVec3, f64)> {
     let ov = overlap_of(&ha.poly, da, &hb.poly, db)?;
     Some(match best_separation(atoms, ha, da, hb, db, &ov, extra) {
         Some((n, t, _)) => (n, t),
@@ -984,7 +1216,10 @@ fn separating_plane(atoms: &[Atom], ha: &HullRec, da: &HullData, hb: &HullRec, d
 /// sequential order.
 fn separate_level(asset: &Asset, level: u8, recs: &mut [Vec<HullRec>], atoms: &[Atom]) {
     let t0 = std::time::Instant::now();
-    let bonds: Vec<&Bond> = asset.level_bonds(level).filter(|b| matches!(b.b, FragmentOrWorld::Fragment(_))).collect();
+    let bonds: Vec<&Bond> = asset
+        .level_bonds(level)
+        .filter(|b| matches!(b.b, FragmentOrWorld::Fragment(_)))
+        .collect();
     let fb_of = |b: &Bond| match b.b {
         FragmentOrWorld::Fragment(f) => f.idx(),
         FragmentOrWorld::World => unreachable!(),
@@ -993,11 +1228,19 @@ fn separate_level(asset: &Asset, level: u8, recs: &mut [Vec<HullRec>], atoms: &[
     let extras: Vec<Vec<DVec3>> = bonds
         .par_iter()
         .map(|b| {
-            let fa_cells: BTreeSet<CellId> = asset.fragment_cells(asset.fragment(b.a)).iter().copied().collect();
+            let fa_cells: BTreeSet<CellId> = asset
+                .fragment_cells(asset.fragment(b.a))
+                .iter()
+                .copied()
+                .collect();
             let mut extra: Vec<DVec3> = vec![b.normal];
             for &iid in &b.interfaces {
                 let it = &asset.interfaces[iid.idx()];
-                let s = if fa_cells.contains(&it.cells.0) { 1.0 } else { -1.0 };
+                let s = if fa_cells.contains(&it.cells.0) {
+                    1.0
+                } else {
+                    -1.0
+                };
                 for poly in &it.polygons {
                     extra.push(poly.normal * s);
                 }
@@ -1008,7 +1251,10 @@ fn separate_level(asset: &Asset, level: u8, recs: &mut [Vec<HullRec>], atoms: &[
             extra
         })
         .collect();
-    let mut data: Vec<Vec<HullData>> = recs.par_iter().map(|v| v.iter().map(|r| hull_data(&r.poly)).collect()).collect();
+    let mut data: Vec<Vec<HullData>> = recs
+        .par_iter()
+        .map(|v| v.iter().map(|r| hull_data(&r.poly)).collect())
+        .collect();
     // detection
     let found: Vec<Vec<(usize, usize, usize)>> = bonds
         .par_iter()
@@ -1018,7 +1264,14 @@ fn separate_level(asset: &Asset, level: u8, recs: &mut [Vec<HullRec>], atoms: &[
             let mut v = Vec::new();
             for x in 0..recs[ia].len() {
                 for y in 0..recs[ib].len() {
-                    if overlap_of(&recs[ia][x].poly, &data[ia][x], &recs[ib][y].poly, &data[ib][y]).is_some() {
+                    if overlap_of(
+                        &recs[ia][x].poly,
+                        &data[ia][x],
+                        &recs[ib][y].poly,
+                        &data[ib][y],
+                    )
+                    .is_some()
+                    {
                         v.push((bi, x, y));
                     }
                 }
@@ -1028,7 +1281,11 @@ fn separate_level(asset: &Asset, level: u8, recs: &mut [Vec<HullRec>], atoms: &[
         .collect();
     let mut pending: Vec<(usize, usize, usize)> = found.into_iter().flatten().collect();
     if std::env::var("FRAC_PROFILE").is_ok() {
-        eprintln!("  level {level}: {} bonds, {} overlapping hull pairs", bonds.len(), pending.len());
+        eprintln!(
+            "  level {level}: {} bonds, {} overlapping hull pairs",
+            bonds.len(),
+            pending.len()
+        );
     }
     let t_detect = t0.elapsed();
     let mut rounds = 0usize;
@@ -1054,7 +1311,14 @@ fn separate_level(asset: &Asset, level: u8, recs: &mut [Vec<HullRec>], atoms: &[
             .map(|&(bi, x, y)| {
                 let b = bonds[bi];
                 let (ia, ib) = (b.a.idx(), fb_of(b));
-                separating_plane(atoms, &recs[ia][x], &data[ia][x], &recs[ib][y], &data[ib][y], &extras[bi])
+                separating_plane(
+                    atoms,
+                    &recs[ia][x],
+                    &data[ia][x],
+                    &recs[ib][y],
+                    &data[ib][y],
+                    &extras[bi],
+                )
             })
             .collect();
         for (&(bi, x, y), cut) in batch.iter().zip(cuts) {
@@ -1071,7 +1335,11 @@ fn separate_level(asset: &Asset, level: u8, recs: &mut [Vec<HullRec>], atoms: &[
         v.retain(|r| !r.poly.is_empty());
     }
     if std::env::var("FRAC_PROFILE").is_ok() {
-        eprintln!("  level {level}: separation {:?} (detection {:?}, {rounds} rounds)", t0.elapsed(), t_detect);
+        eprintln!(
+            "  level {level}: separation {:?} (detection {:?}, {rounds} rounds)",
+            t0.elapsed(),
+            t_detect
+        );
     }
 }
 
@@ -1095,7 +1363,11 @@ pub fn to_hull(f: FragmentId, p: &ConvexPolytope) -> Hull {
             faces.push(face);
         }
     }
-    Hull { fragment: f, vertices: verts, faces }
+    Hull {
+        fragment: f,
+        vertices: verts,
+        faces,
+    }
 }
 
 /// Polytope of a stored hull.
@@ -1110,23 +1382,51 @@ mod tests {
 
     fn atom_of(pts: &[DVec3]) -> Option<Atom> {
         let ch = coacd::hull(pts)?;
-        Some(Atom { cell: CellId(0), vol: ch.volume, pvol: ch.poly.volume(), poly: ch.poly, pts: ch.pts, own: 0.0 })
+        Some(Atom {
+            cell: CellId(0),
+            vol: ch.volume,
+            pvol: ch.poly.volume(),
+            poly: ch.poly,
+            pts: ch.pts,
+            own: 0.0,
+        })
     }
 
     /// Separate two fragment hulls built from atoms and return the clipped
     /// polytopes.
-    fn separate(atoms: &[Atom], ia: Vec<u32>, ib: Vec<u32>, normal: DVec3) -> (ConvexPolytope, ConvexPolytope, f64) {
-        let pa: Vec<DVec3> = ia.iter().flat_map(|&a| atoms[a as usize].pts.clone()).collect();
-        let pb: Vec<DVec3> = ib.iter().flat_map(|&a| atoms[a as usize].pts.clone()).collect();
-        let ha = HullRec { poly: coacd::hull(&pa).unwrap().poly, atoms: ia.clone() };
-        let hb = HullRec { poly: coacd::hull(&pb).unwrap().poly, atoms: ib.clone() };
+    fn separate(
+        atoms: &[Atom],
+        ia: Vec<u32>,
+        ib: Vec<u32>,
+        normal: DVec3,
+    ) -> (ConvexPolytope, ConvexPolytope, f64) {
+        let pa: Vec<DVec3> = ia
+            .iter()
+            .flat_map(|&a| atoms[a as usize].pts.clone())
+            .collect();
+        let pb: Vec<DVec3> = ib
+            .iter()
+            .flat_map(|&a| atoms[a as usize].pts.clone())
+            .collect();
+        let ha = HullRec {
+            poly: coacd::hull(&pa).unwrap().poly,
+            atoms: ia.clone(),
+        };
+        let hb = HullRec {
+            poly: coacd::hull(&pb).unwrap().poly,
+            atoms: ib.clone(),
+        };
         let (da, db) = (hull_data(&ha.poly), hull_data(&hb.poly));
         match separating_plane(atoms, &ha, &da, &hb, &db, &[normal]) {
             Some((n, t)) => {
                 let a = ha.poly.clip(&HalfSpace { n, d: t });
                 let b = hb.poly.clip(&HalfSpace { n: -n, d: -t });
                 // own atom volume kept by each hull
-                let keep = |h: &ConvexPolytope, ids: &[u32]| -> f64 { ids.iter().map(|&i| atoms[i as usize].poly.intersection_volume(h)).sum() };
+                let keep = |h: &ConvexPolytope, ids: &[u32]| -> f64 {
+                    ids.iter()
+                        .map(|&i| atoms[i as usize].poly.intersection_volume(h))
+                        .sum()
+                };
                 let total: f64 = ia.iter().chain(&ib).map(|&i| atoms[i as usize].vol).sum();
                 let kept = keep(&a, &ia) + keep(&b, &ib);
                 (a, b, kept / total)
@@ -1136,7 +1436,15 @@ mod tests {
     }
 
     fn cube(c: DVec3, h: f64) -> Vec<DVec3> {
-        (0..8).map(|i| c + DVec3::new(if i & 1 == 0 { -h } else { h }, if i & 2 == 0 { -h } else { h }, if i & 4 == 0 { -h } else { h })).collect()
+        (0..8)
+            .map(|i| {
+                c + DVec3::new(
+                    if i & 1 == 0 { -h } else { h },
+                    if i & 2 == 0 { -h } else { h },
+                    if i & 4 == 0 { -h } else { h },
+                )
+            })
+            .collect()
     }
 
     #[test]
@@ -1144,21 +1452,56 @@ mod tests {
         use rand::{Rng, SeedableRng};
         let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(5);
         for _ in 0..200 {
-            let c = DVec3::new(rng.gen_range(-5.0..5.0), rng.gen_range(-5.0..5.0), rng.gen_range(-5.0..5.0));
-            let pts: Vec<DVec3> = (0..rng.gen_range(4..40)).map(|_| c + DVec3::new(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0))).collect();
-            let Some(ch) = coacd::hull(&pts) else { continue };
-            let n = DVec3::new(rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0), rng.gen_range(-1.0..1.0)).normalize();
+            let c = DVec3::new(
+                rng.gen_range(-5.0..5.0),
+                rng.gen_range(-5.0..5.0),
+                rng.gen_range(-5.0..5.0),
+            );
+            let pts: Vec<DVec3> = (0..rng.gen_range(4..40))
+                .map(|_| {
+                    c + DVec3::new(
+                        rng.gen_range(-1.0..1.0),
+                        rng.gen_range(-1.0..1.0),
+                        rng.gen_range(-1.0..1.0),
+                    )
+                })
+                .collect();
+            let Some(ch) = coacd::hull(&pts) else {
+                continue;
+            };
+            let n = DVec3::new(
+                rng.gen_range(-1.0..1.0),
+                rng.gen_range(-1.0..1.0),
+                rng.gen_range(-1.0..1.0),
+            )
+            .normalize();
             let t = n.dot(c) + rng.gen_range(-1.0..1.0);
             let above = ch.poly.clip(&HalfSpace { n: -n, d: -t }).volume();
             let below = ch.poly.clip(&HalfSpace { n, d: t }).volume();
-            let (a2, b2) = (clipped_volume(&ch.poly, n, t, true), clipped_volume(&ch.poly, n, t, false));
-            assert!((above - a2).abs() <= 1e-9 * ch.volume.max(1.0), "above {above} vs {a2}");
-            assert!((below - b2).abs() <= 1e-9 * ch.volume.max(1.0), "below {below} vs {b2}");
+            let (a2, b2) = (
+                clipped_volume(&ch.poly, n, t, true),
+                clipped_volume(&ch.poly, n, t, false),
+            );
+            assert!(
+                (above - a2).abs() <= 1e-9 * ch.volume.max(1.0),
+                "above {above} vs {a2}"
+            );
+            assert!(
+                (below - b2).abs() <= 1e-9 * ch.volume.max(1.0),
+                "below {below} vs {b2}"
+            );
             // polygon_minus: face area outside a box equals area minus the overlap
             let bx = ConvexPolytope::from_box(c - DVec3::splat(0.3), c + DVec3::splat(0.3));
             for (h, f) in &ch.poly.faces {
-                let area = |p: &[DVec3]| -> f64 { (1..p.len() - 1).map(|k| (p[k] - p[0]).cross(p[k + 1] - p[0]).dot(h.n) * 0.5).sum() };
-                let outside: f64 = coacd::polygon_minus(f, &[&bx], 1e-12).iter().map(|p| area(p)).sum();
+                let area = |p: &[DVec3]| -> f64 {
+                    (1..p.len() - 1)
+                        .map(|k| (p[k] - p[0]).cross(p[k + 1] - p[0]).dot(h.n) * 0.5)
+                        .sum()
+                };
+                let outside: f64 = coacd::polygon_minus(f, &[&bx], 1e-12)
+                    .iter()
+                    .map(|p| area(p))
+                    .sum();
                 // the part inside the box: the face clipped by the box planes
                 let mut inside = f.clone();
                 for (bh, _) in &bx.faces {
@@ -1179,8 +1522,16 @@ mod tests {
                         break;
                     }
                 }
-                let ins = if inside.len() >= 3 { area(&inside) } else { 0.0 };
-                assert!((outside + ins - area(f)).abs() <= 1e-9, "face area {} = {outside} + {ins}", area(f));
+                let ins = if inside.len() >= 3 {
+                    area(&inside)
+                } else {
+                    0.0
+                };
+                assert!(
+                    (outside + ins - area(f)).abs() <= 1e-9,
+                    "face area {} = {outside} + {ins}",
+                    area(f)
+                );
             }
         }
     }
@@ -1189,10 +1540,27 @@ mod tests {
     fn interleaved_l_shapes_separate_with_small_loss() {
         // A: L of three unit cubes, B: the complementary L; their hulls
         // overlap in the notch region
-        let a = [cube(DVec3::new(0.5, 0.5, 0.5), 0.5), cube(DVec3::new(1.5, 0.5, 0.5), 0.5), cube(DVec3::new(0.5, 1.5, 0.5), 0.5)];
-        let b = [cube(DVec3::new(1.5, 1.5, 0.5), 0.5), cube(DVec3::new(2.5, 1.5, 0.5), 0.5), cube(DVec3::new(1.5, 2.5, 0.5), 0.5)];
-        let atoms: Vec<Atom> = a.iter().chain(b.iter()).map(|p| atom_of(p).unwrap()).collect();
-        let (pa, pb, kept) = separate(&atoms, vec![0, 1, 2], vec![3, 4, 5], DVec3::new(1.0, 1.0, 0.0).normalize());
+        let a = [
+            cube(DVec3::new(0.5, 0.5, 0.5), 0.5),
+            cube(DVec3::new(1.5, 0.5, 0.5), 0.5),
+            cube(DVec3::new(0.5, 1.5, 0.5), 0.5),
+        ];
+        let b = [
+            cube(DVec3::new(1.5, 1.5, 0.5), 0.5),
+            cube(DVec3::new(2.5, 1.5, 0.5), 0.5),
+            cube(DVec3::new(1.5, 2.5, 0.5), 0.5),
+        ];
+        let atoms: Vec<Atom> = a
+            .iter()
+            .chain(b.iter())
+            .map(|p| atom_of(p).unwrap())
+            .collect();
+        let (pa, pb, kept) = separate(
+            &atoms,
+            vec![0, 1, 2],
+            vec![3, 4, 5],
+            DVec3::new(1.0, 1.0, 0.0).normalize(),
+        );
         assert!(pa.intersection_volume(&pb) <= 1e-12);
         // the diagonal plane x + y = 2 removes 1/4 of a cube from each side
         assert!(kept > 0.9, "kept {kept}");

@@ -5,14 +5,14 @@
 
 use frac_collision::{cells_boundary_mesh_with, hull_polytope};
 use frac_core::*;
+use frac_geom::DVec3;
 use frac_geom::hull::ConvexPolytope;
 use frac_geom::inside::MeshQuery;
 use frac_geom::integrals::sym_eigen3;
-use frac_geom::DVec3;
 use frac_material::MaterialLibrary;
 use frac_render::RenderOut;
 use rayon::prelude::*;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn quantiles(mut v: Vec<f64>) -> Value {
     if v.is_empty() {
@@ -80,12 +80,10 @@ pub fn compute(asset: &Asset, render: &RenderOut, _lib: &MaterialLibrary) -> Val
             .step_by(fr.len().div_ceil(CONVEXITY_SAMPLES).max(1))
             .map(|f| {
                 let m = cells_boundary_mesh_with(asset, &cp, asset.fragment_cells(f));
-                let hv = ConvexPolytope::from_points(&m.verts).map(|p| p.volume()).unwrap_or(0.0);
-                if hv > 0.0 {
-                    f.mass.volume / hv
-                } else {
-                    1.0
-                }
+                let hv = ConvexPolytope::from_points(&m.verts)
+                    .map(|p| p.volume())
+                    .unwrap_or(0.0);
+                if hv > 0.0 { f.mass.volume / hv } else { 1.0 }
             })
             .collect();
         // hulls
@@ -93,12 +91,32 @@ pub fn compute(asset: &Asset, render: &RenderOut, _lib: &MaterialLibrary) -> Val
             .par_iter()
             .filter(|f| !f.hulls.is_empty())
             .map(|f| {
-                let hv: f64 = asset.hulls[f.hulls.start as usize..f.hulls.end as usize].iter().map(|hh| hull_polytope(hh).volume()).sum();
+                let hv: f64 = asset.hulls[f.hulls.start as usize..f.hulls.end as usize]
+                    .iter()
+                    .map(|hh| hull_polytope(hh).volume())
+                    .sum();
                 (hv / f.mass.volume.max(1e-300) - 1.0, f.hulls.len())
             })
             .collect();
-        let tris: Vec<f64> = fr.iter().map(|f| render.fragments[f.id.idx()].first().map(|m| m.triangle_count()).unwrap_or(0) as f64).collect();
-        let lod_tris: Vec<Vec<usize>> = fr.iter().take(1).map(|f| render.fragments[f.id.idx()].iter().map(|m| m.triangle_count()).collect()).collect();
+        let tris: Vec<f64> = fr
+            .iter()
+            .map(|f| {
+                render.fragments[f.id.idx()]
+                    .first()
+                    .map(|m| m.triangle_count())
+                    .unwrap_or(0) as f64
+            })
+            .collect();
+        let lod_tris: Vec<Vec<usize>> = fr
+            .iter()
+            .take(1)
+            .map(|f| {
+                render.fragments[f.id.idx()]
+                    .iter()
+                    .map(|m| m.triangle_count())
+                    .collect()
+            })
+            .collect();
         levels.push(json!({
             "level": l,
             "fragments": fr.len(),
@@ -143,7 +161,11 @@ pub fn compute(asset: &Asset, render: &RenderOut, _lib: &MaterialLibrary) -> Val
     for c in &asset.components {
         let Some(g) = c.grain else { continue };
         let (mut s, mut w) = (0.0, 0.0);
-        for f in asset.level_fragments(leaf).iter().filter(|f| f.component == c.id) {
+        for f in asset
+            .level_fragments(leaf)
+            .iter()
+            .filter(|f| f.component == c.id)
+        {
             let (_, ax) = sym_eigen3(&f.mass.inertia);
             // principal (longest) axis = smallest inertia eigenvalue
             s += ax.col(0).dot(g).abs() * f.mass.volume;
@@ -226,7 +248,12 @@ fn polytope_distance(x: DVec3, p: &ConvexPolytope) -> f64 {
         }
         let q = x - h.n * dn;
         // inside the face polygon (CCW about n)?
-        let inside = (0..poly.len()).all(|i| (poly[(i + 1) % poly.len()] - poly[i]).cross(q - poly[i]).dot(h.n) >= -tol);
+        let inside = (0..poly.len()).all(|i| {
+            (poly[(i + 1) % poly.len()] - poly[i])
+                .cross(q - poly[i])
+                .dot(h.n)
+                >= -tol
+        });
         if inside {
             best = best.min(dn);
             continue;
@@ -246,7 +273,10 @@ fn hull_fit(asset: &Asset, cp: &CellPolys, f: &Fragment) -> f64 {
     let m = cells_boundary_mesh_with(asset, cp, asset.fragment_cells(f));
     let q = MeshQuery::new(&m);
     let diam = m.aabb().diagonal().max(1e-300);
-    let hulls: Vec<ConvexPolytope> = asset.hulls[f.hulls.start as usize..f.hulls.end as usize].iter().map(hull_polytope).collect();
+    let hulls: Vec<ConvexPolytope> = asset.hulls[f.hulls.start as usize..f.hulls.end as usize]
+        .iter()
+        .map(hull_polytope)
+        .collect();
     let mut worst: f64 = 0.0;
     for hh in &asset.hulls[f.hulls.start as usize..f.hulls.end as usize] {
         for v in &hh.vertices {
@@ -257,9 +287,15 @@ fn hull_fit(asset: &Asset, cp: &CellPolys, f: &Fragment) -> f64 {
             }
         }
     }
-    let samples = m.verts.iter().copied().chain(m.tris.iter().map(|t| (m.verts[t[0] as usize] + m.verts[t[1] as usize] + m.verts[t[2] as usize]) / 3.0));
+    let samples =
+        m.verts.iter().copied().chain(m.tris.iter().map(|t| {
+            (m.verts[t[0] as usize] + m.verts[t[1] as usize] + m.verts[t[2] as usize]) / 3.0
+        }));
     for x in samples {
-        let d = hulls.iter().map(|p| polytope_distance(x, p)).fold(f64::INFINITY, f64::min);
+        let d = hulls
+            .iter()
+            .map(|p| polytope_distance(x, p))
+            .fold(f64::INFINITY, f64::min);
         if d.is_finite() {
             worst = worst.max(d);
         }

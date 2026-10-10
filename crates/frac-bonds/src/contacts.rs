@@ -24,7 +24,12 @@ pub fn cell_faces(geom: &ComponentGeometry) -> Vec<CellFace> {
             if n.length_squared() == 0.0 {
                 return None;
             }
-            Some(CellFace { cell: e.cell, aabb: Aabb::from_points(pts.iter()), normal: n.normalize(), pts })
+            Some(CellFace {
+                cell: e.cell,
+                aabb: Aabb::from_points(pts.iter()),
+                normal: n.normalize(),
+                pts,
+            })
         })
         .collect()
 }
@@ -60,13 +65,21 @@ fn clip_convex(subject: &[[f64; 2]], clip: &[[f64; 2]]) -> Vec<[f64; 2]> {
 
 fn area2(p: &[[f64; 2]]) -> f64 {
     let n = p.len();
-    (0..n).map(|k| p[k][0] * p[(k + 1) % n][1] - p[(k + 1) % n][0] * p[k][1]).sum::<f64>() * 0.5
+    (0..n)
+        .map(|k| p[k][0] * p[(k + 1) % n][1] - p[(k + 1) % n][0] * p[k][1])
+        .sum::<f64>()
+        * 0.5
 }
 
 /// Contact polygons between two components: pairs of opposed, nearly
 /// coplanar exterior faces within `tol`, intersected in A's plane.
 /// Returns (cell_a, cell_b, polygon with normal pointing from A to B).
-pub fn contact_polygons(a: &[CellFace], b: &[CellFace], tol: f64, cos: f64) -> Vec<(CellId, CellId, Polygon3)> {
+pub fn contact_polygons(
+    a: &[CellFace],
+    b: &[CellFace],
+    tol: f64,
+    cos: f64,
+) -> Vec<(CellId, CellId, Polygon3)> {
     let boxes: Vec<Aabb> = b.iter().map(|f| f.aabb.expanded(tol)).collect();
     let bvh = Bvh::build(&boxes);
     let mut out = Vec::new();
@@ -82,9 +95,18 @@ pub fn contact_polygons(a: &[CellFace], b: &[CellFace], tol: f64, cos: f64) -> V
                 continue;
             }
             let (u, v) = plane_basis(fa.normal);
-            let pa: Vec<[f64; 2]> = fa.pts.iter().map(|p| [(*p - r).dot(u), (*p - r).dot(v)]).collect();
+            let pa: Vec<[f64; 2]> = fa
+                .pts
+                .iter()
+                .map(|p| [(*p - r).dot(u), (*p - r).dot(v)])
+                .collect();
             // B's polygon reversed so it is CCW about A's normal
-            let pb: Vec<[f64; 2]> = fb.pts.iter().rev().map(|p| [(*p - r).dot(u), (*p - r).dot(v)]).collect();
+            let pb: Vec<[f64; 2]> = fb
+                .pts
+                .iter()
+                .rev()
+                .map(|p| [(*p - r).dot(u), (*p - r).dot(v)])
+                .collect();
             if area2(&pa) <= 0.0 || area2(&pb) <= 0.0 {
                 continue;
             }
@@ -93,7 +115,14 @@ pub fn contact_polygons(a: &[CellFace], b: &[CellFace], tol: f64, cos: f64) -> V
                 continue;
             }
             let pts: Vec<DVec3> = c.iter().map(|q| r + u * q[0] + v * q[1]).collect();
-            out.push((fa.cell, fb.cell, Polygon3 { loops: vec![pts], normal: fa.normal }));
+            out.push((
+                fa.cell,
+                fb.cell,
+                Polygon3 {
+                    loops: vec![pts],
+                    normal: fa.normal,
+                },
+            ));
         }
     }
     out
@@ -105,7 +134,15 @@ pub fn anchor_polygons(faces: &[CellFace], height: f64, tol: f64) -> Vec<(CellId
     faces
         .iter()
         .filter(|f| f.normal.y < -0.7 && f.pts.iter().all(|p| p.y <= height + tol))
-        .map(|f| (f.cell, Polygon3 { loops: vec![f.pts.clone()], normal: f.normal }))
+        .map(|f| {
+            (
+                f.cell,
+                Polygon3 {
+                    loops: vec![f.pts.clone()],
+                    normal: f.normal,
+                },
+            )
+        })
         .collect()
 }
 
@@ -115,12 +152,22 @@ mod tests {
     #[test]
     fn stacked_squares_contact() {
         let sq = |y: f64, flip: bool, off: f64| {
-            let mut pts = vec![DVec3::new(off, y, 0.0), DVec3::new(off + 1.0, y, 0.0), DVec3::new(off + 1.0, y, 1.0), DVec3::new(off, y, 1.0)];
+            let mut pts = vec![
+                DVec3::new(off, y, 0.0),
+                DVec3::new(off + 1.0, y, 0.0),
+                DVec3::new(off + 1.0, y, 1.0),
+                DVec3::new(off, y, 1.0),
+            ];
             if flip {
                 pts.reverse();
             }
             let n = newell(&pts).normalize();
-            CellFace { cell: CellId(0), aabb: Aabb::from_points(pts.iter()), normal: n, pts }
+            CellFace {
+                cell: CellId(0),
+                aabb: Aabb::from_points(pts.iter()),
+                normal: n,
+                pts,
+            }
         };
         // A's top face (normal +y) and B's bottom face (normal -y), offset by 0.5 in x
         let a = vec![sq(1.0, true, 0.0)];

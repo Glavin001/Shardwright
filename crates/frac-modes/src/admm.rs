@@ -33,8 +33,8 @@
 //! iterations of the same mode. All buffers are allocated once per call and
 //! every reduction has a fixed order, so results are deterministic.
 
-use crate::problem::{Problem, DELTA};
 use crate::SubResult;
+use crate::problem::{DELTA, Problem};
 use frac_fem::dense::{self, Lu};
 use frac_fem::sparse::{CsrMatrix, SolveWork, SparseCholesky};
 use rayon::prelude::*;
@@ -54,7 +54,15 @@ pub(crate) struct AdmmSettings {
 
 impl Default for AdmmSettings {
     fn default() -> Self {
-        AdmmSettings { eps_abs: 1e-9, eps_rel: 1e-6, max_iter: 20_000, alpha: 1.0, adaptive: true, anderson: 6, dr_state: true }
+        AdmmSettings {
+            eps_abs: 1e-9,
+            eps_rel: 1e-6,
+            max_iter: 20_000,
+            alpha: 1.0,
+            adaptive: true,
+            anderson: 6,
+            dr_state: true,
+        }
     }
 }
 
@@ -92,7 +100,11 @@ fn dot(a: &[f64], b: &[f64]) -> f64 {
     if a.len() < 8 * CHUNK {
         return dot_seq(a, b);
     }
-    let parts: Vec<f64> = a.par_chunks(CHUNK).zip(b.par_chunks(CHUNK)).map(|(x, y)| dot_seq(x, y)).collect();
+    let parts: Vec<f64> = a
+        .par_chunks(CHUNK)
+        .zip(b.par_chunks(CHUNK))
+        .map(|(x, y)| dot_seq(x, y))
+        .collect();
     parts.iter().sum()
 }
 
@@ -189,11 +201,20 @@ impl Admm {
             let fro: Vec<f64> = pb
                 .rows_act
                 .iter()
-                .map(|r| b.vals[b.row_ptr[r.start]..b.row_ptr[r.end]].iter().map(|v| v * v).sum::<f64>())
+                .map(|r| {
+                    b.vals[b.row_ptr[r.start]..b.row_ptr[r.end]]
+                        .iter()
+                        .map(|v| v * v)
+                        .sum::<f64>()
+                })
                 .collect();
             let mean = fro.iter().sum::<f64>() / fro.len().max(1) as f64;
             for (g, r) in pb.rows_act.iter().enumerate() {
-                let sg = if fro[g] > 0.0 { (mean / fro[g]).sqrt() } else { 1.0 };
+                let sg = if fro[g] > 0.0 {
+                    (mean / fro[g]).sqrt()
+                } else {
+                    1.0
+                };
                 let (a0, a1) = (b.row_ptr[r.start], b.row_ptr[r.end]);
                 b.vals[a0..a1].iter_mut().for_each(|v| *v *= sg);
                 lam[g] /= sg;
@@ -215,7 +236,11 @@ impl Admm {
                 sb += bd[i];
             }
         }
-        let rho = rho0.unwrap_or(if sb > 0.0 { (0.03 * sq / sb).clamp(1e-6, 1e6) } else { 1.0 });
+        let rho = rho0.unwrap_or(if sb > 0.0 {
+            (0.03 * sq / sb).clamp(1e-6, 1e6)
+        } else {
+            1.0
+        });
         let a = base.add(1.0, &btb, rho);
         // simplicial factors have lean, allocation-free solves (the u-step is
         // solved thousands of times); supernodal ones (dense blocks, half the
@@ -278,11 +303,7 @@ impl Admm {
     }
 
     fn state_len(&self, nr: usize) -> usize {
-        if self.settings.dr_state {
-            nr
-        } else {
-            2 * nr
-        }
+        if self.settings.dr_state { nr } else { 2 * nr }
     }
 
     /// Packs `(z, y)` into the iteration state.
@@ -317,7 +338,11 @@ impl Admm {
         let mut s = vec![0.0; mc * mc];
         for i in 0..mc {
             for j in 0..mc {
-                let wj: &[f64] = if j < persistent.len() { &self.persist_w[j] } else { &w_cur };
+                let wj: &[f64] = if j < persistent.len() {
+                    &self.persist_w[j]
+                } else {
+                    &w_cur
+                };
                 s[i * mc + j] = dot(rows[i], wj);
             }
         }
@@ -328,18 +353,41 @@ impl Admm {
                 s[j * mc + i] = a;
             }
         }
-        let lu = Lu::new(s, mc).map_err(|e| format!("ADMM: dependent equality constraints ({e})"))?;
-        Ok(Constraints { rows, n_persist: persistent.len(), w_cur, lu, rhs })
+        let lu =
+            Lu::new(s, mc).map_err(|e| format!("ADMM: dependent equality constraints ({e})"))?;
+        Ok(Constraints {
+            rows,
+            n_persist: persistent.len(),
+            w_cur,
+            lu,
+            rhs,
+        })
     }
 
     /// One ADMM map evaluation `F(x)`, written into `out`.
-    fn step(&self, pb: &Problem, cs: &Constraints, x: &[f64], st: &AdmmSettings, out: &mut Step, w: &mut Work) {
+    fn step(
+        &self,
+        pb: &Problem,
+        cs: &Constraints,
+        x: &[f64],
+        st: &AdmmSettings,
+        out: &mut Step,
+        w: &mut Work,
+    ) {
         let t0 = std::time::Instant::now();
         self.step_inner(pb, cs, x, st, out, w);
         STEP_NS.with(|c| c.set(c.get() + t0.elapsed().as_nanos() as u64));
     }
 
-    fn step_inner(&self, pb: &Problem, cs: &Constraints, x: &[f64], st: &AdmmSettings, out: &mut Step, w: &mut Work) {
+    fn step_inner(
+        &self,
+        pb: &Problem,
+        cs: &Constraints,
+        x: &[f64],
+        st: &AdmmSettings,
+        out: &mut Step,
+        w: &mut Work,
+    ) {
         let n = pb.n;
         let nr = pb.b_act.n_rows;
         let rho = self.rho;
@@ -374,7 +422,11 @@ impl Admm {
         let u = &mut out.u;
         u.copy_from_slice(r);
         for j in 0..mc {
-            let wj: &[f64] = if j < cs.n_persist { &self.persist_w[j] } else { &cs.w_cur };
+            let wj: &[f64] = if j < cs.n_persist {
+                &self.persist_w[j]
+            } else {
+                &cs.w_cur
+            };
             let c = nu[j];
             for k in 0..n {
                 u[k] -= c * wj[k];
@@ -433,7 +485,11 @@ impl Admm {
         let rd = self.rho * norm(&w.r);
         self.bt.matvec(&s.yn, &mut w.r);
         let scale_d = self.rho * norm(&w.r);
-        (rd, scale_d, (n as f64).sqrt() * st.eps_abs + st.eps_rel * scale_d)
+        (
+            rd,
+            scale_d,
+            (n as f64).sqrt() * st.eps_abs + st.eps_rel * scale_d,
+        )
     }
 
     /// Solves the subproblem with equality rows `persistent ++ [current]`
@@ -456,7 +512,12 @@ impl Admm {
         let mut cs = self.constraints(persistent, current, rhs)?;
         let mem = st.anderson;
         let len = self.state_len(nr);
-        let mut work = Work { tmp: vec![0.0; nr], r: vec![0.0; n], bu: vec![0.0; nr], chol: SolveWork::default() };
+        let mut work = Work {
+            tmp: vec![0.0; nr],
+            r: vec![0.0; n],
+            bu: vec![0.0; nr],
+            chol: SolveWork::default(),
+        };
         let mut x = vec![0.0; len];
         self.pack(&self.z0, &self.y0, &mut x);
         let mut s = Step::new(n, nr, len);
@@ -622,11 +683,20 @@ impl Admm {
             std::mem::swap(&mut s, &mut s_new);
         }
         // keep the last evaluated map output as the warm start
-        let dbg = if debug_enabled() { Some(self.dual(&s, &st, &mut work)) } else { None };
+        let dbg = if debug_enabled() {
+            Some(self.dual(&s, &st, &mut work))
+        } else {
+            None
+        };
         self.z0.copy_from_slice(&s.zn);
         self.y0.copy_from_slice(&s.yn);
         if let Some((rd, _, ed)) = dbg {
-            eprintln!("[admm] final rp/eps {:.2} rd/eps {:.2} tol {:.1e}", s.r_prim / s.eps_pri, rd / ed, st.eps_rel);
+            eprintln!(
+                "[admm] final rp/eps {:.2} rd/eps {:.2} tol {:.1e}",
+                s.r_prim / s.eps_pri,
+                rd / ed,
+                st.eps_rel
+            );
             eprintln!(
                 "[admm] iters {iters} ok {ok} rho {:.3e} refactors {} accel {n_accel} reject {n_reject} time {:.3}s n {} rows {nr} step {:.3}s solve {:.3}s",
                 self.rho,
@@ -637,6 +707,10 @@ impl Admm {
                 SOLVE_NS.with(|c| c.replace(0)) as f64 * 1e-9,
             );
         }
-        Ok(SubResult { u: std::mem::take(&mut s.u), iterations: iters, ok })
+        Ok(SubResult {
+            u: std::mem::take(&mut s.u),
+            iterations: iters,
+            ok,
+        })
     }
 }

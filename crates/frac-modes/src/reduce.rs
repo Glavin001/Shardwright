@@ -33,7 +33,7 @@
 //! `e_x`, `e_y`, `e_z` (degenerate direction triples). Solving one component
 //! gives `k` distinct cut patterns for `k` modes at a third of the unknowns.
 
-use crate::problem::{active_groups, NodeInfo, Problem};
+use crate::problem::{NodeInfo, Problem, active_groups};
 use frac_fem::dense;
 use frac_fem::sparse::CsrMatrix;
 use std::ops::Range;
@@ -45,7 +45,14 @@ fn monomials(x: [f64; 3], degree: u8, out: &mut Vec<f64>) {
         out.extend_from_slice(&[x[0], x[1], x[2]]);
     }
     if degree >= 2 {
-        out.extend_from_slice(&[x[0] * x[0], x[1] * x[1], x[2] * x[2], x[0] * x[1], x[1] * x[2], x[2] * x[0]]);
+        out.extend_from_slice(&[
+            x[0] * x[0],
+            x[1] * x[1],
+            x[2] * x[2],
+            x[0] * x[1],
+            x[1] * x[2],
+            x[2] * x[0],
+        ]);
     }
 }
 
@@ -57,7 +64,12 @@ struct CellBasis {
     offset: usize, // first reduced column; component k uses offset + k*s .. + s
 }
 
-pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) -> Result<Problem, String> {
+pub(crate) fn reduce(
+    full: &Problem,
+    info: &NodeInfo,
+    degree: u8,
+    omega: f64,
+) -> Result<Problem, String> {
     let degree = degree.min(2);
     // displacement components carried by the reduced space: the translational
     // model (degree 0) is solved for one component (see below), P1/P2 for 3
@@ -79,7 +91,12 @@ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) ->
     for sc in 0..ns {
         let nodes = std::mem::take(&mut members[sc]);
         if nodes.is_empty() {
-            cells.push(CellBasis { nodes, s: 0, phi: Vec::new(), offset });
+            cells.push(CellBasis {
+                nodes,
+                s: 0,
+                phi: Vec::new(),
+                offset,
+            });
             continue;
         }
         // local normalized coordinates
@@ -98,10 +115,18 @@ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) ->
             r2 = r2.max(d);
         }
         let scale = if r2 > 0.0 { 1.0 / r2.sqrt() } else { 1.0 };
-        let loc = |p: [f64; 3]| [(p[0] - c[0]) * scale, (p[1] - c[1]) * scale, (p[2] - c[2]) * scale];
+        let loc = |p: [f64; 3]| {
+            [
+                (p[0] - c[0]) * scale,
+                (p[1] - c[1]) * scale,
+                (p[2] - c[2]) * scale,
+            ]
+        };
         let s0 = [1, 4, 10][degree as usize];
         // null space of anchored nodal values
-        let mut nmat: Vec<f64> = (0..s0 * s0).map(|i| if i % (s0 + 1) == 0 { 1.0 } else { 0.0 }).collect();
+        let mut nmat: Vec<f64> = (0..s0 * s0)
+            .map(|i| if i % (s0 + 1) == 0 { 1.0 } else { 0.0 })
+            .collect();
         let mut s1 = s0;
         if !anchored[sc].is_empty() {
             let mut g = vec![0.0; s0 * s0];
@@ -160,7 +185,12 @@ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) ->
                 phi[a * s2 + ii] = acc / w[i].sqrt();
             }
         }
-        cells.push(CellBasis { nodes, s: s2, phi, offset });
+        cells.push(CellBasis {
+            nodes,
+            s: s2,
+            phi,
+            offset,
+        });
         offset += ncomp * s2;
     }
     let nr = offset;
@@ -274,7 +304,8 @@ pub(crate) fn reduce(full: &Problem, info: &NodeInfo, degree: u8, omega: f64) ->
         rows_all.push(start..row);
     }
     let b_all = CsrMatrix::from_triplets(row, nr, btrip);
-    let (active, b_act, rows_act, lam_act) = active_groups(&b_all, &rows_all, &full.group_weight, omega);
+    let (active, b_act, rows_act, lam_act) =
+        active_groups(&b_all, &rows_all, &full.group_weight, omega);
     // Rigid-mode rows: only rigid modes contained in the subspace constrain
     // it (all six for degree >= 1). For degree 0 (per-cell translations of
     // one component, the paper's §3.6 space) the rotations are not

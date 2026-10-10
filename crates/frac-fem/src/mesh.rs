@@ -70,7 +70,9 @@ impl TetMesh {
 
     /// Smallest signed tet volume (useful for validity checks).
     pub fn min_volume(&self) -> f64 {
-        (0..self.tets.len()).map(|t| self.tet_volume(t)).fold(f64::INFINITY, f64::min)
+        (0..self.tets.len())
+            .map(|t| self.tet_volume(t))
+            .fold(f64::INFINITY, f64::min)
     }
 
     /// All tet faces as `(sorted vertex triple, tet, local face)`, sorted.

@@ -19,7 +19,10 @@ fn repo_root() -> PathBuf {
         roots.extend(exe.ancestors().skip(1).take(4).map(|p| p.to_path_buf()));
     }
     roots.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(".."));
-    roots.into_iter().find(|r| has_tools(r)).unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(".."))
+    roots
+        .into_iter()
+        .find(|r| has_tools(r))
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(".."))
 }
 
 fn runs(cmd: &Path, arg: &str) -> bool {
@@ -38,11 +41,17 @@ fn remove_stale_scratch(tag: &str) {
         return;
     }
     let prefix = format!("frac-io-{tag}-");
-    let Ok(rd) = std::fs::read_dir(std::env::temp_dir()) else { return };
+    let Ok(rd) = std::fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
     for e in rd.flatten() {
         let name = e.file_name().to_string_lossy().to_string();
-        let Some(rest) = name.strip_prefix(&prefix) else { continue };
-        let Some(pid) = rest.split('-').next().and_then(|p| p.parse::<u32>().ok()) else { continue };
+        let Some(rest) = name.strip_prefix(&prefix) else {
+            continue;
+        };
+        let Some(pid) = rest.split('-').next().and_then(|p| p.parse::<u32>().ok()) else {
+            continue;
+        };
         if pid != std::process::id() && !Path::new(&format!("/proc/{pid}")).exists() {
             let _ = std::fs::remove_dir_all(e.path());
         }
@@ -87,8 +96,13 @@ pub fn find_flatc() -> Option<PathBuf> {
 /// (about ten times the binary size; building-scale payloads give
 /// multi-GB dumps). `Err` explains why the cross-check cannot run.
 pub fn flatc_scratch_check(path: &Path) -> Result<(), String> {
-    let need = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0).saturating_mul(12);
-    let Some(free) = free_bytes(&std::env::temp_dir()) else { return Ok(()) };
+    let need = std::fs::metadata(path)
+        .map(|m| m.len())
+        .unwrap_or(0)
+        .saturating_mul(12);
+    let Some(free) = free_bytes(&std::env::temp_dir()) else {
+        return Ok(());
+    };
     if free < need {
         return Err(format!(
             "flatc cross-check not run: its JSON dump needs ~{:.1} GB scratch, {:.1} GB free (the FlatBuffers verifier still checks the payload)",
@@ -152,9 +166,11 @@ pub fn flatc_validate(path: &Path) -> Option<Result<(), String>> {
             // streamed syntax check (the dump reaches gigabytes on
             // building-scale assets; no in-memory document)
             match std::fs::File::open(&json_out) {
-                Ok(f) => serde_json::from_reader::<_, serde::de::IgnoredAny>(std::io::BufReader::with_capacity(1 << 20, f))
-                    .map(|_| ())
-                    .map_err(|e| format!("flatc JSON output invalid: {e}")),
+                Ok(f) => serde_json::from_reader::<_, serde::de::IgnoredAny>(
+                    std::io::BufReader::with_capacity(1 << 20, f),
+                )
+                .map(|_| ())
+                .map_err(|e| format!("flatc JSON output invalid: {e}")),
                 Err(e) => Err(format!("flatc produced no JSON output: {e}")),
             }
         };

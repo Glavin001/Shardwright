@@ -23,7 +23,8 @@ pub fn write_asset_json(asset: &Asset, path: &Path) -> Result<(), IoError> {
     }
     let f = std::fs::File::create(path).map_err(|e| IoError::io(path, e))?;
     let mut w = std::io::BufWriter::with_capacity(1 << 20, f);
-    serde_json::to_writer(&mut w, asset).map_err(|e| IoError::io(path, std::io::Error::other(e)))?;
+    serde_json::to_writer(&mut w, asset)
+        .map_err(|e| IoError::io(path, std::io::Error::other(e)))?;
     std::io::Write::flush(&mut w).map_err(|e| IoError::io(path, e))
 }
 

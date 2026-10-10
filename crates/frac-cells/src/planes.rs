@@ -12,7 +12,7 @@
 //! insphere SoS, so the cell complex and the clipping decisions describe the
 //! same perturbed configuration.
 
-use frac_geom::exact::{det2, det3, Expansion, Field};
+use frac_geom::exact::{Expansion, Field, det2, det3};
 use frac_geom::exact_sign;
 use smallvec::SmallVec;
 
@@ -87,7 +87,11 @@ impl PlaneSystem {
                 let (i, j) = vor_pair(p);
                 let si = v.seeds[i as usize];
                 let sj = v.seeds[j as usize];
-                [2.0 * (sj[0] - si[0]), 2.0 * (sj[1] - si[1]), 2.0 * (sj[2] - si[2])]
+                [
+                    2.0 * (sj[0] - si[0]),
+                    2.0 * (sj[1] - si[1]),
+                    2.0 * (sj[2] - si[2]),
+                ]
             }
             PlaneSystem::Boxes(b) => {
                 let mut n = [0.0; 3];
@@ -209,8 +213,16 @@ impl PlaneSystem {
             let one = F::one();
             let m = [
                 [one.clone(), one.clone(), one],
-                [self.eval::<F>(p, t[0]), self.eval::<F>(p, t[1]), self.eval::<F>(p, t[2])],
-                [self.eval::<F>(q, t[0]), self.eval::<F>(q, t[1]), self.eval::<F>(q, t[2])],
+                [
+                    self.eval::<F>(p, t[0]),
+                    self.eval::<F>(p, t[1]),
+                    self.eval::<F>(p, t[2]),
+                ],
+                [
+                    self.eval::<F>(q, t[0]),
+                    self.eval::<F>(q, t[1]),
+                    self.eval::<F>(q, t[2]),
+                ],
             ];
             det3(&m)
         });
@@ -219,9 +231,21 @@ impl PlaneSystem {
         }
         let num = exact_sign!(|F| {
             let m = [
-                [self.eval::<F>(p, t[0]), self.eval::<F>(p, t[1]), self.eval::<F>(p, t[2])],
-                [self.eval::<F>(q, t[0]), self.eval::<F>(q, t[1]), self.eval::<F>(q, t[2])],
-                [self.eval::<F>(r, t[0]), self.eval::<F>(r, t[1]), self.eval::<F>(r, t[2])],
+                [
+                    self.eval::<F>(p, t[0]),
+                    self.eval::<F>(p, t[1]),
+                    self.eval::<F>(p, t[2]),
+                ],
+                [
+                    self.eval::<F>(q, t[0]),
+                    self.eval::<F>(q, t[1]),
+                    self.eval::<F>(q, t[2]),
+                ],
+                [
+                    self.eval::<F>(r, t[0]),
+                    self.eval::<F>(r, t[1]),
+                    self.eval::<F>(r, t[2]),
+                ],
             ];
             det3(&m)
         });
@@ -233,7 +257,11 @@ impl PlaneSystem {
             [self.eval(q, t[0]), self.eval(q, t[1]), self.eval(q, t[2])],
             [self.eval(r, t[0]), self.eval(r, t[1]), self.eval(r, t[2])],
         ];
-        let ones = [Expansion::from_f64(1.0), Expansion::from_f64(1.0), Expansion::from_f64(1.0)];
+        let ones = [
+            Expansion::from_f64(1.0),
+            Expansion::from_f64(1.0),
+            Expansion::from_f64(1.0),
+        ];
         let mut terms = Vec::with_capacity(3);
         for (k, plane) in [p, q, r].into_iter().enumerate() {
             let mut m = rows.clone();
@@ -246,11 +274,36 @@ impl PlaneSystem {
     /// Exact comparison of `f_r` at `TL(t1, p, q)` and `TL(t2, p, q)`
     /// (both on the same line). Ties (impossible for distinct pierce points
     /// of an embedded surface) return `Equal`.
-    pub fn cmp_along_line(&self, t1: [&P3; 3], t2: [&P3; 3], p: PlaneId, q: PlaneId, r: PlaneId) -> std::cmp::Ordering {
-        fn nd<F: Field>(ps: &PlaneSystem, t: [&P3; 3], p: PlaneId, q: PlaneId, r: PlaneId) -> (F, F) {
-            let rp = [ps.eval::<F>(p, t[0]), ps.eval::<F>(p, t[1]), ps.eval::<F>(p, t[2])];
-            let rq = [ps.eval::<F>(q, t[0]), ps.eval::<F>(q, t[1]), ps.eval::<F>(q, t[2])];
-            let rr = [ps.eval::<F>(r, t[0]), ps.eval::<F>(r, t[1]), ps.eval::<F>(r, t[2])];
+    pub fn cmp_along_line(
+        &self,
+        t1: [&P3; 3],
+        t2: [&P3; 3],
+        p: PlaneId,
+        q: PlaneId,
+        r: PlaneId,
+    ) -> std::cmp::Ordering {
+        fn nd<F: Field>(
+            ps: &PlaneSystem,
+            t: [&P3; 3],
+            p: PlaneId,
+            q: PlaneId,
+            r: PlaneId,
+        ) -> (F, F) {
+            let rp = [
+                ps.eval::<F>(p, t[0]),
+                ps.eval::<F>(p, t[1]),
+                ps.eval::<F>(p, t[2]),
+            ];
+            let rq = [
+                ps.eval::<F>(q, t[0]),
+                ps.eval::<F>(q, t[1]),
+                ps.eval::<F>(q, t[2]),
+            ];
+            let rr = [
+                ps.eval::<F>(r, t[0]),
+                ps.eval::<F>(r, t[1]),
+                ps.eval::<F>(r, t[2]),
+            ];
             let one = F::one();
             let n = det3(&[rp.clone(), rq.clone(), rr]);
             let d = det3(&[[one.clone(), one.clone(), one], rp, rq]);
@@ -272,10 +325,17 @@ impl PlaneSystem {
             // f_r(T_i) = (N_i + δ_p C_p,i + δ_q C_q,i + δ_r D_i) / D_i, and δ_r
             // cancels in the difference.
             let cof = |t: [&P3; 3]| -> (Expansion, Expansion, Expansion) {
-                let rp: [Expansion; 3] = [self.eval(p, t[0]), self.eval(p, t[1]), self.eval(p, t[2])];
-                let rq: [Expansion; 3] = [self.eval(q, t[0]), self.eval(q, t[1]), self.eval(q, t[2])];
-                let rr: [Expansion; 3] = [self.eval(r, t[0]), self.eval(r, t[1]), self.eval(r, t[2])];
-                let one = [Expansion::from_f64(1.0), Expansion::from_f64(1.0), Expansion::from_f64(1.0)];
+                let rp: [Expansion; 3] =
+                    [self.eval(p, t[0]), self.eval(p, t[1]), self.eval(p, t[2])];
+                let rq: [Expansion; 3] =
+                    [self.eval(q, t[0]), self.eval(q, t[1]), self.eval(q, t[2])];
+                let rr: [Expansion; 3] =
+                    [self.eval(r, t[0]), self.eval(r, t[1]), self.eval(r, t[2])];
+                let one = [
+                    Expansion::from_f64(1.0),
+                    Expansion::from_f64(1.0),
+                    Expansion::from_f64(1.0),
+                ];
                 let cp = det3(&[one.clone(), rq.clone(), rr.clone()]);
                 let cq = det3(&[rp.clone(), one.clone(), rr]);
                 let d = det3(&[one, rp, rq]);
@@ -313,11 +373,19 @@ impl PlaneSystem {
     pub fn edge_point(&self, a: &P3, b: &P3, p: PlaneId) -> P3 {
         let fa = frac_geom::exact_value!(|F| self.eval::<F>(p, a));
         let fb = frac_geom::exact_value!(|F| self.eval::<F>(p, b));
-        let (o, d, t) = if fa.abs() <= fb.abs() { (a, b, fa / (fa - fb)) } else { (b, a, fb / (fb - fa)) };
+        let (o, d, t) = if fa.abs() <= fb.abs() {
+            (a, b, fa / (fa - fb))
+        } else {
+            (b, a, fb / (fb - fa))
+        };
         if !t.is_finite() {
             return *a;
         }
-        let mut x = [o[0] + (d[0] - o[0]) * t, o[1] + (d[1] - o[1]) * t, o[2] + (d[2] - o[2]) * t];
+        let mut x = [
+            o[0] + (d[0] - o[0]) * t,
+            o[1] + (d[1] - o[1]) * t,
+            o[2] + (d[2] - o[2]) * t,
+        ];
         self.snap(p, &mut x);
         x
     }
@@ -338,7 +406,12 @@ impl PlaneSystem {
     pub fn tri_line_point(&self, t: [&P3; 3], p: PlaneId, q: PlaneId) -> P3 {
         let minor = |x: &P3, y: &P3| {
             frac_geom::exact_value!(|F| {
-                det2(&self.eval::<F>(p, x), &self.eval::<F>(p, y), &self.eval::<F>(q, x), &self.eval::<F>(q, y))
+                det2(
+                    &self.eval::<F>(p, x),
+                    &self.eval::<F>(p, y),
+                    &self.eval::<F>(q, x),
+                    &self.eval::<F>(q, y),
+                )
             })
         };
         let la = minor(t[1], t[2]);
@@ -346,7 +419,11 @@ impl PlaneSystem {
         let lc = minor(t[0], t[1]);
         let s = la + lb + lc;
         if s == 0.0 || !s.is_finite() {
-            return [(t[0][0] + t[1][0] + t[2][0]) / 3.0, (t[0][1] + t[1][1] + t[2][1]) / 3.0, (t[0][2] + t[1][2] + t[2][2]) / 3.0];
+            return [
+                (t[0][0] + t[1][0] + t[2][0]) / 3.0,
+                (t[0][1] + t[1][1] + t[2][1]) / 3.0,
+                (t[0][2] + t[1][2] + t[2][2]) / 3.0,
+            ];
         }
         let (wa, wb, wc) = (la / s, lb / s, lc / s);
         let mut x = [
@@ -406,7 +483,9 @@ mod tests {
 
     #[test]
     fn voronoi_lines_and_incidence() {
-        let ps = PlaneSystem::Voronoi(VoronoiPlanes { seeds: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]] });
+        let ps = PlaneSystem::Voronoi(VoronoiPlanes {
+            seeds: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        });
         let l1 = ps.line(vor_id(1, 2), vor_id(1, 0));
         let l2 = ps.line(vor_id(0, 2), vor_id(2, 1));
         assert_eq!(l1, l2);
@@ -418,7 +497,9 @@ mod tests {
     #[test]
     fn sos_consistency_vertex_on_plane() {
         // A vertex exactly on a box plane gets a consistent nonzero side.
-        let ps = PlaneSystem::Boxes(BoxPlanes { planes: vec![(0, 0.5), (1, 0.5)] });
+        let ps = PlaneSystem::Boxes(BoxPlanes {
+            planes: vec![(0, 0.5), (1, 0.5)],
+        });
         assert_eq!(ps.side_vertex(&[0.5, 0.2, 0.0], 0), 1);
         // edge from x=0 to x=1 crosses plane 0 at (0.5, y) with y=0.5 exactly on plane 1
         let a = [0.0, 0.5, 0.0];
@@ -431,14 +512,18 @@ mod tests {
 
     #[test]
     fn tri_line_point_on_planes() {
-        let ps = PlaneSystem::Boxes(BoxPlanes { planes: vec![(0, 0.25), (1, 0.3)] });
+        let ps = PlaneSystem::Boxes(BoxPlanes {
+            planes: vec![(0, 0.25), (1, 0.3)],
+        });
         let t = [[0.0, 0.0, 0.0], [1.0, 0.0, 1.0], [0.0, 1.0, 2.0]];
         let x = ps.tri_line_point([&t[0], &t[1], &t[2]], 0, 1);
         assert!((x[0] - 0.25).abs() < 1e-15 && (x[1] - 0.3).abs() < 1e-15);
         assert!((x[2] - (0.25 + 0.6)).abs() < 1e-14);
         assert!(ps.pierces([&t[0], &t[1], &t[2]], 0, 1));
         // side of TL vs a third plane
-        let ps2 = PlaneSystem::Boxes(BoxPlanes { planes: vec![(0, 0.25), (1, 0.3), (2, 0.5)] });
+        let ps2 = PlaneSystem::Boxes(BoxPlanes {
+            planes: vec![(0, 0.25), (1, 0.3), (2, 0.5)],
+        });
         assert_eq!(ps2.side_tri_line([&t[0], &t[1], &t[2]], 0, 1, 2), 1);
     }
 }

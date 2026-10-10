@@ -6,8 +6,8 @@ pub mod metrics;
 pub mod network;
 pub mod structure;
 
-use frac_core::settings::ValidationSettings;
 use frac_core::Asset;
+use frac_core::settings::ValidationSettings;
 use frac_material::MaterialLibrary;
 use frac_render::RenderOut;
 use serde::{Deserialize, Serialize};
@@ -40,17 +40,25 @@ impl Scorecard {
         self.gates.iter().all(|g| g.status != GateStatus::Fail)
     }
     pub fn failures(&self) -> Vec<&GateResult> {
-        self.gates.iter().filter(|g| g.status == GateStatus::Fail).collect()
+        self.gates
+            .iter()
+            .filter(|g| g.status == GateStatus::Fail)
+            .collect()
     }
     pub fn to_markdown(&self) -> String {
-        let mut s = String::from("## Hard gates\n\n| Gate | Status | Worst value | Threshold | Detail |\n|---|---|---|---|---|\n");
+        let mut s = String::from(
+            "## Hard gates\n\n| Gate | Status | Worst value | Threshold | Detail |\n|---|---|---|---|---|\n",
+        );
         for g in &self.gates {
             let st = match g.status {
                 GateStatus::Pass => "PASS",
                 GateStatus::Fail => "**FAIL**",
                 GateStatus::NotEvaluated => "n/a",
             };
-            s += &format!("| {} | {} | {:.3e} | {:.1e} | {} |\n", g.name, st, g.value, g.threshold, g.detail);
+            s += &format!(
+                "| {} | {} | {:.3e} | {:.1e} | {} |\n",
+                g.name, st, g.value, g.threshold, g.detail
+            );
         }
         s += "\n## Metrics\n\n```json\n";
         s += &serde_json::to_string_pretty(&self.metrics).unwrap();
@@ -60,7 +68,13 @@ impl Scorecard {
 }
 
 /// Run hard gates and metrics on a baked asset.
-pub fn validate(asset: &Asset, render: &RenderOut, lib: &MaterialLibrary, vs: &ValidationSettings, physics: &[u8]) -> Scorecard {
+pub fn validate(
+    asset: &Asset,
+    render: &RenderOut,
+    lib: &MaterialLibrary,
+    vs: &ValidationSettings,
+    physics: &[u8],
+) -> Scorecard {
     let mut gates = gates::run_gates(asset, render, vs, physics);
     gates.extend(structure_gates(asset, lib));
     gates.sort_by_key(|g| gates::order(&g.name));
@@ -72,7 +86,13 @@ pub fn validate(asset: &Asset, render: &RenderOut, lib: &MaterialLibrary, vs: &V
 /// `structural_support` and `self_weight` (see [`structure`]); not evaluated
 /// for assets without ground anchors.
 fn structure_gates(asset: &Asset, lib: &MaterialLibrary) -> Vec<GateResult> {
-    let na = |name: &str| GateResult { name: name.into(), status: GateStatus::NotEvaluated, value: 0.0, threshold: 0.0, detail: "no ground anchors".into() };
+    let na = |name: &str| GateResult {
+        name: name.into(),
+        status: GateStatus::NotEvaluated,
+        value: 0.0,
+        threshold: 0.0,
+        detail: "no ground anchors".into(),
+    };
     let sup = structure::support(asset);
     if !sup.applicable {
         return vec![na("structural_support"), na("self_weight")];
@@ -81,7 +101,11 @@ fn structure_gates(asset: &Asset, lib: &MaterialLibrary) -> Vec<GateResult> {
     let list = |v: &[String]| v.iter().take(5).cloned().collect::<Vec<_>>().join(", ");
     let support = GateResult {
         name: "structural_support".into(),
-        status: if bad == 0 { GateStatus::Pass } else { GateStatus::Fail },
+        status: if bad == 0 {
+            GateStatus::Pass
+        } else {
+            GateStatus::Fail
+        },
         value: bad as f64,
         threshold: 0.0,
         detail: format!(
@@ -94,16 +118,30 @@ fn structure_gates(asset: &Asset, lib: &MaterialLibrary) -> Vec<GateResult> {
     };
     gates::log_step("structural_support");
     let joints = structure::self_weight(asset, lib);
-    let worst = joints.iter().max_by(|a, b| a.utilization.total_cmp(&b.utilization));
+    let worst = joints
+        .iter()
+        .max_by(|a, b| a.utilization.total_cmp(&b.utilization));
     let over = joints.iter().filter(|j| j.utilization > 1.0).count();
     let umax = worst.map(|w| w.utilization).unwrap_or(0.0);
     let sw = GateResult {
         name: "self_weight".into(),
-        status: if over == 0 { GateStatus::Pass } else { GateStatus::Fail },
+        status: if over == 0 {
+            GateStatus::Pass
+        } else {
+            GateStatus::Fail
+        },
         value: umax,
         threshold: 1.0,
         detail: match worst {
-            Some(w) => format!("{} joints; max utilization {:.3} ({} {:?} joint {} – {}); {over} joints over capacity", joints.len(), w.utilization, w.mode, w.kind, w.a, w.b),
+            Some(w) => format!(
+                "{} joints; max utilization {:.3} ({} {:?} joint {} – {}); {over} joints over capacity",
+                joints.len(),
+                w.utilization,
+                w.mode,
+                w.kind,
+                w.a,
+                w.b
+            ),
             None => "no inter-component joints".into(),
         },
     };

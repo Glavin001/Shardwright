@@ -32,7 +32,10 @@ impl Aabb {
     }
     #[inline]
     pub fn union(&self, o: &Aabb) -> Aabb {
-        Aabb { min: self.min.min(o.min), max: self.max.max(o.max) }
+        Aabb {
+            min: self.min.min(o.min),
+            max: self.max.max(o.max),
+        }
     }
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -61,7 +64,10 @@ impl Aabb {
         self.extent().length()
     }
     pub fn expanded(&self, r: f64) -> Aabb {
-        Aabb { min: self.min - DVec3::splat(r), max: self.max + DVec3::splat(r) }
+        Aabb {
+            min: self.min - DVec3::splat(r),
+            max: self.max + DVec3::splat(r),
+        }
     }
     /// Squared distance from a point to the box (0 if inside).
     pub fn dist2(&self, p: DVec3) -> f64 {

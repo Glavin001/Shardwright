@@ -67,7 +67,11 @@ impl FragMesh {
                 tris.push([t[0], t[1], t[2]]);
             }
         }
-        TriMesh { verts: self.positions.clone(), tris }.weld_exact()
+        TriMesh {
+            verts: self.positions.clone(),
+            tris,
+        }
+        .weld_exact()
     }
 
     /// [`as_trimesh`](Self::as_trimesh) and the owner cell of every kept
@@ -77,22 +81,33 @@ impl FragMesh {
         if self.owner.len() != n {
             return (self.as_trimesh(), None);
         }
-        let mut map: std::collections::HashMap<[u64; 3], u32> = std::collections::HashMap::with_capacity(self.positions.len());
+        let mut map: std::collections::HashMap<[u64; 3], u32> =
+            std::collections::HashMap::with_capacity(self.positions.len());
         let mut verts = Vec::new();
         let remap: Vec<u32> = self
             .positions
             .iter()
             .map(|v| {
-                *map.entry([v.x.to_bits(), v.y.to_bits(), v.z.to_bits()]).or_insert_with(|| {
-                    verts.push(*v);
-                    (verts.len() - 1) as u32
-                })
+                *map.entry([v.x.to_bits(), v.y.to_bits(), v.z.to_bits()])
+                    .or_insert_with(|| {
+                        verts.push(*v);
+                        (verts.len() - 1) as u32
+                    })
             })
             .collect();
         let mut tris = Vec::with_capacity(n);
         let mut owner = Vec::with_capacity(n);
-        for (k, t) in self.ext_indices.chunks(3).chain(self.int_indices.chunks(3)).enumerate() {
-            let t = [remap[t[0] as usize], remap[t[1] as usize], remap[t[2] as usize]];
+        for (k, t) in self
+            .ext_indices
+            .chunks(3)
+            .chain(self.int_indices.chunks(3))
+            .enumerate()
+        {
+            let t = [
+                remap[t[0] as usize],
+                remap[t[1] as usize],
+                remap[t[2] as usize],
+            ];
             if t[0] != t[1] && t[1] != t[2] && t[0] != t[2] {
                 tris.push(t);
                 owner.push(self.owner[k]);
@@ -152,11 +167,22 @@ fn cell_min_extent(c: &Cell) -> f64 {
     let a2 = 6.0 * (ev.y + ev.z - ev.x) / m;
     let b2 = 6.0 * (ev.x + ev.z - ev.y) / m;
     let c2 = 6.0 * (ev.x + ev.y - ev.z) / m;
-    a2.max(0.0).sqrt().min(b2.max(0.0).sqrt()).min(c2.max(0.0).sqrt())
+    a2.max(0.0)
+        .sqrt()
+        .min(b2.max(0.0).sqrt())
+        .min(c2.max(0.0).sqrt())
 }
 
 /// Build the shared displaced surface of a patch.
-fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f64, settings: &settings::RenderSettings, seed: u64, dihedral: &[(f64, f64)]) -> PatchSurface {
+fn patch_surface(
+    verts: &[DVec3],
+    p: &Patch,
+    spec: Option<NoiseSpec>,
+    amp_cap: f64,
+    settings: &settings::RenderSettings,
+    seed: u64,
+    dihedral: &[(f64, f64)],
+) -> PatchSurface {
     let n = p.normal;
     let (u, v) = plane_basis(n);
     let mut comp_vert: Vec<Option<u32>> = Vec::new();
@@ -171,9 +197,20 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
             });
         }
     }
-    let area: f64 = frac_geom::polygon::area_integrals(&p.loops.iter().map(|l| l.iter().map(|&i| verts[i as usize]).collect()).collect::<Vec<_>>(), n).area;
+    let area: f64 = frac_geom::polygon::area_integrals(
+        &p.loops
+            .iter()
+            .map(|l| l.iter().map(|&i| verts[i as usize]).collect())
+            .collect::<Vec<_>>(),
+        n,
+    )
+    .area;
     let noise_on = settings.noise && spec.map(|s| s.amplitude > 0.0).unwrap_or(false) && area > 0.0;
-    let mut tris_local: Vec<[u32; 3]> = p.tris.iter().map(|t| [local[&t[0]], local[&t[1]], local[&t[2]]]).collect();
+    let mut tris_local: Vec<[u32; 3]> = p
+        .tris
+        .iter()
+        .map(|t| [local[&t[0]], local[&t[1]], local[&t[2]]])
+        .collect();
     if noise_on {
         let s = spec.unwrap();
         // Steiner spacing: resolve the noise but respect the triangle cap
@@ -206,7 +243,10 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
         if (nx * ny) as f64 <= cap * 2.0 {
             for j in 0..=ny {
                 for i in 0..=nx {
-                    let q = [lo[0] + (i as f64 + if j % 2 == 1 { 0.5 } else { 0.0 }) * spacing, lo[1] + j as f64 * spacing * 0.866];
+                    let q = [
+                        lo[0] + (i as f64 + if j % 2 == 1 { 0.5 } else { 0.0 }) * spacing,
+                        lo[1] + j as f64 * spacing * 0.866,
+                    ];
                     if !inside_segs(&segs, q) {
                         continue;
                     }
@@ -218,7 +258,9 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
                         let de = seg_dist(q, *a, *b);
                         d = d.min(de);
                         let (ta, tb) = dihedral.get(k).copied().unwrap_or((1.5, 1.5));
-                        let f = |t: f64| 0.4 * de * libm::sin(t.clamp(0.0, std::f64::consts::FRAC_PI_2));
+                        let f = |t: f64| {
+                            0.4 * de * libm::sin(t.clamp(0.0, std::f64::consts::FRAC_PI_2))
+                        };
                         lim_pos = lim_pos.min(f(tb));
                         lim_neg = lim_neg.min(f(ta));
                     }
@@ -230,7 +272,8 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
         }
         if !steiner.is_empty() {
             // CDT with loop constraints and Steiner points
-            let mut cdt: ConstrainedDelaunayTriangulation<Point2<f64>> = ConstrainedDelaunayTriangulation::new();
+            let mut cdt: ConstrainedDelaunayTriangulation<Point2<f64>> =
+                ConstrainedDelaunayTriangulation::new();
             let mut handles = Vec::new();
             let mut ok = true;
             for q in &pts2 {
@@ -254,7 +297,11 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
                     for k in 0..l.len() {
                         let a = handles[local[&l[k]] as usize];
                         let b = handles[local[&l[(k + 1) % l.len()]] as usize];
-                        if a != b && !cdt.exists_constraint(a, b) && cdt.try_add_constraint(a, b).is_empty() && !cdt.exists_constraint(a, b) {
+                        if a != b
+                            && !cdt.exists_constraint(a, b)
+                            && cdt.try_add_constraint(a, b).is_empty()
+                            && !cdt.exists_constraint(a, b)
+                        {
                             ok = false;
                         }
                     }
@@ -273,7 +320,11 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
                     let t = (d / taper_w).clamp(0.0, 1.0);
                     let taper = t * t * (3.0 - 2.0 * t);
                     let h = amp * noise::fbm(np, s.min_wl, s.max_wl, s.hurst, seed) * taper;
-                    let h = if h > 0.0 { h.min(*lim_pos) } else { h.max(-*lim_neg) };
+                    let h = if h > 0.0 {
+                        h.min(*lim_pos)
+                    } else {
+                        h.max(-*lim_neg)
+                    };
                     let x = base + n * h;
                     if let Ok(hd) = cdt.insert(Point2::new(q[0], q[1])) {
                         if hd.index() >= nb && !handle_to_local.contains_key(&hd.index()) {
@@ -321,7 +372,10 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
                         continue;
                     }
                     let vs = f.vertices();
-                    let ids: Vec<Option<&u32>> = vs.iter().map(|v| handle_to_local.get(&v.fix().index())).collect();
+                    let ids: Vec<Option<&u32>> = vs
+                        .iter()
+                        .map(|v| handle_to_local.get(&v.fix().index()))
+                        .collect();
                     if ids.iter().any(|x| x.is_none()) {
                         all_known = false;
                         break;
@@ -343,18 +397,32 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
     // vertex normals of the (possibly displaced) surface
     let mut nrm = vec![DVec3::ZERO; pos.len()];
     for t in &tris_local {
-        let fnrm = (pos[t[1] as usize] - pos[t[0] as usize]).cross(pos[t[2] as usize] - pos[t[0] as usize]);
+        let fnrm = (pos[t[1] as usize] - pos[t[0] as usize])
+            .cross(pos[t[2] as usize] - pos[t[0] as usize]);
         for &k in t {
             nrm[k as usize] += fnrm;
         }
     }
-    let normal = nrm.into_iter().map(|x| if x.dot(n) > 0.0 { x.normalize() } else { n }).collect();
-    PatchSurface { comp_vert, pos, normal, tris: tris_local }
+    let normal = nrm
+        .into_iter()
+        .map(|x| if x.dot(n) > 0.0 { x.normalize() } else { n })
+        .collect();
+    PatchSurface {
+        comp_vert,
+        pos,
+        normal,
+        tris: tris_local,
+    }
 }
 
 /// Patches whose displaced triangles take part in a self-intersection of
 /// some cell's render mesh (exact test, zero-area triangles ignored).
-fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface], only: Option<&std::collections::BTreeSet<CellId>>) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
+fn offending_patches(
+    comp: &Component,
+    verts: &[DVec3],
+    surfaces: &[PatchSurface],
+    only: Option<&std::collections::BTreeSet<CellId>>,
+) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
     let g = &comp.geometry;
     let mut per_cell: BTreeMap<CellId, (Vec<usize>, Vec<(usize, bool)>)> = BTreeMap::new();
     for (i, e) in g.ext_polys.iter().enumerate() {
@@ -364,18 +432,33 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
         per_cell.entry(pt.cells.0).or_default().1.push((pi, false));
         per_cell.entry(pt.cells.1).or_default().1.push((pi, true));
     }
-    let parts: Vec<(Vec<usize>, Vec<(usize, bool)>)> = per_cell.into_iter().filter(|(c, _)| only.map(|o| o.contains(c)).unwrap_or(true)).map(|(_, p)| p).collect();
+    let parts: Vec<(Vec<usize>, Vec<(usize, bool)>)> = per_cell
+        .into_iter()
+        .filter(|(c, _)| only.map(|o| o.contains(c)).unwrap_or(true))
+        .map(|(_, p)| p)
+        .collect();
     offending_in(g, verts, surfaces, &parts, false)
 }
 
 /// Offending patches / exterior vertices of multi-cell fragments: the
 /// fragment's render mesh holds displaced patches of different cells that
 /// no single-cell check sees together.
-fn offending_fragments(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface], sets: &[Vec<CellId>], cp: &CellPolys, only: Option<&std::collections::BTreeSet<CellId>>, inter_cell_only: bool) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
+fn offending_fragments(
+    comp: &Component,
+    verts: &[DVec3],
+    surfaces: &[PatchSurface],
+    sets: &[Vec<CellId>],
+    cp: &CellPolys,
+    only: Option<&std::collections::BTreeSet<CellId>>,
+    inter_cell_only: bool,
+) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
     let g = &comp.geometry;
     let parts: Vec<(Vec<usize>, Vec<(usize, bool)>)> = sets
         .par_iter()
-        .filter(|set| only.map(|o| set.iter().any(|c| o.contains(c))).unwrap_or(true))
+        .filter(|set| {
+            only.map(|o| set.iter().any(|c| o.contains(c)))
+                .unwrap_or(true)
+        })
         .map(|set| cp.boundary_of(set, |c| set.binary_search(&c).is_ok(), g))
         .collect();
     offending_in(g, verts, surfaces, &parts, inter_cell_only)
@@ -384,7 +467,13 @@ fn offending_fragments(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurfa
 /// Exact self-intersection check of closed surface parts (exterior polygons
 /// plus oriented patches); returns the patches and exterior vertices of
 /// intersecting triangle pairs.
-fn offending_in(g: &ComponentGeometry, verts: &[DVec3], surfaces: &[PatchSurface], parts: &[(Vec<usize>, Vec<(usize, bool)>)], inter_cell_only: bool) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
+fn offending_in(
+    g: &ComponentGeometry,
+    verts: &[DVec3],
+    surfaces: &[PatchSurface],
+    parts: &[(Vec<usize>, Vec<(usize, bool)>)],
+    inter_cell_only: bool,
+) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
     #[allow(clippy::type_complexity)]
     let bad: Vec<(Vec<usize>, Vec<u32>, Vec<u32>)> = parts
         .par_iter()
@@ -408,28 +497,48 @@ fn offending_in(g: &ComponentGeometry, verts: &[DVec3], surfaces: &[PatchSurface
                 let srf = &surfaces[pi];
                 let base = m.verts.len() as u32;
                 m.verts.extend(srf.pos.iter().copied());
-                let inside = if flip { g.patches[pi].cells.1 } else { g.patches[pi].cells.0 };
+                let inside = if flip {
+                    g.patches[pi].cells.1
+                } else {
+                    g.patches[pi].cells.0
+                };
                 for t in &srf.tris {
-                    m.tris.push(if flip { [base + t[0], base + t[2], base + t[1]] } else { [base + t[0], base + t[1], base + t[2]] });
+                    m.tris.push(if flip {
+                        [base + t[0], base + t[2], base + t[1]]
+                    } else {
+                        [base + t[0], base + t[1], base + t[2]]
+                    });
                     tag.push(Some(pi));
                     ext_of.push(None);
                     owner.push(inside.0);
                 }
             }
             // weld by exact coordinates without dropping triangles (keep tags aligned)
-            let mut map: std::collections::HashMap<[u64; 3], u32> = std::collections::HashMap::with_capacity(m.verts.len());
+            let mut map: std::collections::HashMap<[u64; 3], u32> =
+                std::collections::HashMap::with_capacity(m.verts.len());
             let mut nv = Vec::new();
             let remap: Vec<u32> = m
                 .verts
                 .iter()
                 .map(|v| {
-                    *map.entry([v.x.to_bits(), v.y.to_bits(), v.z.to_bits()]).or_insert_with(|| {
-                        nv.push(*v);
-                        (nv.len() - 1) as u32
-                    })
+                    *map.entry([v.x.to_bits(), v.y.to_bits(), v.z.to_bits()])
+                        .or_insert_with(|| {
+                            nv.push(*v);
+                            (nv.len() - 1) as u32
+                        })
                 })
                 .collect();
-            let tris: Vec<[u32; 3]> = m.tris.iter().map(|t| [remap[t[0] as usize], remap[t[1] as usize], remap[t[2] as usize]]).collect();
+            let tris: Vec<[u32; 3]> = m
+                .tris
+                .iter()
+                .map(|t| {
+                    [
+                        remap[t[0] as usize],
+                        remap[t[1] as usize],
+                        remap[t[2] as usize],
+                    ]
+                })
+                .collect();
             let wm = TriMesh { verts: nv, tris };
             let mut out = Vec::new();
             let mut ev = Vec::new();
@@ -523,7 +632,9 @@ fn boundary_preserved(p: &Patch, local: &BTreeMap<u32, u32>, tris: &[[u32; 3]]) 
             e.insert((t[k], t[(k + 1) % 3]));
         }
     }
-    p.loops.iter().all(|l| (0..l.len()).all(|k| e.contains(&(local[&l[k]], local[&l[(k + 1) % l.len()]]))))
+    p.loops
+        .iter()
+        .all(|l| (0..l.len()).all(|k| e.contains(&(local[&l[k]], local[&l[(k + 1) % l.len()]]))))
 }
 
 fn inside_segs(segs: &[([f64; 2], [f64; 2])], q: [f64; 2]) -> bool {
@@ -542,7 +653,11 @@ fn inside_segs(segs: &[([f64; 2], [f64; 2])], q: [f64; 2]) -> bool {
 fn seg_dist(q: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     let ab = [b[0] - a[0], b[1] - a[1]];
     let l2 = ab[0] * ab[0] + ab[1] * ab[1];
-    let t = if l2 > 0.0 { (((q[0] - a[0]) * ab[0] + (q[1] - a[1]) * ab[1]) / l2).clamp(0.0, 1.0) } else { 0.0 };
+    let t = if l2 > 0.0 {
+        (((q[0] - a[0]) * ab[0] + (q[1] - a[1]) * ab[1]) / l2).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
     let d = [a[0] + ab[0] * t - q[0], a[1] + ab[1] * t - q[1]];
     (d[0] * d[0] + d[1] * d[1]).sqrt()
 }
@@ -583,7 +698,11 @@ fn chip_vertices(comp: &Component, ratio: f64, seed: u64) -> Vec<DVec3> {
                 } else {
                     let (pa, pb) = (g.verts[a as usize], g.verts[b as usize]);
                     let ab = pb - pa;
-                    let t = if ab.length_squared() > 0.0 { ((pv - pa).dot(ab) / ab.length_squared()).clamp(0.0, 1.0) } else { 0.0 };
+                    let t = if ab.length_squared() > 0.0 {
+                        ((pv - pa).dot(ab) / ab.length_squared()).clamp(0.0, 1.0)
+                    } else {
+                        0.0
+                    };
                     (pa + ab * t - pv).length()
                 };
                 m_here = m_here.min(d);
@@ -656,7 +775,11 @@ impl<'a> ExteriorAttrs<'a> {
             let v = DVec3::new(cn[0][0] as f64, cn[0][1] as f64, cn[0][2] as f64) * bary.x
                 + DVec3::new(cn[1][0] as f64, cn[1][1] as f64, cn[1][2] as f64) * bary.y
                 + DVec3::new(cn[2][0] as f64, cn[2][1] as f64, cn[2][2] as f64) * bary.z;
-            if v.length_squared() > 0.0 { v.normalize() } else { face_n }
+            if v.length_squared() > 0.0 {
+                v.normalize()
+            } else {
+                face_n
+            }
         } else {
             face_n
         };
@@ -664,8 +787,10 @@ impl<'a> ExteriorAttrs<'a> {
             Some(u) if ti < u.len() => {
                 let c = u[ti];
                 [
-                    (c[0][0] as f64 * bary.x + c[1][0] as f64 * bary.y + c[2][0] as f64 * bary.z) as f32,
-                    (c[0][1] as f64 * bary.x + c[1][1] as f64 * bary.y + c[2][1] as f64 * bary.z) as f32,
+                    (c[0][0] as f64 * bary.x + c[1][0] as f64 * bary.y + c[2][0] as f64 * bary.z)
+                        as f32,
+                    (c[0][1] as f64 * bary.x + c[1][1] as f64 * bary.y + c[2][1] as f64 * bary.z)
+                        as f32,
                 ]
             }
             _ => triplanar_uv(p, face_n, 1.0),
@@ -709,7 +834,11 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
         .map(|comp| {
             let tc = std::time::Instant::now();
             let mut marks: Vec<(&str, f64)> = Vec::new();
-            let chip = if s.chipping { (p.chipping_for)(comp.id) } else { 0.0 };
+            let chip = if s.chipping {
+                (p.chipping_for)(comp.id)
+            } else {
+                0.0
+            };
             let mut verts = chip_vertices(comp, chip, p.seed);
             // the whole exterior surface must stay embedded after chipping
             if chip > 0.0 {
@@ -722,7 +851,10 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                             owner.push(i);
                         }
                     }
-                    let m = TriMesh { verts: verts.clone(), tris };
+                    let m = TriMesh {
+                        verts: verts.clone(),
+                        tris,
+                    };
                     let si = m.self_intersections(usize::MAX);
                     let mut changed = false;
                     for (a, b) in si {
@@ -751,14 +883,25 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                 .geometry
                 .patches
                 .iter()
-                .map(|pt| 0.2 * cell_min_extent(&asset.cells[pt.cells.0.idx()]).min(cell_min_extent(&asset.cells[pt.cells.1.idx()])))
+                .map(|pt| {
+                    0.2 * cell_min_extent(&asset.cells[pt.cells.0.idx()])
+                        .min(cell_min_extent(&asset.cells[pt.cells.1.idx()]))
+                })
                 .collect();
             let make = |verts: &[DVec3], pi: usize, scale: f64| -> PatchSurface {
                 let sp = spec.map(|mut x| {
                     x.amplitude *= scale;
                     x
                 });
-                patch_surface(verts, &comp.geometry.patches[pi], sp, caps[pi], s, seed, &dihedrals[pi])
+                patch_surface(
+                    verts,
+                    &comp.geometry.patches[pi],
+                    sp,
+                    caps[pi],
+                    s,
+                    seed,
+                    &dihedrals[pi],
+                )
             };
             let mut vpatches: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
             for (pi, pt) in comp.geometry.patches.iter().enumerate() {
@@ -769,7 +912,10 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                 }
             }
             let mut scale = vec![1.0f64; comp.geometry.patches.len()];
-            let mut surfaces: Vec<PatchSurface> = (0..comp.geometry.patches.len()).into_par_iter().map(|pi| make(&verts, pi, 1.0)).collect();
+            let mut surfaces: Vec<PatchSurface> = (0..comp.geometry.patches.len())
+                .into_par_iter()
+                .map(|pi| make(&verts, pi, 1.0))
+                .collect();
             marks.push(("surfaces", tc.elapsed().as_secs_f64()));
             // Guarantee validity: exact self-intersection check per cell;
             // halve the noise of offending patches (flat on late rounds) and
@@ -782,7 +928,9 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                     vext.entry(v).or_default().push(i);
                 }
             }
-            let dirty_of = |rebuilt: &std::collections::BTreeSet<usize>, moved: &[u32]| -> std::collections::BTreeSet<CellId> {
+            let dirty_of = |rebuilt: &std::collections::BTreeSet<usize>,
+                            moved: &[u32]|
+             -> std::collections::BTreeSet<CellId> {
                 let mut d = std::collections::BTreeSet::new();
                 for &pi in rebuilt {
                     let pt = &comp.geometry.patches[pi];
@@ -799,7 +947,8 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
             let mut dirty: Option<std::collections::BTreeSet<CellId>> = None;
             let mut cells_clean = false;
             for round in 0..6 {
-                let (bad, mut bad_verts, patch_verts) = offending_patches(comp, &verts, &surfaces, dirty.as_ref());
+                let (bad, mut bad_verts, patch_verts) =
+                    offending_patches(comp, &verts, &surfaces, dirty.as_ref());
                 if bad.is_empty() && bad_verts.is_empty() {
                     cells_clean = true;
                     break;
@@ -842,7 +991,15 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                 // With every cell mesh valid, a multi-cell mesh can only fail
                 // between triangles of different cells; cells changed by a
                 // previous round are re-checked in full.
-                let (mut bad, mut bad_verts, mut patch_verts) = offending_fragments(comp, &verts, &surfaces, &sets, &cp, dirty.as_ref(), cells_clean);
+                let (mut bad, mut bad_verts, mut patch_verts) = offending_fragments(
+                    comp,
+                    &verts,
+                    &surfaces,
+                    &sets,
+                    &cp,
+                    dirty.as_ref(),
+                    cells_clean,
+                );
                 if cells_clean && round > 0 {
                     let (b, v, p) = offending_patches(comp, &verts, &surfaces, dirty.as_ref());
                     for (x, y) in [(&mut bad, b)] {
@@ -881,13 +1038,21 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
             }
             marks.push(("fragment rounds", tc.elapsed().as_secs_f64()));
             if log && tc.elapsed().as_secs_f64() > 2.0 {
-                eprintln!("  render component '{}' ({} patches): {:?}", comp.name, comp.geometry.patches.len(), marks);
+                eprintln!(
+                    "  render component '{}' ({} patches): {:?}",
+                    comp.name,
+                    comp.geometry.patches.len(),
+                    marks
+                );
             }
             CompRender { verts, surfaces }
         })
         .collect();
     if log {
-        eprintln!("  render surfaces + validity rounds: {:.1} s", t0.elapsed().as_secs_f64());
+        eprintln!(
+            "  render surfaces + validity rounds: {:.1} s",
+            t0.elapsed().as_secs_f64()
+        );
     }
     let h = &asset.hierarchy;
     let leaf_level = h.levels.saturating_sub(1);
@@ -899,7 +1064,8 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
             let cr = &comps[f.component.idx()];
             let mut cells: Vec<CellId> = asset.fragment_cells(f).to_vec();
             cells.sort_unstable();
-            let (exts, pats) = cp.boundary_of(&cells, |c| cells.binary_search(&c).is_ok(), &comp.geometry);
+            let (exts, pats) =
+                cp.boundary_of(&cells, |c| cells.binary_search(&c).is_ok(), &comp.geometry);
             let attrs = ExteriorAttrs::new(comp);
             let uv_scale = (p.uv_scale_for)(comp.id);
             let origin = f.mass.com;
@@ -946,9 +1112,11 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                 let inside = if flip { pt.cells.1 } else { pt.cells.0 };
                 for t in &srf.tris {
                     if flip {
-                        m.int_indices.extend_from_slice(&[base + t[0], base + t[2], base + t[1]]);
+                        m.int_indices
+                            .extend_from_slice(&[base + t[0], base + t[2], base + t[1]]);
                     } else {
-                        m.int_indices.extend_from_slice(&[base + t[0], base + t[1], base + t[2]]);
+                        m.int_indices
+                            .extend_from_slice(&[base + t[0], base + t[1], base + t[2]]);
                     }
                     int_owner.push(inside.0);
                 }
@@ -962,7 +1130,8 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                 lods[0] = simplify(&lods[0], s.triangle_budget as usize);
             }
             for k in 1..s.lods.max(1) {
-                let target = ((lods[0].triangle_count() as f64) * s.lod_ratio.powi(k as i32)).ceil() as usize;
+                let target = ((lods[0].triangle_count() as f64) * s.lod_ratio.powi(k as i32)).ceil()
+                    as usize;
                 let l = simplify(&lods[0], target.max(4));
                 lods.push(l);
             }
@@ -970,7 +1139,10 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
         })
         .collect();
     if log {
-        eprintln!("  render fragment meshes + LODs: {:.1} s", t0.elapsed().as_secs_f64());
+        eprintln!(
+            "  render fragment meshes + LODs: {:.1} s",
+            t0.elapsed().as_secs_f64()
+        );
     }
     // render volume deviation (leaf fragments)
     let mut volume_deviation = Vec::new();
@@ -989,15 +1161,27 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
             if it.rebar_points.is_empty() {
                 continue;
             }
-            let dir = if it.rebar.dir.length_squared() > 0.0 { it.rebar.dir.normalize() } else { it.polygons.first().map(|p| p.normal).unwrap_or(DVec3::Y) };
-            let mut sm = StubMesh { interface: it.id, ..Default::default() };
+            let dir = if it.rebar.dir.length_squared() > 0.0 {
+                it.rebar.dir.normalize()
+            } else {
+                it.polygons.first().map(|p| p.normal).unwrap_or(DVec3::Y)
+            };
+            let mut sm = StubMesh {
+                interface: it.id,
+                ..Default::default()
+            };
             for &(c, d) in &it.rebar_points {
                 add_cylinder(&mut sm, c, dir, 0.5 * d, 6.0 * d, 8);
             }
             stubs.push(sm);
         }
     }
-    RenderOut { fragments: frag_meshes, stubs, volume_deviation, uv_mismatch: 0.0 }
+    RenderOut {
+        fragments: frag_meshes,
+        stubs,
+        volume_deviation,
+        uv_mismatch: 0.0,
+    }
 }
 
 fn add_cylinder(sm: &mut StubMesh, c: DVec3, dir: DVec3, r: f64, len: f64, segs: u32) {
@@ -1024,7 +1208,11 @@ fn add_cylinder(sm: &mut StubMesh, c: DVec3, dir: DVec3, r: f64, len: f64, segs:
 /// junctions and patch boundaries are borders because vertices are split
 /// there), so LODs never cross interface boundary loops.
 fn simplify(m: &FragMesh, target_tris: usize) -> FragMesh {
-    let pos32: Vec<[f32; 3]> = m.positions.iter().map(|p| [p.x as f32, p.y as f32, p.z as f32]).collect();
+    let pos32: Vec<[f32; 3]> = m
+        .positions
+        .iter()
+        .map(|p| [p.x as f32, p.y as f32, p.z as f32])
+        .collect();
     let locks = vec![false; pos32.len()];
     let mut out = m.clone();
     let total = m.triangle_count().max(1);
@@ -1033,7 +1221,15 @@ fn simplify(m: &FragMesh, target_tris: usize) -> FragMesh {
             return Vec::new();
         }
         let tgt = ((target_tris as f64 * share).ceil() as usize * 3).max(3);
-        meshopt::simplify_with_locks_decoder(idx, &pos32, &locks, tgt, 0.05, meshopt::SimplifyOptions::LockBorder, None)
+        meshopt::simplify_with_locks_decoder(
+            idx,
+            &pos32,
+            &locks,
+            tgt,
+            0.05,
+            meshopt::SimplifyOptions::LockBorder,
+            None,
+        )
     };
     let es = m.ext_indices.len() as f64 / 3.0 / total as f64;
     out.ext_indices = simplify_part(&m.ext_indices, es);

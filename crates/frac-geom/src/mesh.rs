@@ -4,7 +4,7 @@
 use crate::aabb::Aabb;
 use crate::bvh::Bvh;
 use crate::integrals::VolumeIntegrals;
-use crate::predicates::{orient2d, orient3d, P3};
+use crate::predicates::{P3, orient2d, orient3d};
 use glam::DVec3;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -49,18 +49,30 @@ impl TriMesh {
     }
     pub fn tri_aabb(&self, t: usize) -> Aabb {
         let [a, b, c] = self.tris[t];
-        Aabb::from_points([&self.verts[a as usize], &self.verts[b as usize], &self.verts[c as usize]])
+        Aabb::from_points([
+            &self.verts[a as usize],
+            &self.verts[b as usize],
+            &self.verts[c as usize],
+        ])
     }
     pub fn tri_aabbs(&self) -> Vec<Aabb> {
         (0..self.tris.len()).map(|t| self.tri_aabb(t)).collect()
     }
     pub fn tri_points(&self, t: usize) -> [DVec3; 3] {
         let [a, b, c] = self.tris[t];
-        [self.verts[a as usize], self.verts[b as usize], self.verts[c as usize]]
+        [
+            self.verts[a as usize],
+            self.verts[b as usize],
+            self.verts[c as usize],
+        ]
     }
     pub fn volume_integrals(&self) -> VolumeIntegrals {
         let mut vi = VolumeIntegrals::default();
-        let r = if self.verts.is_empty() { DVec3::ZERO } else { self.aabb().center() };
+        let r = if self.verts.is_empty() {
+            DVec3::ZERO
+        } else {
+            self.aabb().center()
+        };
         for t in 0..self.tris.len() {
             let [a, b, c] = self.tri_points(t);
             vi.add_tet(r, a, b, c);
@@ -116,7 +128,9 @@ impl TriMesh {
         let mut m: BTreeMap<(u32, u32), Vec<u32>> = BTreeMap::new();
         for (t, tri) in self.tris.iter().enumerate() {
             for k in 0..3 {
-                m.entry((tri[k], tri[(k + 1) % 3])).or_default().push(t as u32);
+                m.entry((tri[k], tri[(k + 1) % 3]))
+                    .or_default()
+                    .push(t as u32);
             }
         }
         m
@@ -159,7 +173,9 @@ impl TriMesh {
             }
             i = j;
         }
-        rep.degenerate_tris = (0..self.tris.len()).filter(|&t| self.is_degenerate(t)).count();
+        rep.degenerate_tris = (0..self.tris.len())
+            .filter(|&t| self.is_degenerate(t))
+            .count();
         // vertex manifoldness: the triangles around each vertex form one fan
         let nv = self.verts.len();
         let mut start = vec![0u32; nv + 1];
@@ -254,7 +270,11 @@ impl TriMesh {
 
     /// [`self_intersections`](Self::self_intersections) restricted to the
     /// candidate pairs `keep` accepts (tested before the exact predicate).
-    pub fn self_intersections_where(&self, limit: usize, keep: impl Fn(u32, u32) -> bool) -> Vec<(u32, u32)> {
+    pub fn self_intersections_where(
+        &self,
+        limit: usize,
+        keep: impl Fn(u32, u32) -> bool,
+    ) -> Vec<(u32, u32)> {
         let boxes = self.tri_aabbs();
         let bvh = Bvh::build(&boxes);
         let mut out = Vec::new();
@@ -273,7 +293,8 @@ impl TriMesh {
     /// Merge vertices with bit-identical coordinates; returns new mesh.
     pub fn weld_exact(&self) -> TriMesh {
         // ids by first appearance, so a hash map gives the same mesh
-        let mut map: std::collections::HashMap<[u64; 3], u32> = std::collections::HashMap::with_capacity(self.verts.len());
+        let mut map: std::collections::HashMap<[u64; 3], u32> =
+            std::collections::HashMap::with_capacity(self.verts.len());
         let mut remap = vec![0u32; self.verts.len()];
         let mut verts = Vec::new();
         for (i, v) in self.verts.iter().enumerate() {
@@ -287,7 +308,13 @@ impl TriMesh {
         let tris = self
             .tris
             .iter()
-            .map(|t| [remap[t[0] as usize], remap[t[1] as usize], remap[t[2] as usize]])
+            .map(|t| {
+                [
+                    remap[t[0] as usize],
+                    remap[t[1] as usize],
+                    remap[t[2] as usize],
+                ]
+            })
             .filter(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2])
             .collect();
         TriMesh { verts, tris }
@@ -298,7 +325,13 @@ impl TriMesh {
         if eps <= 0.0 {
             return self.weld_exact();
         }
-        let key = |v: DVec3| [(v.x / eps).floor() as i64, (v.y / eps).floor() as i64, (v.z / eps).floor() as i64];
+        let key = |v: DVec3| {
+            [
+                (v.x / eps).floor() as i64,
+                (v.y / eps).floor() as i64,
+                (v.z / eps).floor() as i64,
+            ]
+        };
         let mut grid: BTreeMap<[i64; 3], Vec<u32>> = BTreeMap::new();
         let mut remap = vec![u32::MAX; self.verts.len()];
         let mut verts: Vec<DVec3> = Vec::new();
@@ -333,7 +366,13 @@ impl TriMesh {
         let tris = self
             .tris
             .iter()
-            .map(|t| [remap[t[0] as usize], remap[t[1] as usize], remap[t[2] as usize]])
+            .map(|t| {
+                [
+                    remap[t[0] as usize],
+                    remap[t[1] as usize],
+                    remap[t[2] as usize],
+                ]
+            })
             .filter(|t| t[0] != t[1] && t[1] != t[2] && t[0] != t[2])
             .collect();
         TriMesh { verts, tris }
@@ -360,18 +399,25 @@ impl TriMesh {
     }
 
     pub fn flipped(&self) -> TriMesh {
-        TriMesh { verts: self.verts.clone(), tris: self.tris.iter().map(|t| [t[0], t[2], t[1]]).collect() }
+        TriMesh {
+            verts: self.verts.clone(),
+            tris: self.tris.iter().map(|t| [t[0], t[2], t[1]]).collect(),
+        }
     }
 
     pub fn transformed(&self, f: impl Fn(DVec3) -> DVec3) -> TriMesh {
-        TriMesh { verts: self.verts.iter().map(|&v| f(v)).collect(), tris: self.tris.clone() }
+        TriMesh {
+            verts: self.verts.iter().map(|&v| f(v)).collect(),
+            tris: self.tris.clone(),
+        }
     }
 
     /// Append another mesh.
     pub fn append(&mut self, o: &TriMesh) {
         let off = self.verts.len() as u32;
         self.verts.extend_from_slice(&o.verts);
-        self.tris.extend(o.tris.iter().map(|t| [t[0] + off, t[1] + off, t[2] + off]));
+        self.tris
+            .extend(o.tris.iter().map(|t| [t[0] + off, t[1] + off, t[2] + off]));
     }
 
     /// Connected components by shared edges; returns per-triangle labels.
@@ -420,7 +466,11 @@ impl TriMesh {
 
     /// Extract the sub-mesh of the given triangles (compacted).
     pub fn submesh(&self, tris: &[u32]) -> TriMesh {
-        TriMesh { verts: self.verts.clone(), tris: tris.iter().map(|&t| self.tris[t as usize]).collect() }.compact()
+        TriMesh {
+            verts: self.verts.clone(),
+            tris: tris.iter().map(|&t| self.tris[t as usize]).collect(),
+        }
+        .compact()
     }
 }
 
@@ -445,7 +495,11 @@ pub fn segment_triangle(p: &P3, q: &P3, a: &P3, b: &P3, c: &P3) -> bool {
 fn dominant_axes(a: &P3, b: &P3, c: &P3) -> (usize, usize) {
     let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    let n = [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+    ];
     let an = [n[0].abs(), n[1].abs(), n[2].abs()];
     if an[0] >= an[1] && an[0] >= an[2] {
         (1, 2)
@@ -469,9 +523,15 @@ fn seg_seg_2d(p: &[f64; 2], q: &[f64; 2], a: &[f64; 2], b: &[f64; 2]) -> bool {
         return true;
     }
     let on = |x: &[f64; 2], y: &[f64; 2], z: &[f64; 2]| {
-        z[0] >= x[0].min(y[0]) && z[0] <= x[0].max(y[0]) && z[1] >= x[1].min(y[1]) && z[1] <= x[1].max(y[1])
+        z[0] >= x[0].min(y[0])
+            && z[0] <= x[0].max(y[0])
+            && z[1] >= x[1].min(y[1])
+            && z[1] <= x[1].max(y[1])
     };
-    (d1 == 0 && on(p, q, a)) || (d2 == 0 && on(p, q, b)) || (d3 == 0 && on(a, b, p)) || (d4 == 0 && on(a, b, q))
+    (d1 == 0 && on(p, q, a))
+        || (d2 == 0 && on(p, q, b))
+        || (d3 == 0 && on(a, b, p))
+        || (d4 == 0 && on(a, b, q))
 }
 
 fn point_in_tri_2d(p: &[f64; 2], a: &[f64; 2], b: &[f64; 2], c: &[f64; 2]) -> bool {
@@ -524,7 +584,11 @@ pub fn tris_intersect(m: &TriMesh, i: usize, j: usize) -> bool {
             // exact plane-side rejection: one triangle strictly on one side
             // of the other's plane cannot meet it
             let strictly_one_side = |p: &[P3; 3], q: &[P3; 3]| {
-                let o = [orient3d(&p[0], &p[1], &p[2], &q[0]), orient3d(&p[0], &p[1], &p[2], &q[1]), orient3d(&p[0], &p[1], &p[2], &q[2])];
+                let o = [
+                    orient3d(&p[0], &p[1], &p[2], &q[0]),
+                    orient3d(&p[0], &p[1], &p[2], &q[1]),
+                    orient3d(&p[0], &p[1], &p[2], &q[2]),
+                ];
                 o[0] != 0 && o[0] == o[1] && o[1] == o[2]
             };
             if strictly_one_side(&b, &a) || strictly_one_side(&a, &b) {
@@ -546,27 +610,49 @@ pub fn tris_intersect(m: &TriMesh, i: usize, j: usize) -> bool {
             let (ps, pi0, pi1, pj0, pj1) = (pt(s), pt(oi[0]), pt(oi[1]), pt(oj[0]), pt(oj[1]));
             // exact rejection: the rest of one triangle strictly on one side
             // of the other's plane leaves only the shared vertex in common
-            let (o0, o1) = (orient3d(&ps, &pi0, &pi1, &pj0), orient3d(&ps, &pi0, &pi1, &pj1));
+            let (o0, o1) = (
+                orient3d(&ps, &pi0, &pi1, &pj0),
+                orient3d(&ps, &pi0, &pi1, &pj1),
+            );
             if o0 != 0 && o0 == o1 {
                 return false;
             }
-            let (q0, q1) = (orient3d(&ps, &pj0, &pj1, &pi0), orient3d(&ps, &pj0, &pj1, &pi1));
+            let (q0, q1) = (
+                orient3d(&ps, &pj0, &pj1, &pi0),
+                orient3d(&ps, &pj0, &pj1, &pi1),
+            );
             if q0 != 0 && q0 == q1 {
                 return false;
             }
             // Opposite edges against the other triangle
-            if segment_triangle(&pi0, &pi1, &ps, &pj0, &pj1) || segment_triangle(&pj0, &pj1, &ps, &pi0, &pi1) {
+            if segment_triangle(&pi0, &pi1, &ps, &pj0, &pj1)
+                || segment_triangle(&pj0, &pj1, &ps, &pi0, &pi1)
+            {
                 return true;
             }
             // Coplanar overlap around the shared vertex
             if orient3d(&ps, &pi0, &pi1, &pj0) == 0 && orient3d(&ps, &pi0, &pi1, &pj1) == 0 {
                 let ax = dominant_axes(&ps, &pi0, &pi1);
-                let (s2, a0, a1, b0, b1) = (pr(&ps, ax), pr(&pi0, ax), pr(&pi1, ax), pr(&pj0, ax), pr(&pj1, ax));
+                let (s2, a0, a1, b0, b1) = (
+                    pr(&ps, ax),
+                    pr(&pi0, ax),
+                    pr(&pi1, ax),
+                    pr(&pj0, ax),
+                    pr(&pj1, ax),
+                );
                 // a small step from the shared vertex into triangle j inside triangle i?
-                let inside = |x: &[f64; 2]| point_in_tri_2d(x, &s2, &a0, &a1) && orient2d(&s2, x, &a0) != 0 && orient2d(&s2, x, &a1) != 0;
+                let inside = |x: &[f64; 2]| {
+                    point_in_tri_2d(x, &s2, &a0, &a1)
+                        && orient2d(&s2, x, &a0) != 0
+                        && orient2d(&s2, x, &a1) != 0
+                };
                 let mid = [(b0[0] + b1[0]) * 0.5, (b0[1] + b1[1]) * 0.5];
                 let mid2 = [(a0[0] + a1[0]) * 0.5, (a0[1] + a1[1]) * 0.5];
-                let inside2 = |x: &[f64; 2]| point_in_tri_2d(x, &s2, &b0, &b1) && orient2d(&s2, x, &b0) != 0 && orient2d(&s2, x, &b1) != 0;
+                let inside2 = |x: &[f64; 2]| {
+                    point_in_tri_2d(x, &s2, &b0, &b1)
+                        && orient2d(&s2, x, &b0) != 0
+                        && orient2d(&s2, x, &b1) != 0
+                };
                 if inside(&mid) || inside2(&mid2) {
                     return true;
                 }
@@ -601,7 +687,14 @@ pub fn box_mesh(lo: DVec3, hi: DVec3) -> TriMesh {
             )
         })
         .collect();
-    let quads = [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]];
+    let quads = [
+        [0, 2, 3, 1],
+        [4, 5, 7, 6],
+        [0, 1, 5, 4],
+        [2, 6, 7, 3],
+        [0, 4, 6, 2],
+        [1, 3, 7, 5],
+    ];
     let mut tris = Vec::new();
     for q in quads {
         tris.push([q[0], q[1], q[2]]);
@@ -614,18 +707,43 @@ pub fn box_mesh(lo: DVec3, hi: DVec3) -> TriMesh {
 pub fn icosphere(center: DVec3, radius: f64, level: u32) -> TriMesh {
     let t = (1.0 + 5f64.sqrt()) / 2.0;
     let mut verts: Vec<DVec3> = [
-        [-1.0, t, 0.0], [1.0, t, 0.0], [-1.0, -t, 0.0], [1.0, -t, 0.0],
-        [0.0, -1.0, t], [0.0, 1.0, t], [0.0, -1.0, -t], [0.0, 1.0, -t],
-        [t, 0.0, -1.0], [t, 0.0, 1.0], [-t, 0.0, -1.0], [-t, 0.0, 1.0],
+        [-1.0, t, 0.0],
+        [1.0, t, 0.0],
+        [-1.0, -t, 0.0],
+        [1.0, -t, 0.0],
+        [0.0, -1.0, t],
+        [0.0, 1.0, t],
+        [0.0, -1.0, -t],
+        [0.0, 1.0, -t],
+        [t, 0.0, -1.0],
+        [t, 0.0, 1.0],
+        [-t, 0.0, -1.0],
+        [-t, 0.0, 1.0],
     ]
     .iter()
     .map(|p| DVec3::from_array(*p).normalize())
     .collect();
     let mut tris: Vec<[u32; 3]> = vec![
-        [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
-        [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
-        [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
-        [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1],
+        [0, 11, 5],
+        [0, 5, 1],
+        [0, 1, 7],
+        [0, 7, 10],
+        [0, 10, 11],
+        [1, 5, 9],
+        [5, 11, 4],
+        [11, 10, 2],
+        [10, 7, 6],
+        [7, 1, 8],
+        [3, 9, 4],
+        [3, 4, 2],
+        [3, 2, 6],
+        [3, 6, 8],
+        [3, 8, 9],
+        [4, 9, 5],
+        [2, 4, 11],
+        [6, 2, 10],
+        [8, 6, 7],
+        [9, 8, 1],
     ];
     for _ in 0..level {
         let mut mid: BTreeMap<(u32, u32), u32> = BTreeMap::new();
@@ -645,7 +763,10 @@ pub fn icosphere(center: DVec3, radius: f64, level: u32) -> TriMesh {
         }
         tris = nt;
     }
-    TriMesh { verts: verts.into_iter().map(|v| center + v * radius).collect(), tris }
+    TriMesh {
+        verts: verts.into_iter().map(|v| center + v * radius).collect(),
+        tris,
+    }
 }
 
 #[cfg(test)]

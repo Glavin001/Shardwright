@@ -188,7 +188,10 @@ pub struct HierarchySettings {
 
 impl Default for HierarchySettings {
     fn default() -> Self {
-        HierarchySettings { level2_target: 0, compactness: 0.5 }
+        HierarchySettings {
+            level2_target: 0,
+            compactness: 0.5,
+        }
     }
 }
 
@@ -204,7 +207,11 @@ pub struct BondSettings {
 
 impl Default for BondSettings {
     fn default() -> Self {
-        BondSettings { loop_simplify: 0.02, spawn_density: 400.0, max_spawn_per_bond: 64 }
+        BondSettings {
+            loop_simplify: 0.02,
+            spawn_density: 400.0,
+            max_spawn_per_bond: 64,
+        }
     }
 }
 
@@ -305,7 +312,12 @@ impl Default for ValidationSettings {
     fn default() -> Self {
         ValidationSettings {
             gates: "all".into(),
-            metrics: vec!["bond_fidelity".into(), "distributions".into(), "collision".into(), "render".into()],
+            metrics: vec![
+                "bond_fidelity".into(),
+                "distributions".into(),
+                "collision".into(),
+                "render".into(),
+            ],
             mass_rays: 160,
             max_hull_vertices: 64,
         }
@@ -314,7 +326,8 @@ impl Default for ValidationSettings {
 
 impl Settings {
     pub fn from_toml(s: &str) -> Result<Settings, crate::FracError> {
-        toml::from_str(s).map_err(|e| crate::FracError::new(crate::Stage::Config, "bake.toml", e.to_string()))
+        toml::from_str(s)
+            .map_err(|e| crate::FracError::new(crate::Stage::Config, "bake.toml", e.to_string()))
     }
     /// Canonical hash of the settings (JSON with sorted keys).
     pub fn hash(&self) -> String {

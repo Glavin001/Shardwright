@@ -101,7 +101,6 @@
 //! represented exactly in that subspace (see `reduce`). Use
 //! [`compute_modes_with`] to force a discretization.
 
-
 mod admm;
 mod clarabel_solver;
 pub mod dump;
@@ -109,9 +108,11 @@ mod level1;
 pub mod problem;
 mod reduce;
 
-pub use level1::{adjusted_rand_index, segment_from_jumps, segment_level1, segment_level1_balanced, Level1};
+pub use level1::{
+    Level1, adjusted_rand_index, segment_from_jumps, segment_level1, segment_level1_balanced,
+};
 
-use problem::{mdot, Problem};
+use problem::{Problem, mdot};
 use std::time::Instant;
 
 /// Free-DOF threshold below which [`Solver::Auto`] uses Clarabel.
@@ -235,7 +236,12 @@ impl ModesOutput {
         if self.discretization != Discretization::CellPolynomial(0) {
             return None;
         }
-        let n_cells = self.nodes.iter().map(|&(_, c)| c as usize + 1).max().unwrap_or(0);
+        let n_cells = self
+            .nodes
+            .iter()
+            .map(|&(_, c)| c as usize + 1)
+            .max()
+            .unwrap_or(0);
         let mut first = vec![usize::MAX; n_cells];
         for (j, &(_, c)) in self.nodes.iter().enumerate() {
             if first[c as usize] == usize::MAX {
@@ -247,17 +253,27 @@ impl ModesOutput {
             pairs
                 .iter()
                 .map(|&(a, b)| {
-                    let (ja, jb) = (first.get(a as usize).copied(), first.get(b as usize).copied());
+                    let (ja, jb) = (
+                        first.get(a as usize).copied(),
+                        first.get(b as usize).copied(),
+                    );
                     match (ja, jb) {
                         (Some(ja), Some(jb)) if ja != usize::MAX && jb != usize::MAX => self
                             .mode_fields
                             .iter()
                             .map(|f| {
                                 let (u, v) = (f[ja], f[jb]);
-                                ((u[0] - v[0]).powi(2) + (u[1] - v[1]).powi(2) + (u[2] - v[2]).powi(2)).sqrt()
+                                ((u[0] - v[0]).powi(2)
+                                    + (u[1] - v[1]).powi(2)
+                                    + (u[2] - v[2]).powi(2))
+                                .sqrt()
                             })
                             .fold(0.0, f64::max),
-                        _ => self.groups.binary_search(&(a.min(b), a.max(b))).map(|g| group_max[g]).unwrap_or(0.0),
+                        _ => self
+                            .groups
+                            .binary_search(&(a.min(b), a.max(b)))
+                            .map(|g| group_max[g])
+                            .unwrap_or(0.0),
                     }
                 })
                 .collect(),
@@ -336,14 +352,19 @@ pub fn compute_modes_with(input: &ModesInput, disc: Discretization) -> Result<Mo
     compute_modes_impl(input, Some(disc))
 }
 
-fn compute_modes_impl(input: &ModesInput, disc: Option<Discretization>) -> Result<ModesOutput, String> {
+fn compute_modes_impl(
+    input: &ModesInput,
+    disc: Option<Discretization>,
+) -> Result<ModesOutput, String> {
     let mut timings = Vec::new();
     let t_all = Instant::now();
     let p = input.params;
     let translational = disc == Some(Discretization::CellPolynomial(0));
     let (mut full, info) = problem::build_full(input, &mut timings, translational)?;
     let disc = disc.unwrap_or(match p.solver {
-        Solver::Auto if full.n >= AUTO_CLARABEL_MAX_DOFS => Discretization::CellPolynomial(AUTO_REDUCED_DEGREE),
+        Solver::Auto if full.n >= AUTO_CLARABEL_MAX_DOFS => {
+            Discretization::CellPolynomial(AUTO_REDUCED_DEGREE)
+        }
         _ => Discretization::Full,
     });
     let (pb, disc_name) = match disc {
@@ -396,7 +417,10 @@ fn compute_modes_impl(input: &ModesInput, disc: Option<Discretization>) -> Resul
     timings.push(("iccm".into(), t_iccm.elapsed().as_secs_f64() * 1e3));
     let mut solver_used = match &backend {
         Backend::Clarabel => "clarabel".to_string(),
-        Backend::Admm(a) => format!("admm(refactorizations={}, rho={:.3e})", a.refactorizations, a.rho),
+        Backend::Admm(a) => format!(
+            "admm(refactorizations={}, rho={:.3e})",
+            a.refactorizations, a.rho
+        ),
     };
     if disc_name != "full" {
         solver_used = format!("{disc_name}+{solver_used}");
@@ -413,7 +437,13 @@ fn compute_modes_impl(input: &ModesInput, disc: Option<Discretization>) -> Resul
         mode_fields.push(
             info.pair_dof
                 .iter()
-                .map(|&d| if d == usize::MAX { [0.0; 3] } else { [uf[d], uf[d + 1], uf[d + 2]] })
+                .map(|&d| {
+                    if d == usize::MAX {
+                        [0.0; 3]
+                    } else {
+                        [uf[d], uf[d + 1], uf[d + 2]]
+                    }
+                })
                 .collect(),
         );
         let gn = pb.group_norms(u);
@@ -483,9 +513,17 @@ impl Schedule {
         let large = matches!(backend, Backend::Admm(_)) && n > p.large_dofs;
         if large {
             let eps = p.eps.max(p.eps_large);
-            Schedule { eps, tol_min: (0.1 * eps).clamp(1e-8, ADMM_TOL_MAX), clarabel_confirm: false }
+            Schedule {
+                eps,
+                tol_min: (0.1 * eps).clamp(1e-8, ADMM_TOL_MAX),
+                clarabel_confirm: false,
+            }
         } else {
-            Schedule { eps: p.eps, tol_min: (0.01 * p.eps).clamp(1e-8, 1e-4), clarabel_confirm: hybrid }
+            Schedule {
+                eps: p.eps,
+                tol_min: (0.01 * p.eps).clamp(1e-8, 1e-4),
+                clarabel_confirm: hybrid,
+            }
         }
     }
 }
@@ -512,7 +550,13 @@ fn starts(pb: &Problem, i: usize, multi_start: bool) -> Vec<Vec<f64>> {
         for &b in &cl[x + 1..] {
             for sign in [1.0, -1.0] {
                 if out.len() < MAX_STARTS {
-                    out.push(pb.init[a].iter().zip(&pb.init[b]).map(|(u, v)| s * (u + sign * v)).collect());
+                    out.push(
+                        pb.init[a]
+                            .iter()
+                            .zip(&pb.init[b])
+                            .map(|(u, v)| s * (u + sign * v))
+                            .collect(),
+                    );
                 }
             }
         }
@@ -520,12 +564,21 @@ fn starts(pb: &Problem, i: usize, multi_start: bool) -> Vec<Vec<f64>> {
     out
 }
 
-fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> Result<IccmResult, String> {
+fn iccm(
+    pb: &Problem,
+    p: &ModesParams,
+    backend: &mut Backend,
+    hybrid: bool,
+) -> Result<IccmResult, String> {
     let n = pb.n;
     let sched = Schedule::new(p, n, backend, hybrid);
     let m = &pb.m;
     // M̂-orthonormal basis of the rigid space (rows are M̂R; recover R)
-    let rigid_basis: Vec<Vec<f64>> = pb.rigid_rows.iter().map(|r| (0..n).map(|i| r[i] / m[i]).collect()).collect();
+    let rigid_basis: Vec<Vec<f64>> = pb
+        .rigid_rows
+        .iter()
+        .map(|r| (0..n).map(|i| r[i] / m[i]).collect())
+        .collect();
     let mut modes: Vec<Vec<f64>> = Vec::new();
     let mut mode_rows: Vec<Vec<f64>> = Vec::new();
     let mut iterations = Vec::new();
@@ -571,10 +624,24 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> R
                 use rayon::prelude::*;
                 cands
                     .into_par_iter()
-                    .map(|c| iccm_mode(pb, p, &sched, &mut Backend::Clarabel, &persistent, &basis, c, i))
+                    .map(|c| {
+                        iccm_mode(
+                            pb,
+                            p,
+                            &sched,
+                            &mut Backend::Clarabel,
+                            &persistent,
+                            &basis,
+                            c,
+                            i,
+                        )
+                    })
                     .collect()
             }
-            _ => cands.into_iter().map(|c| iccm_mode(pb, p, &sched, backend, &persistent, &basis, c, i)).collect(),
+            _ => cands
+                .into_iter()
+                .map(|c| iccm_mode(pb, p, &sched, backend, &persistent, &basis, c, i))
+                .collect(),
         };
         // best (lowest-energy) result over the starts: (energy, u, its, conv)
         let mut best: Option<(f64, Vec<f64>, usize, bool)> = None;
@@ -582,20 +649,27 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> R
             let (u, its, conv) = r?;
             let e = pb.objective(&u);
             if admm::debug_enabled() {
-                eprintln!("[iccm] mode {i} start {si}: energy {e:.6e} iterations {its} converged {conv}");
+                eprintln!(
+                    "[iccm] mode {i} start {si}: energy {e:.6e} iterations {its} converged {conv}"
+                );
             }
             // strictly lower energy (relative margin) replaces: ties keep the first start
             if best.as_ref().is_none_or(|b| e < b.0 * (1.0 - 1e-9)) {
                 best = Some((e, u, its, conv));
             }
         }
-        let (_, u, its, conv) = best.ok_or_else(|| format!("mode {i}: no admissible initial vector"))?;
+        let (_, u, its, conv) =
+            best.ok_or_else(|| format!("mode {i}: no admissible initial vector"))?;
         mode_rows.push((0..n).map(|q| m[q] * u[q]).collect());
         modes.push(u);
         iterations.push(its);
         converged.push(conv);
     }
-    Ok(IccmResult { modes, iterations, converged })
+    Ok(IccmResult {
+        modes,
+        iterations,
+        converged,
+    })
 }
 
 /// ICCM for one mode from the admissible, M̂-unit start `c`. Returns the
@@ -655,7 +729,12 @@ fn iccm_mode(
                     let tc = Instant::now();
                     let r = clarabel_solver::solve(pb, &rows, &rhs)?;
                     if admm::debug_enabled() {
-                        eprintln!("[clarabel] confirm {} iterations ok {} time {:.3}s", r.iterations, r.ok, tc.elapsed().as_secs_f64());
+                        eprintln!(
+                            "[clarabel] confirm {} iterations ok {} time {:.3}s",
+                            r.iterations,
+                            r.ok,
+                            tc.elapsed().as_secs_f64()
+                        );
                     }
                     a.warm_from(pb, &r.u);
                     r
@@ -679,7 +758,10 @@ fn iccm_mode(
         c = u.iter().map(|x| x / nu).collect();
         last_diff = d2.sqrt();
         if admm::debug_enabled() {
-            eprintln!("[iccm] mode {i} it {it} diff {last_diff:.3e} obj {:.6e}", pb.objective(&u));
+            eprintln!(
+                "[iccm] mode {i} it {it} diff {last_diff:.3e} obj {:.6e}",
+                pb.objective(&u)
+            );
         }
         if last_diff <= sched.eps {
             if matches!(backend, Backend::Clarabel) || tol <= sched.tol_min {
@@ -697,7 +779,9 @@ fn iccm_mode(
         c.iter_mut().for_each(|x| *x /= nc);
     }
     if admm::debug_enabled() {
-        eprintln!("[iccm] mode {i}: {its} iterations, {inner_total} inner iterations, converged {conv}");
+        eprintln!(
+            "[iccm] mode {i}: {its} iterations, {inner_total} inner iterations, converged {conv}"
+        );
     }
     let nu = mdot(&u, &u, m).sqrt();
     Ok((u.iter().map(|x| x / nu).collect(), its, conv))

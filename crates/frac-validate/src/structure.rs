@@ -23,7 +23,14 @@ use glam::DVec3;
 const FRICTION: f64 = 0.6;
 
 pub fn is_structural(r: ComponentRole) -> bool {
-    matches!(r, ComponentRole::Column | ComponentRole::Beam | ComponentRole::Slab | ComponentRole::Connection | ComponentRole::Generic)
+    matches!(
+        r,
+        ComponentRole::Column
+            | ComponentRole::Beam
+            | ComponentRole::Slab
+            | ComponentRole::Connection
+            | ComponentRole::Generic
+    )
 }
 
 pub struct SupportReport {
@@ -51,7 +58,11 @@ pub fn support(asset: &Asset) -> SupportReport {
         }
     }
     if !grounded.iter().any(|&g| g) {
-        return SupportReport { applicable: false, unsupported_structural: Vec::new(), unsupported_other: Vec::new() };
+        return SupportReport {
+            applicable: false,
+            unsupported_structural: Vec::new(),
+            unsupported_other: Vec::new(),
+        };
     }
     let role = |i: usize| asset.components[comp_of(FragmentId(r0 + i as u32))].role;
     let reach = |only_structural: bool| -> Vec<bool> {
@@ -72,11 +83,21 @@ pub fn support(asset: &Asset) -> SupportReport {
         seen
     };
     let (rs, ra) = (reach(true), reach(false));
-    let name = |i: usize| asset.components[comp_of(FragmentId(r0 + i as u32))].name.clone();
+    let name = |i: usize| {
+        asset.components[comp_of(FragmentId(r0 + i as u32))]
+            .name
+            .clone()
+    };
     SupportReport {
         applicable: true,
-        unsupported_structural: (0..n).filter(|&i| is_structural(role(i)) && !rs[i]).map(name).collect(),
-        unsupported_other: (0..n).filter(|&i| !is_structural(role(i)) && !ra[i]).map(name).collect(),
+        unsupported_structural: (0..n)
+            .filter(|&i| is_structural(role(i)) && !rs[i])
+            .map(name)
+            .collect(),
+        unsupported_other: (0..n)
+            .filter(|&i| !is_structural(role(i)) && !ra[i])
+            .map(name)
+            .collect(),
     }
 }
 
@@ -90,13 +111,34 @@ pub struct JointCheck {
 
 /// Self-weight joint utilization at L0 (empty when not applicable).
 pub fn self_weight(asset: &Asset, lib: &MaterialLibrary) -> Vec<JointCheck> {
-    if asset.hierarchy.levels == 0 || !asset.level_bonds(0).any(|b| matches!(b.b, FragmentOrWorld::World)) {
+    if asset.hierarchy.levels == 0
+        || !asset
+            .level_bonds(0)
+            .any(|b| matches!(b.b, FragmentOrWorld::World))
+    {
         return Vec::new();
     }
-    let solver = ReferenceSolver { lib, model: StiffnessModel::Spec };
-    let lc = LoadCase { name: "self_weight".into(), gravity: DVec3::new(0.0, -9.81, 0.0), forces: Vec::new(), force_points: Vec::new(), moments: Vec::new(), fixed: Vec::new() };
+    let solver = ReferenceSolver {
+        lib,
+        model: StiffnessModel::Spec,
+    };
+    let lc = LoadCase {
+        name: "self_weight".into(),
+        gravity: DVec3::new(0.0, -9.81, 0.0),
+        forces: Vec::new(),
+        force_points: Vec::new(),
+        moments: Vec::new(),
+        fixed: Vec::new(),
+    };
     let res = solver.static_solve(asset, 0, &lc);
-    let mat_of = |f: FragmentId| asset.fragment(f).material_mix.first().map(|x| x.0).unwrap_or(MaterialId(0));
+    let mat_of = |f: FragmentId| {
+        asset
+            .fragment(f)
+            .material_mix
+            .first()
+            .map(|x| x.0)
+            .unwrap_or(MaterialId(0))
+    };
     let strengths = |m: MaterialId| {
         let mm = lib.material(m);
         let ft = mm.tensile_strength.unwrap_or(1e6);
@@ -105,11 +147,15 @@ pub fn self_weight(asset: &Asset, lib: &MaterialLibrary) -> Vec<JointCheck> {
     let mut out = Vec::new();
     for bf in &res.bond_forces {
         let b = &asset.bonds[bf.bond.idx()];
-        let FragmentOrWorld::Fragment(fb) = b.b else { continue };
+        let FragmentOrWorld::Fragment(fb) = b.b else {
+            continue;
+        };
         let (fta, fca) = strengths(mat_of(b.a));
         let (ftb, fcb) = strengths(mat_of(fb));
         let comp = b.composition.first();
-        let kind = comp.map(|c| c.kind).unwrap_or(InterfaceKind::ComponentConnection);
+        let kind = comp
+            .map(|c| c.kind)
+            .unwrap_or(InterfaceKind::ComponentConnection);
         let ft = comp
             .and_then(|c| c.interface_material)
             .and_then(|m| lib.interface_material(m))
@@ -121,7 +167,8 @@ pub fn self_weight(asset: &Asset, lib: &MaterialLibrary) -> Vec<JointCheck> {
         let sn = t.dot(b.normal); // > 0 tension
         let tau = (t - b.normal * sn).length();
         let c = b.extent.half[0].max(b.extent.half[1]);
-        let sb = bf.moment.dot(b.frame_u).abs() * c / b.i_uu.max(1e-300) + bf.moment.dot(b.frame_v).abs() * c / b.i_vv.max(1e-300);
+        let sb = bf.moment.dot(b.frame_u).abs() * c / b.i_uu.max(1e-300)
+            + bf.moment.dot(b.frame_v).abs() * c / b.i_vv.max(1e-300);
         let _ = area;
         let (ut, mode_t) = if ft > 0.0 {
             ((sn + sb).max(0.0) / ft, "tension")
@@ -132,9 +179,25 @@ pub fn self_weight(asset: &Asset, lib: &MaterialLibrary) -> Vec<JointCheck> {
         };
         let uc = (-sn + sb).max(0.0) / fc;
         let us = tau / (ft + FRICTION * (-sn).max(0.0)).max(1e-300);
-        let (u, mode) = [(ut, mode_t), (uc, "compression"), (us, "shear")].into_iter().fold((0.0, "none"), |acc, x| if x.0 > acc.0 { x } else { acc });
-        let name = |f: FragmentId| asset.components[asset.fragment(f).component.idx()].name.clone();
-        out.push(JointCheck { a: name(b.a), b: name(fb), kind, utilization: if tau == 0.0 && sn == 0.0 && sb == 0.0 { 0.0 } else { u }, mode });
+        let (u, mode) = [(ut, mode_t), (uc, "compression"), (us, "shear")]
+            .into_iter()
+            .fold((0.0, "none"), |acc, x| if x.0 > acc.0 { x } else { acc });
+        let name = |f: FragmentId| {
+            asset.components[asset.fragment(f).component.idx()]
+                .name
+                .clone()
+        };
+        out.push(JointCheck {
+            a: name(b.a),
+            b: name(fb),
+            kind,
+            utilization: if tau == 0.0 && sn == 0.0 && sb == 0.0 {
+                0.0
+            } else {
+                u
+            },
+            mode,
+        });
     }
     out
 }

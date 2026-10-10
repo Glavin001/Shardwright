@@ -7,9 +7,11 @@
 pub mod contacts;
 
 use frac_core::*;
-use frac_geom::integrals::sym_eigen3;
-use frac_geom::polygon::{area_integrals, newell, outer, plane_basis, simplify_loop, AreaIntegrals};
 use frac_geom::DVec3;
+use frac_geom::integrals::sym_eigen3;
+use frac_geom::polygon::{
+    AreaIntegrals, area_integrals, newell, outer, plane_basis, simplify_loop,
+};
 use glam::DMat3;
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
@@ -27,7 +29,10 @@ pub fn patch_polygon(verts: &[DVec3], p: &Patch, flip: bool) -> Polygon3 {
             v
         })
         .collect();
-    Polygon3 { loops, normal: if flip { -p.normal } else { p.normal } }
+    Polygon3 {
+        loops,
+        normal: if flip { -p.normal } else { p.normal },
+    }
 }
 
 pub fn polygon_integrals(p: &Polygon3) -> AreaIntegrals {
@@ -37,7 +42,10 @@ pub fn polygon_integrals(p: &Polygon3) -> AreaIntegrals {
 /// Intersect rebar polylines with an interface's polygons. Returns the
 /// crossing summary (count, steel area, area-weighted direction oriented
 /// along the interface normal) and the crossing points with diameters.
-pub fn rebar_crossings(polys: &[Polygon3], rebar: &[frac_core::input::RebarSpec]) -> (RebarCrossing, Vec<(DVec3, f64)>) {
+pub fn rebar_crossings(
+    polys: &[Polygon3],
+    rebar: &[frac_core::input::RebarSpec],
+) -> (RebarCrossing, Vec<(DVec3, f64)>) {
     let mut rc = RebarCrossing::default();
     let mut pts = Vec::new();
     for bar in rebar {
@@ -178,7 +186,9 @@ pub fn build_bonds(asset: &Asset, p: &BondParams) -> BondOutput {
             ai.area_vec *= sgn;
             acc.ai.add(&ai);
             acc.an += ai.area_vec;
-            *acc.comp.entry((it.kind, it.interface_material)).or_default() += it.area;
+            *acc.comp
+                .entry((it.kind, it.interface_material))
+                .or_default() += it.area;
             let mut rb = it.rebar;
             rb.dir *= sgn;
             acc.rebar.add(&rb);
@@ -202,7 +212,11 @@ pub fn build_bonds(asset: &Asset, p: &BondParams) -> BondOutput {
             let centroid = acc.ai.centroid();
             let anl = acc.an.length();
             let normal = if anl > 0.0 { acc.an / anl } else { DVec3::Y };
-            let planarity = if area > 0.0 { (anl / area).min(1.0) } else { 1.0 };
+            let planarity = if area > 0.0 {
+                (anl / area).min(1.0)
+            } else {
+                1.0
+            };
             // in-plane second moment tensor about centroid, projected
             let c2 = acc.ai.central_second();
             let (u0, v0) = plane_basis(normal);
@@ -216,7 +230,13 @@ pub fn build_bonds(asset: &Asset, p: &BondParams) -> BondOutput {
             let mut fu = u0 * ct + v0 * st;
             // canonical sign for determinism
             let am = fu.abs();
-            let lead = if am.x >= am.y && am.x >= am.z { fu.x } else if am.y >= am.z { fu.y } else { fu.z };
+            let lead = if am.x >= am.y && am.x >= am.z {
+                fu.x
+            } else if am.y >= am.z {
+                fu.y
+            } else {
+                fu.z
+            };
             if lead < 0.0 {
                 fu = -fu;
             }
@@ -227,7 +247,12 @@ pub fn build_bonds(asset: &Asset, p: &BondParams) -> BondOutput {
             let i_uv = fu.dot(c2 * fv);
             let j = i_uu + i_vv;
             // extent: project polygon vertices into the frame
-            let (mut umin, mut umax, mut vmin, mut vmax) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+            let (mut umin, mut umax, mut vmin, mut vmax) = (
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            );
             for poly in &acc.polys {
                 for l in &poly.loops {
                     for &x in l {
@@ -251,21 +276,43 @@ pub fn build_bonds(asset: &Asset, p: &BondParams) -> BondOutput {
                 Obb2::default()
             };
             let dist_a = (fa.mass.com - centroid).dot(normal).abs();
-            let dist_b = if b >= 0 { (h.fragments[b as usize].mass.com - centroid).dot(normal).abs() } else { 0.0 };
+            let dist_b = if b >= 0 {
+                (h.fragments[b as usize].mass.com - centroid)
+                    .dot(normal)
+                    .abs()
+            } else {
+                0.0
+            };
             // composition: dominant first, max 4
-            let mut comp: Vec<((InterfaceKind, Option<MaterialId>), f64)> = acc.comp.into_iter().collect();
+            let mut comp: Vec<((InterfaceKind, Option<MaterialId>), f64)> =
+                acc.comp.into_iter().collect();
             comp.sort_by(|x, y| y.1.partial_cmp(&x.1).unwrap().then(x.0.cmp(&y.0)));
             let comp_total: f64 = comp.iter().map(|c| c.1).sum::<f64>().max(1e-300);
             let composition: SmallVec<[BondComposition; 4]> = comp
                 .iter()
                 .take(4)
-                .map(|((k, m), w)| BondComposition { kind: *k, interface_material: *m, fraction: (w / comp_total) as f32 })
+                .map(|((k, m), w)| BondComposition {
+                    kind: *k,
+                    interface_material: *m,
+                    fraction: (w / comp_total) as f32,
+                })
                 .collect();
             // Weibull strength scale (mean-normalized)
             let dom_mat = composition.first().and_then(|c| c.interface_material);
-            let base_mat = fa.material_mix.first().map(|m| m.0).unwrap_or(MaterialId(0));
+            let base_mat = fa
+                .material_mix
+                .first()
+                .map(|m| m.0)
+                .unwrap_or(MaterialId(0));
             let m = (p.weibull)(dom_mat, base_mat).max(0.5);
-            let u = unit_f64(stable_hash(&[p.seed, level as u64, a as u64, b as u64, 0x5eed])).clamp(1e-12, 1.0 - 1e-12);
+            let u = unit_f64(stable_hash(&[
+                p.seed,
+                level as u64,
+                a as u64,
+                b as u64,
+                0x5eed,
+            ]))
+            .clamp(1e-12, 1.0 - 1e-12);
             let raw = libm::pow(-libm::log(u), 1.0 / m);
             let strength_scale = (raw / libm::tgamma(1.0 + 1.0 / m)) as f32;
             // boundary loops
@@ -281,14 +328,24 @@ pub fn build_bonds(asset: &Asset, p: &BondParams) -> BondOutput {
             let loop_end = loops.len() as u32;
             // spawn samples
             let sp_begin = spawn.len() as u32;
-            let n_sp = ((area * p.spawn_density).ceil() as u32).clamp(1, p.max_spawn_per_bond.max(1));
-            sample_polys(&acc.polys, n_sp, stable_hash(&[p.seed, level as u64, a as u64, b as u64, 0x5a]), &mut spawn);
+            let n_sp =
+                ((area * p.spawn_density).ceil() as u32).clamp(1, p.max_spawn_per_bond.max(1));
+            sample_polys(
+                &acc.polys,
+                n_sp,
+                stable_hash(&[p.seed, level as u64, a as u64, b as u64, 0x5a]),
+                &mut spawn,
+            );
             let sp_end = spawn.len() as u32;
             bonds.push(Bond {
                 id,
                 level: level as u8,
                 a: FragmentId(a),
-                b: if b >= 0 { FragmentOrWorld::Fragment(FragmentId(b as u32)) } else { FragmentOrWorld::World },
+                b: if b >= 0 {
+                    FragmentOrWorld::Fragment(FragmentId(b as u32))
+                } else {
+                    FragmentOrWorld::World
+                },
                 area,
                 centroid,
                 normal,
@@ -329,7 +386,11 @@ pub fn build_bonds(asset: &Asset, p: &BondParams) -> BondOutput {
         if pb >= 0 && pb as u32 == pa.0 {
             continue; // internal to the parent fragment
         }
-        let key = if pb >= 0 && (pb as u32) < pa.0 { (pb as u32, pa.0 as i64) } else { (pa.0, pb) };
+        let key = if pb >= 0 && (pb as u32) < pa.0 {
+            (pb as u32, pa.0 as i64)
+        } else {
+            (pa.0, pb)
+        };
         if let Some(&pid) = per_level_index[level - 1].get(&key) {
             bonds[i].parent_bond = Some(BondId(pid));
             children[pid as usize].push(BondId(i as u32));
@@ -341,7 +402,13 @@ pub fn build_bonds(asset: &Asset, p: &BondParams) -> BondOutput {
         bond_children.extend(ch);
         bonds[i].child_bonds = s..bond_children.len() as u32;
     }
-    BondOutput { bonds, bond_children, loops, spawn, interior_area }
+    BondOutput {
+        bonds,
+        bond_children,
+        loops,
+        spawn,
+        interior_area,
+    }
 }
 
 #[inline]
@@ -437,7 +504,10 @@ fn sample_polys(polys: &[Polygon3], n: u32, seed: u64, out: &mut Vec<SpawnPoint>
                 let s = r1.sqrt();
                 let x = t.0 * (1.0 - s) + t.1 * (s * (1.0 - r2)) + t.2 * (s * r2);
                 // reject samples falling in holes (negative fan triangles cover them)
-                if polys.iter().any(|p| p.normal.dot(t.3) > 0.999 && point_in_polygon3(p, x)) {
+                if polys
+                    .iter()
+                    .any(|p| p.normal.dot(t.3) > 0.999 && point_in_polygon3(p, x))
+                {
                     out.push(SpawnPoint { p: x, n: t.3 });
                     taken += 1;
                 }

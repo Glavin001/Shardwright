@@ -16,7 +16,9 @@ fn column() -> Case {
 }
 
 fn anchors(c: &Case) -> Vec<u32> {
-    (0..c.mesh.verts.len() as u32).filter(|&v| c.mesh.verts[v as usize][1] < 1e-9).collect()
+    (0..c.mesh.verts.len() as u32)
+        .filter(|&v| c.mesh.verts[v as usize][1] < 1e-9)
+        .collect()
 }
 
 fn timing(disc: Option<Discretization>, prefix: &str, budget_s: f64) {
@@ -25,10 +27,25 @@ fn timing(disc: Option<Discretization>, prefix: &str, budget_s: f64) {
     assert!(c.mesh.tets.len() > 15_000, "{}", c.mesh.tets.len());
     let a = anchors(&c);
     let t = std::time::Instant::now();
-    let out = run(&c, &|_, _| 1.0, &a, ModesParams { k: 10, discretization: disc, ..Default::default() });
+    let out = run(
+        &c,
+        &|_, _| 1.0,
+        &a,
+        ModesParams {
+            k: 10,
+            discretization: disc,
+            ..Default::default()
+        },
+    );
     let secs = t.elapsed().as_secs_f64();
     let l1 = segment_level1(c.n_cells, &out.groups, &out.max_jump(), 4);
-    eprintln!("RC column: {} tets, {} unknowns, {} -> {secs:.2} s, level1 n={}", c.mesh.tets.len(), out.n_dofs, out.solver_used, l1.n_fragments);
+    eprintln!(
+        "RC column: {} tets, {} unknowns, {} -> {secs:.2} s, level1 n={}",
+        c.mesh.tets.len(),
+        out.n_dofs,
+        out.solver_used,
+        l1.n_fragments
+    );
     assert!(out.solver_used.starts_with(prefix), "{}", out.solver_used);
     assert_eq!(out.jumps.len(), 10);
     assert!(secs < budget_s, "compute_modes took {secs:.1} s");
@@ -51,19 +68,40 @@ fn rc_column_p1_k10_timing() {
 fn rc_column_variants() {
     let c = column();
     let a = anchors(&c);
-    let k: usize = std::env::var("RC_K").ok().and_then(|v| v.parse().ok()).unwrap_or(10);
-    let degs: Vec<u8> = std::env::var("RC_DEG").ok().map(|v| v.split(',').map(|x| x.parse().unwrap()).collect()).unwrap_or(vec![1, 2]);
-    for (disc, solver) in degs.iter().map(|&d| (Discretization::CellPolynomial(d), Solver::Admm)) {
+    let k: usize = std::env::var("RC_K")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10);
+    let degs: Vec<u8> = std::env::var("RC_DEG")
+        .ok()
+        .map(|v| v.split(',').map(|x| x.parse().unwrap()).collect())
+        .unwrap_or(vec![1, 2]);
+    for (disc, solver) in degs
+        .iter()
+        .map(|&d| (Discretization::CellPolynomial(d), Solver::Admm))
+    {
         let input = ModesInput {
             mesh: &c.mesh,
             tet_material: &c.mats,
             tet_cell: &c.cells,
             group_weight: &|_, _| 1.0,
             anchored_vertices: &a,
-            params: ModesParams { k, solver, discretization: None, ..Default::default() },
+            params: ModesParams {
+                k,
+                solver,
+                discretization: None,
+                ..Default::default()
+            },
         };
         let t = std::time::Instant::now();
         let out = compute_modes_with(&input, disc).unwrap();
-        eprintln!("{disc:?} {}: {:.2} s iters {:?} conv {:?} timings {:?}", out.solver_used, t.elapsed().as_secs_f64(), out.iterations, out.converged, out.timings_ms);
+        eprintln!(
+            "{disc:?} {}: {:.2} s iters {:?} conv {:?} timings {:?}",
+            out.solver_used,
+            t.elapsed().as_secs_f64(),
+            out.iterations,
+            out.converged,
+            out.timings_ms
+        );
     }
 }

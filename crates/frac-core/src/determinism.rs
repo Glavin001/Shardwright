@@ -35,8 +35,20 @@ pub fn stable_hash_hex(bytes: &[u8]) -> String {
 }
 
 /// RNG for `(asset_seed, component, stage, level, variant)` (spec §10).
-pub fn rng_for(asset_seed: u64, component: u32, stage: RngStage, level: u32, variant: u32) -> ChaCha8Rng {
-    ChaCha8Rng::seed_from_u64(stable_hash(&[asset_seed, component as u64, stage as u64, level as u64, variant as u64]))
+pub fn rng_for(
+    asset_seed: u64,
+    component: u32,
+    stage: RngStage,
+    level: u32,
+    variant: u32,
+) -> ChaCha8Rng {
+    ChaCha8Rng::seed_from_u64(stable_hash(&[
+        asset_seed,
+        component as u64,
+        stage as u64,
+        level as u64,
+        variant as u64,
+    ]))
 }
 
 /// Derive a sub-stream seed.

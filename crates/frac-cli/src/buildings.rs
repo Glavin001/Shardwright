@@ -60,18 +60,35 @@ impl Default for FrameBuilding {
     }
 }
 
-fn part(name: String, lo: DVec3, hi: DVec3, material: &str, role: &str, anchored: bool) -> BuildingPart {
+fn part(
+    name: String,
+    lo: DVec3,
+    hi: DVec3,
+    material: &str,
+    role: &str,
+    anchored: bool,
+) -> BuildingPart {
     let meta = PartMeta {
         material: Some(material.into()),
         component_role: Some(role.into()),
         anchor_below: anchored.then_some(lo.y),
         ..Default::default()
     };
-    BuildingPart { name, mesh: box_at(lo, hi), material: material.into(), meta }
+    BuildingPart {
+        name,
+        mesh: box_at(lo, hi),
+        material: material.into(),
+        meta,
+    }
 }
 
 fn conn(a: &str, b: &str, kind: &str) -> ConnectionSpec {
-    ConnectionSpec { a: a.into(), b: b.into(), kind: kind.into(), interface_material: None }
+    ConnectionSpec {
+        a: a.into(),
+        b: b.into(),
+        kind: kind.into(),
+        interface_material: None,
+    }
 }
 
 impl FrameBuilding {
@@ -100,28 +117,62 @@ impl FrameBuilding {
             for i in 0..=nx {
                 for j in 0..=nz {
                     let (x, z) = (i as f64 * s, j as f64 * s);
-                    parts.push(part(format!("f{f}_col_{i}_{j}"), DVec3::new(x, y0, z), DVec3::new(x + c, yt, z + c), "concrete_c30", "column", ground));
+                    parts.push(part(
+                        format!("f{f}_col_{i}_{j}"),
+                        DVec3::new(x, y0, z),
+                        DVec3::new(x + c, yt, z + c),
+                        "concrete_c30",
+                        "column",
+                        ground,
+                    ));
                 }
             }
             // beams framing into the column faces, along x and z
             for j in 0..=nz {
                 for i in 0..nx {
                     let (x, z) = (i as f64 * s, j as f64 * s);
-                    parts.push(part(format!("f{f}_beamx_{i}_{j}"), DVec3::new(x + c, yb, z), DVec3::new(x + s, yt, z + c), "concrete_c30", "beam", false));
+                    parts.push(part(
+                        format!("f{f}_beamx_{i}_{j}"),
+                        DVec3::new(x + c, yb, z),
+                        DVec3::new(x + s, yt, z + c),
+                        "concrete_c30",
+                        "beam",
+                        false,
+                    ));
                 }
             }
             for i in 0..=nx {
                 for j in 0..nz {
                     let (x, z) = (i as f64 * s, j as f64 * s);
-                    parts.push(part(format!("f{f}_beamz_{i}_{j}"), DVec3::new(x, yb, z + c), DVec3::new(x + c, yt, z + s), "concrete_c30", "beam", false));
+                    parts.push(part(
+                        format!("f{f}_beamz_{i}_{j}"),
+                        DVec3::new(x, yb, z + c),
+                        DVec3::new(x + c, yt, z + s),
+                        "concrete_c30",
+                        "beam",
+                        false,
+                    ));
                 }
             }
             // slab on columns and beams
-            parts.push(part(format!("f{f}_slab"), DVec3::new(0.0, yt, 0.0), DVec3::new(xmax, y0 + self.storey, zmax), "concrete_c30", "slab", false));
+            parts.push(part(
+                format!("f{f}_slab"),
+                DVec3::new(0.0, yt, 0.0),
+                DVec3::new(xmax, y0 + self.storey, zmax),
+                "concrete_c30",
+                "slab",
+                false,
+            ));
             // perimeter infill walls (non-load-bearing brick) with a window,
             // split into four cuboids around the opening plus a glass pane
             let off = 0.5 * (c - self.wall);
-            let facade = |name: String, along_x: bool, line: f64, a0: f64, a1: f64, parts: &mut Vec<BuildingPart>, conns: &mut Vec<ConnectionSpec>| {
+            let facade = |name: String,
+                          along_x: bool,
+                          line: f64,
+                          a0: f64,
+                          a1: f64,
+                          parts: &mut Vec<BuildingPart>,
+                          conns: &mut Vec<ConnectionSpec>| {
                 let mid = 0.5 * (a0 + a1);
                 let (wl, wr) = (mid - 0.5 * self.window[0], mid + 0.5 * self.window[0]);
                 let (ws, wh) = (y0 + self.sill, y0 + self.sill + self.window[1]);
@@ -139,15 +190,30 @@ impl FrameBuilding {
                     ("sill", bx(wl, wr, y0, ws, t0, t1)),
                     ("head", bx(wl, wr, wh, yb, t0, t1)),
                 ];
-                let names: Vec<String> = pieces.iter().map(|(k, _)| format!("{name}_{k}")).collect();
+                let names: Vec<String> =
+                    pieces.iter().map(|(k, _)| format!("{name}_{k}")).collect();
                 for ((k, (lo, hi)), n) in pieces.iter().zip(&names) {
                     let anchored = ground && (*k == "left" || *k == "right" || *k == "sill");
-                    parts.push(self.brick(part(n.clone(), *lo, *hi, "brick_clay", "wall", anchored)));
+                    parts.push(self.brick(part(
+                        n.clone(),
+                        *lo,
+                        *hi,
+                        "brick_clay",
+                        "wall",
+                        anchored,
+                    )));
                 }
                 let gm = 0.5 * (t0 + t1);
                 let (glo, ghi) = bx(wl, wr, ws, wh, gm - 0.005, gm + 0.005);
                 let gname = format!("{name}_glass");
-                parts.push(part(gname.clone(), glo, ghi, "glass_annealed", "glazing", false));
+                parts.push(part(
+                    gname.clone(),
+                    glo,
+                    ghi,
+                    "glass_annealed",
+                    "glazing",
+                    false,
+                ));
                 for n in &names {
                     conns.push(conn(&gname, n, "adhesive"));
                     for m in &names {
@@ -161,17 +227,49 @@ impl FrameBuilding {
             for j in [0, nz] {
                 for i in 0..nx {
                     let line = j as f64 * s;
-                    let names = facade(format!("f{f}_wallx_{i}_{j}"), true, line, i as f64 * s + c, (i + 1) as f64 * s, &mut parts, &mut conns);
-                    conns.push(conn(&names[0], &format!("f{f}_col_{i}_{j}"), "mortar_joint"));
-                    conns.push(conn(&names[1], &format!("f{f}_col_{}_{j}", i + 1), "mortar_joint"));
+                    let names = facade(
+                        format!("f{f}_wallx_{i}_{j}"),
+                        true,
+                        line,
+                        i as f64 * s + c,
+                        (i + 1) as f64 * s,
+                        &mut parts,
+                        &mut conns,
+                    );
+                    conns.push(conn(
+                        &names[0],
+                        &format!("f{f}_col_{i}_{j}"),
+                        "mortar_joint",
+                    ));
+                    conns.push(conn(
+                        &names[1],
+                        &format!("f{f}_col_{}_{j}", i + 1),
+                        "mortar_joint",
+                    ));
                 }
             }
             for i in [0, nx] {
                 for j in 0..nz {
                     let line = i as f64 * s;
-                    let names = facade(format!("f{f}_wallz_{i}_{j}"), false, line, j as f64 * s + c, (j + 1) as f64 * s, &mut parts, &mut conns);
-                    conns.push(conn(&names[0], &format!("f{f}_col_{i}_{j}"), "mortar_joint"));
-                    conns.push(conn(&names[1], &format!("f{f}_col_{i}_{}", j + 1), "mortar_joint"));
+                    let names = facade(
+                        format!("f{f}_wallz_{i}_{j}"),
+                        false,
+                        line,
+                        j as f64 * s + c,
+                        (j + 1) as f64 * s,
+                        &mut parts,
+                        &mut conns,
+                    );
+                    conns.push(conn(
+                        &names[0],
+                        &format!("f{f}_col_{i}_{j}"),
+                        "mortar_joint",
+                    ));
+                    conns.push(conn(
+                        &names[1],
+                        &format!("f{f}_col_{i}_{}", j + 1),
+                        "mortar_joint",
+                    ));
                 }
             }
             // interior drywall partitions along the inner column lines (x)
@@ -180,7 +278,14 @@ impl FrameBuilding {
                     let (x, z) = (i as f64 * s, j as f64 * s);
                     let zo = z + 0.5 * (c - self.partition);
                     let n = format!("f{f}_partition_{i}_{j}");
-                    parts.push(part(n.clone(), DVec3::new(x + c, y0, zo), DVec3::new(x + s, yb, zo + self.partition), "drywall", "cosmetic", ground));
+                    parts.push(part(
+                        n.clone(),
+                        DVec3::new(x + c, y0, zo),
+                        DVec3::new(x + s, yb, zo + self.partition),
+                        "drywall",
+                        "cosmetic",
+                        ground,
+                    ));
                     conns.push(conn(&n, &format!("f{f}_col_{i}_{j}"), "adhesive"));
                     conns.push(conn(&n, &format!("f{f}_col_{}_{j}", i + 1), "adhesive"));
                 }
@@ -190,15 +295,36 @@ impl FrameBuilding {
         let ytop = self.floors as f64 * self.storey;
         let [ph, pt] = self.parapet;
         let edges = [
-            ("parapet_s", DVec3::new(0.0, ytop, 0.0), DVec3::new(xmax, ytop + ph, pt)),
-            ("parapet_n", DVec3::new(0.0, ytop, zmax - pt), DVec3::new(xmax, ytop + ph, zmax)),
-            ("parapet_w", DVec3::new(0.0, ytop, pt), DVec3::new(pt, ytop + ph, zmax - pt)),
-            ("parapet_e", DVec3::new(xmax - pt, ytop, pt), DVec3::new(xmax, ytop + ph, zmax - pt)),
+            (
+                "parapet_s",
+                DVec3::new(0.0, ytop, 0.0),
+                DVec3::new(xmax, ytop + ph, pt),
+            ),
+            (
+                "parapet_n",
+                DVec3::new(0.0, ytop, zmax - pt),
+                DVec3::new(xmax, ytop + ph, zmax),
+            ),
+            (
+                "parapet_w",
+                DVec3::new(0.0, ytop, pt),
+                DVec3::new(pt, ytop + ph, zmax - pt),
+            ),
+            (
+                "parapet_e",
+                DVec3::new(xmax - pt, ytop, pt),
+                DVec3::new(xmax, ytop + ph, zmax - pt),
+            ),
         ];
         for (n, lo, hi) in edges {
             parts.push(self.brick(part(n.into(), lo, hi, "brick_clay", "cosmetic", false)));
         }
-        for (a, b) in [("parapet_w", "parapet_s"), ("parapet_w", "parapet_n"), ("parapet_e", "parapet_s"), ("parapet_e", "parapet_n")] {
+        for (a, b) in [
+            ("parapet_w", "parapet_s"),
+            ("parapet_w", "parapet_n"),
+            ("parapet_e", "parapet_s"),
+            ("parapet_e", "parapet_n"),
+        ] {
             conns.push(conn(a, b, "mortar_joint"));
         }
         (parts, conns)

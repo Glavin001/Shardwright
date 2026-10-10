@@ -35,7 +35,10 @@
 
 use frac_fem::{ElasticMaterial, TetMesh};
 use frac_geom::{DVec3, TriMesh};
-use frac_modes::{compute_modes_with, segment_level1, Discretization, ModesInput, ModesOutput, ModesParams, Solver};
+use frac_modes::{
+    Discretization, ModesInput, ModesOutput, ModesParams, Solver, compute_modes_with,
+    segment_level1,
+};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
@@ -168,8 +171,10 @@ impl Parser<'_> {
                                 b'n' => out.push('\n'),
                                 b't' => out.push('\t'),
                                 b'u' => {
-                                    let h = std::str::from_utf8(&self.s[self.i..self.i + 4]).map_err(|e| e.to_string())?;
-                                    let cp = u32::from_str_radix(h, 16).map_err(|e| e.to_string())?;
+                                    let h = std::str::from_utf8(&self.s[self.i..self.i + 4])
+                                        .map_err(|e| e.to_string())?;
+                                    let cp =
+                                        u32::from_str_radix(h, 16).map_err(|e| e.to_string())?;
                                     out.push(char::from_u32(cp).unwrap_or('?'));
                                     self.i += 4;
                                 }
@@ -178,10 +183,16 @@ impl Parser<'_> {
                         }
                         Some(_) => {
                             let start = self.i;
-                            while self.i < self.s.len() && self.s[self.i] != b'"' && self.s[self.i] != b'\\' {
+                            while self.i < self.s.len()
+                                && self.s[self.i] != b'"'
+                                && self.s[self.i] != b'\\'
+                            {
                                 self.i += 1;
                             }
-                            out.push_str(std::str::from_utf8(&self.s[start..self.i]).map_err(|e| e.to_string())?);
+                            out.push_str(
+                                std::str::from_utf8(&self.s[start..self.i])
+                                    .map_err(|e| e.to_string())?,
+                            );
                         }
                     }
                 }
@@ -200,18 +211,28 @@ impl Parser<'_> {
             }
             Some(_) => {
                 let start = self.i;
-                while self.i < self.s.len() && matches!(self.s[self.i], b'0'..=b'9' | b'-' | b'+' | b'.' | b'e' | b'E') {
+                while self.i < self.s.len()
+                    && matches!(
+                        self.s[self.i],
+                        b'0'..=b'9' | b'-' | b'+' | b'.' | b'e' | b'E'
+                    )
+                {
                     self.i += 1;
                 }
                 let t = std::str::from_utf8(&self.s[start..self.i]).map_err(|e| e.to_string())?;
-                t.parse::<f64>().map(Json::Num).map_err(|_| format!("bad number '{t}' at byte {start}"))
+                t.parse::<f64>()
+                    .map(Json::Num)
+                    .map_err(|_| format!("bad number '{t}' at byte {start}"))
             }
         }
     }
 }
 
 fn parse_json(text: &str) -> Result<Json, String> {
-    let mut p = Parser { s: text.as_bytes(), i: 0 };
+    let mut p = Parser {
+        s: text.as_bytes(),
+        i: 0,
+    };
     let v = p.value()?;
     p.ws();
     if p.i != p.s.len() {
@@ -317,7 +338,15 @@ fn write_run(o: &mut Out, name: &str, out: &ModesOutput, n_cells: u32, targets: 
     o.key("iterations", false);
     o.nums(out.iterations.iter().map(|&x| x as f64));
     o.key("converged", false);
-    let _ = write!(o.0, "[{}]", out.converged.iter().map(|b| b.to_string()).collect::<Vec<_>>().join(","));
+    let _ = write!(
+        o.0,
+        "[{}]",
+        out.converged
+            .iter()
+            .map(|b| b.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
     o.key("n_dofs", false);
     let _ = write!(o.0, "{}", out.n_dofs);
     o.key("solver_used", false);
@@ -337,7 +366,11 @@ fn write_run(o: &mut Out, name: &str, out: &ModesOutput, n_cells: u32, targets: 
             o.0.push(',');
         }
         let l1 = segment_level1(n_cells, &out.groups, &mj, t);
-        let _ = write!(o.0, "{{\"target\":{t},\"n_fragments\":{},\"hit_target\":{},\"sigma\":", l1.n_fragments, l1.hit_target);
+        let _ = write!(
+            o.0,
+            "{{\"target\":{t},\"n_fragments\":{},\"hit_target\":{},\"sigma\":",
+            l1.n_fragments, l1.hit_target
+        );
         o.num(l1.sigma);
         o.key("labels", false);
         o.nums(l1.labels.iter().map(|&x| x as f64));
@@ -387,7 +420,11 @@ fn run() -> Result<(), String> {
             .collect();
         let tris = idx_list::<3>(solid.get("tris").ok_or("solid.tris missing")?)?;
         let h = inp.get("h").ok_or("'h' is required with 'solid'")?.num()?;
-        let max_tets = inp.get("max_tets").map(|v| v.num()).transpose()?.unwrap_or(0.0) as usize;
+        let max_tets = inp
+            .get("max_tets")
+            .map(|v| v.num())
+            .transpose()?
+            .unwrap_or(0.0) as usize;
         let m = frac_fem::tetrahedralize(&TriMesh { verts, tris }, h, max_tets);
         if m.tets.is_empty() {
             return Err("tetrahedralization produced no tets".into());
@@ -434,9 +471,18 @@ fn run() -> Result<(), String> {
         };
         let mat = match inp.get("material") {
             Some(m) => ElasticMaterial::isotropic(
-                m.get("youngs").map(|v| v.num()).transpose()?.unwrap_or(200e9),
-                m.get("poisson").map(|v| v.num()).transpose()?.unwrap_or(0.3),
-                m.get("density").map(|v| v.num()).transpose()?.unwrap_or(7850.0),
+                m.get("youngs")
+                    .map(|v| v.num())
+                    .transpose()?
+                    .unwrap_or(200e9),
+                m.get("poisson")
+                    .map(|v| v.num())
+                    .transpose()?
+                    .unwrap_or(0.3),
+                m.get("density")
+                    .map(|v| v.num())
+                    .transpose()?
+                    .unwrap_or(7850.0),
             ),
             None => ElasticMaterial::isotropic(200e9, 0.3, 7850.0),
         };
@@ -483,7 +529,11 @@ fn run() -> Result<(), String> {
         let weight = |_: u32, _: u32| 1.0;
 
         let discs: Vec<String> = match inp.get("discretizations") {
-            Some(j) => j.arr()?.iter().map(|v| v.str().map(str::to_string)).collect::<Result<_, _>>()?,
+            Some(j) => j
+                .arr()?
+                .iter()
+                .map(|v| v.str().map(str::to_string))
+                .collect::<Result<_, _>>()?,
             None => vec!["cell-p0".into()],
         };
         let targets = match inp.get("level1_targets") {

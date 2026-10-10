@@ -37,10 +37,38 @@ fn check(out: &ClipOutput, ncells: usize, expect_volume: f64) {
         for (&(a, b), &n) in &de {
             let m = de.get(&(b, a)).copied().unwrap_or(0);
             if n != m {
-                eprintln!("cell {c}: edge ({a},{b}) {:?} -> {:?} used {n} rev {m}", out.keys[a as usize], out.keys[b as usize]);
-                eprintln!("  pa {:?} pb {:?}", out.verts[a as usize], out.verts[b as usize]);
-                for p in polys { if p.contains(&a) || p.contains(&b) { eprintln!("  poly {:?}", p.iter().map(|&i| out.keys[i as usize]).collect::<Vec<_>>()); } }
-                for pt in &out.patches { if pt.loops.iter().any(|l| l.contains(&a) || l.contains(&b)) { eprintln!("  patch cells {:?} face {} loops {:?}", pt.cells, pt.face, pt.loops.iter().map(|l| l.iter().map(|&i| out.keys[i as usize]).collect::<Vec<_>>()).collect::<Vec<_>>()); } }
+                eprintln!(
+                    "cell {c}: edge ({a},{b}) {:?} -> {:?} used {n} rev {m}",
+                    out.keys[a as usize], out.keys[b as usize]
+                );
+                eprintln!(
+                    "  pa {:?} pb {:?}",
+                    out.verts[a as usize], out.verts[b as usize]
+                );
+                for p in polys {
+                    if p.contains(&a) || p.contains(&b) {
+                        eprintln!(
+                            "  poly {:?}",
+                            p.iter().map(|&i| out.keys[i as usize]).collect::<Vec<_>>()
+                        );
+                    }
+                }
+                for pt in &out.patches {
+                    if pt.loops.iter().any(|l| l.contains(&a) || l.contains(&b)) {
+                        eprintln!(
+                            "  patch cells {:?} face {} loops {:?}",
+                            pt.cells,
+                            pt.face,
+                            pt.loops
+                                .iter()
+                                .map(|l| l
+                                    .iter()
+                                    .map(|&i| out.keys[i as usize])
+                                    .collect::<Vec<_>>())
+                                .collect::<Vec<_>>()
+                        );
+                    }
+                }
                 panic!("not closed");
             }
         }
@@ -53,12 +81,21 @@ fn check(out: &ClipOutput, ncells: usize, expect_volume: f64) {
         assert!(vi.volume > -1e-12, "cell {c} negative volume {}", vi.volume);
         total += vi.volume;
     }
-    assert!((total / expect_volume - 1.0).abs() < 1e-9, "volume {total} vs {expect_volume}");
+    assert!(
+        (total / expect_volume - 1.0).abs() < 1e-9,
+        "volume {total} vs {expect_volume}"
+    );
 }
 
 fn seeds_in(rng: &mut rand_chacha::ChaCha8Rng, lo: DVec3, hi: DVec3, n: usize) -> Vec<[f64; 3]> {
     (0..n)
-        .map(|_| [rng.gen_range(lo.x..hi.x), rng.gen_range(lo.y..hi.y), rng.gen_range(lo.z..hi.z)])
+        .map(|_| {
+            [
+                rng.gen_range(lo.x..hi.x),
+                rng.gen_range(lo.y..hi.y),
+                rng.gen_range(lo.z..hi.z),
+            ]
+        })
         .collect()
 }
 
@@ -85,7 +122,14 @@ fn sphere_voronoi() {
 
 fn l_shape() -> TriMesh {
     // union of boxes, built as a single closed mesh: extrude an L polygon
-    let poly = [[0.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0], [1.0, 2.0], [0.0, 2.0]];
+    let poly = [
+        [0.0, 0.0],
+        [2.0, 0.0],
+        [2.0, 1.0],
+        [1.0, 1.0],
+        [1.0, 2.0],
+        [0.0, 2.0],
+    ];
     extrude(&poly, 0.0, 0.7)
 }
 
@@ -137,7 +181,11 @@ fn grid_seeds_on_box_degenerate() {
     for i in 0..4 {
         for j in 0..4 {
             for k in 0..4 {
-                seeds.push([0.25 + 0.5 * i as f64, 0.25 + 0.5 * j as f64, 0.25 + 0.5 * k as f64]);
+                seeds.push([
+                    0.25 + 0.5 * i as f64,
+                    0.25 + 0.5 * j as f64,
+                    0.25 + 0.5 * k as f64,
+                ]);
             }
         }
     }
@@ -155,7 +203,16 @@ fn bricks_box_complex() {
         // build as union of 4 boxes (non-overlapping, sharing faces) then weld:
         // easier: extrude a polygon with a hole is not supported by extrude();
         // use a U-shaped outline instead (window touching the top).
-        let poly = [[0.0, 0.0], [3.0, 0.0], [3.0, 2.0], [2.0, 2.0], [2.0, 0.6], [1.0, 0.6], [1.0, 2.0], [0.0, 2.0]];
+        let poly = [
+            [0.0, 0.0],
+            [3.0, 0.0],
+            [3.0, 2.0],
+            [2.0, 2.0],
+            [2.0, 0.6],
+            [1.0, 0.6],
+            [1.0, 2.0],
+            [0.0, 2.0],
+        ];
         m.append(&extrude(&poly, 0.0, 0.2));
         m
     };
@@ -167,7 +224,11 @@ fn bricks_box_complex() {
     let rows = 8;
     for r in 0..rows {
         let y0 = if r == 0 { -big } else { r as f64 * bh };
-        let y1 = if r == rows - 1 { big } else { (r + 1) as f64 * bh };
+        let y1 = if r == rows - 1 {
+            big
+        } else {
+            (r + 1) as f64 * bh
+        };
         let off = if r % 2 == 0 { 0.0 } else { bw * 0.5 };
         let mut xs = vec![-big];
         let mut x = off + bw;
@@ -230,7 +291,14 @@ fn perf_10k_cells() {
     let t1 = t0.elapsed();
     let out = Clipper::new(&m, &cx).run().unwrap();
     let t2 = t0.elapsed();
-    eprintln!("complex {:?} clip {:?} verts {} ext {} patches {}", t1, t2 - t1, out.verts.len(), out.ext.len(), out.patches.len());
+    eprintln!(
+        "complex {:?} clip {:?} verts {} ext {} patches {}",
+        t1,
+        t2 - t1,
+        out.verts.len(),
+        out.ext.len(),
+        out.patches.len()
+    );
     check(&out, cx.cells.len(), m.signed_volume());
 }
 
@@ -238,7 +306,15 @@ fn perf_10k_cells() {
 fn regression_quantized_3028() {
     let m = box_mesh(DVec3::ZERO, DVec3::ONE);
     let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(3028);
-    let mut seeds: Vec<[f64; 3]> = (0..59).map(|_| [rng.gen_range(0..8) as f64 / 8.0 + 0.0625, rng.gen_range(0..8) as f64 / 8.0 + 0.0625, rng.gen_range(0..8) as f64 / 8.0]).collect();
+    let mut seeds: Vec<[f64; 3]> = (0..59)
+        .map(|_| {
+            [
+                rng.gen_range(0..8) as f64 / 8.0 + 0.0625,
+                rng.gen_range(0..8) as f64 / 8.0 + 0.0625,
+                rng.gen_range(0..8) as f64 / 8.0,
+            ]
+        })
+        .collect();
     seeds.sort_by(|a, b| a.partial_cmp(b).unwrap());
     seeds.dedup();
     let cx = Complex::voronoi(&seeds, [0.0; 3], [1.0; 3]).unwrap();

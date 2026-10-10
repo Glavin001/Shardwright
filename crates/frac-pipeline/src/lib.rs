@@ -13,9 +13,9 @@ pub mod manifold;
 pub mod oracle;
 pub mod report;
 
-use assemble::{add_anchors, add_contacts, assemble, asset_bbox, BuiltComponent};
+use assemble::{BuiltComponent, add_anchors, add_contacts, assemble, asset_bbox};
 use frac_cells::cellset::{CellSet, CellSetParams};
-use frac_cells::recipes::{build_cells, CellParams, MasonryLayout, Recipe};
+use frac_cells::recipes::{CellParams, MasonryLayout, Recipe, build_cells};
 use frac_core::input::{AuthoringMeta, InputScene};
 use frac_core::*;
 use frac_geom::DVec3;
@@ -44,17 +44,28 @@ pub struct PipelineOutput {
 
 fn recipe_for(lib: &MaterialLibrary, m: MaterialId, meta: &frac_core::input::PartMeta) -> Recipe {
     let mat = lib.material(m);
-    let name = meta.recipe.clone().or_else(|| mat.recipe.clone()).unwrap_or_else(|| "clustered_voronoi".into());
+    let name = meta
+        .recipe
+        .clone()
+        .or_else(|| mat.recipe.clone())
+        .unwrap_or_else(|| "clustered_voronoi".into());
     let mut r = Recipe::from_name(&name).unwrap_or(Recipe::ClusteredVoronoi);
     match &mut r {
         Recipe::Masonry(layout) => {
-            if let Some(v) = meta.masonry_layout.clone().or_else(|| mat.masonry_layout.clone()) {
+            if let Some(v) = meta
+                .masonry_layout
+                .clone()
+                .or_else(|| mat.masonry_layout.clone())
+            {
                 if let Ok(l) = serde_json::from_value::<MasonryLayout>(v) {
                     *layout = l;
                 }
             }
         }
-        Recipe::Wood { stretch, fine_stretch } => {
+        Recipe::Wood {
+            stretch,
+            fine_stretch,
+        } => {
             if let Some(gs) = mat.grain_stretch {
                 *stretch = gs;
                 *fine_stretch = gs * 1.5;
@@ -71,21 +82,39 @@ fn recipe_for(lib: &MaterialLibrary, m: MaterialId, meta: &frac_core::input::Par
 }
 
 /// Run the full pipeline for one variant.
-pub fn run(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary) -> Result<PipelineOutput, FracError> {
+pub fn run(
+    input: &InputSpec,
+    settings: &Settings,
+    lib: &MaterialLibrary,
+) -> Result<PipelineOutput, FracError> {
     run_with(input, settings, lib, false)
 }
 
 /// [`run`], optionally keeping the f64 render meshes in the output (for
 /// diagnostics; they are dropped by default to bound peak memory).
-pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, keep_render: bool) -> Result<PipelineOutput, FracError> {
+pub fn run_with(
+    input: &InputSpec,
+    settings: &Settings,
+    lib: &MaterialLibrary,
+    keep_render: bool,
+) -> Result<PipelineOutput, FracError> {
     let mut timings: Vec<StageTiming> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
     let t0 = Instant::now();
     let log = std::env::var_os("FRAC_LOG").is_some();
     let tick = |name: &str, t: &mut Instant, timings: &mut Vec<StageTiming>| {
-        timings.push(StageTiming { stage: name.into(), ms: t.elapsed().as_secs_f64() * 1e3 });
+        timings.push(StageTiming {
+            stage: name.into(),
+            ms: t.elapsed().as_secs_f64() * 1e3,
+        });
         if log {
-            eprintln!("[{}] {name}: {:.1} s (total {:.1} s), rss {:.0} MB", input.name, t.elapsed().as_secs_f64(), t0.elapsed().as_secs_f64(), rss_mb());
+            eprintln!(
+                "[{}] {name}: {:.1} s (total {:.1} s), rss {:.0} MB",
+                input.name,
+                t.elapsed().as_secs_f64(),
+                t0.elapsed().as_secs_f64(),
+                rss_mb()
+            );
         }
         *t = Instant::now();
     };
@@ -100,11 +129,18 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
     warnings.extend(ing.warnings.iter().cloned());
     tick("ingest", &mut t, &mut timings);
     // keep only parts that ingested; map indices
-    let ok_parts: Vec<usize> = (0..ing.parts.len()).filter(|&i| ing.parts[i].failed.is_none()).collect();
+    let ok_parts: Vec<usize> = (0..ing.parts.len())
+        .filter(|&i| ing.parts[i].failed.is_none())
+        .collect();
     if ok_parts.is_empty() {
-        return Err(FracError::new(Stage::Ingest, input.name.clone(), "no valid parts"));
+        return Err(FracError::new(
+            Stage::Ingest,
+            input.name.clone(),
+            "no valid parts",
+        ));
     }
-    let part_index: std::collections::BTreeMap<usize, usize> = ok_parts.iter().enumerate().map(|(k, &i)| (i, k)).collect();
+    let part_index: std::collections::BTreeMap<usize, usize> =
+        ok_parts.iter().enumerate().map(|(k, &i)| (i, k)).collect();
     // ---- Stage 2: cells per component (parallel)
     let built: Vec<(BuiltComponent, Vec<String>)> = ok_parts
         .par_iter()
@@ -114,9 +150,20 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
             let mat = lib.material(p.material);
             let mut w = Vec::new();
             let recipe = recipe_for(lib, p.material, &p.meta);
-            let density = p.meta.analysis_cells_per_m3.or(mat.analysis_cells_per_m3).unwrap_or(settings.cells.target_analysis_cells_per_m3);
-            let na = ((p.volume * density).round() as usize).clamp(settings.cells.min_analysis_cells as usize, settings.cells.max_analysis_cells as usize);
-            let fpa = p.meta.fine_per_analysis.or(mat.fine_per_analysis).unwrap_or(settings.cells.fine_per_analysis) as usize;
+            let density = p
+                .meta
+                .analysis_cells_per_m3
+                .or(mat.analysis_cells_per_m3)
+                .unwrap_or(settings.cells.target_analysis_cells_per_m3);
+            let na = ((p.volume * density).round() as usize).clamp(
+                settings.cells.min_analysis_cells as usize,
+                settings.cells.max_analysis_cells as usize,
+            );
+            let fpa = p
+                .meta
+                .fine_per_analysis
+                .or(mat.fine_per_analysis)
+                .unwrap_or(settings.cells.fine_per_analysis) as usize;
             let grain = p.meta.grain.map(DVec3::from_array).or_else(|| {
                 if mat.anisotropy.is_some() || matches!(recipe, Recipe::Wood { .. }) {
                     let (_, axes, _) = frac_cells::recipes::principal_axes(&p.solid);
@@ -152,15 +199,24 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
             let mut unfractured = false;
             let mut res = build_cells(&p.solid, &params);
             if let Err(e) = &res {
-                w.push(format!("component '{}': cell construction failed ({e}); exported unfractured", p.name));
+                w.push(format!(
+                    "component '{}': cell construction failed ({e}); exported unfractured",
+                    p.name
+                ));
                 unfractured = true;
-                let single = CellParams { recipe: Recipe::Steel, ..params };
+                let single = CellParams {
+                    recipe: Recipe::Steel,
+                    ..params
+                };
                 res = build_cells(&p.solid, &single);
             }
             let mut cells: CellSet = match res {
                 Ok(b) => b.cells,
                 Err(e) => {
-                    w.push(format!("component '{}': single-cell fallback failed: {e}", p.name));
+                    w.push(format!(
+                        "component '{}': single-cell fallback failed: {e}",
+                        p.name
+                    ));
                     CellSet::default()
                 }
             };
@@ -182,7 +238,10 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
                 cells.merge_groups(&groups, &csp);
                 cells.finalize_clusters();
             }
-            let joint = mat.joint_interface_material.as_ref().map(|j| (InterfaceKind::MortarJoint, lib.interface_material_id(j)));
+            let joint = mat
+                .joint_interface_material
+                .as_ref()
+                .map(|j| (InterfaceKind::MortarJoint, lib.interface_material_id(j)));
             let (surface, render_surface) = match &p.render_surface {
                 Some((m, a)) => (a.clone(), Some(m.clone())),
                 None => (p.surface.clone(), None),
@@ -226,10 +285,26 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
         material_library_version: lib.library_version.clone(),
     };
     let infos = assemble(&mut asset, builts, lib);
-    let contacts: Vec<(usize, usize)> = ing.contacts.iter().filter_map(|&(a, b)| Some((*part_index.get(&a)?, *part_index.get(&b)?))).collect();
-    warnings.extend(add_contacts(&mut asset, &contacts, &input.meta.connections, lib, settings.ingest.contact_tolerance, settings.ingest.contact_cos));
+    let contacts: Vec<(usize, usize)> = ing
+        .contacts
+        .iter()
+        .filter_map(|&(a, b)| Some((*part_index.get(&a)?, *part_index.get(&b)?)))
+        .collect();
+    warnings.extend(add_contacts(
+        &mut asset,
+        &contacts,
+        &input.meta.connections,
+        lib,
+        settings.ingest.contact_tolerance,
+        settings.ingest.contact_cos,
+    ));
     let ground = settings.ground_height.or(input.meta.ground_height);
-    add_anchors(&mut asset, &metas, ground, settings.ingest.contact_tolerance);
+    add_anchors(
+        &mut asset,
+        &metas,
+        ground,
+        settings.ingest.contact_tolerance,
+    );
     tick("interfaces", &mut t, &mut timings);
     // ---- Stage 3/4/5: L1 (modes or agglomeration), L2, hierarchy
     let levels = frac_hierarchy::level_kinds(settings.levels);
@@ -264,13 +339,24 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
         }
         let comp = &asset.components[ci];
         let na = infos[ci].n_analysis as usize;
-        let l2 = if settings.hierarchy.level2_target > 0 && (settings.hierarchy.level2_target as usize) < na {
-            let ac = &asset.analysis_cells[comp.analysis_cells.start as usize..comp.analysis_cells.end as usize];
+        let l2 = if settings.hierarchy.level2_target > 0
+            && (settings.hierarchy.level2_target as usize) < na
+        {
+            let ac = &asset.analysis_cells
+                [comp.analysis_cells.start as usize..comp.analysis_cells.end as usize];
             let c: Vec<DVec3> = ac.iter().map(|a| a.mass.com).collect();
             let v: Vec<f64> = ac.iter().map(|a| a.mass.volume).collect();
-            let l = frac_hierarchy::agglomerate(&c, &v, adj, settings.hierarchy.level2_target as usize, settings.hierarchy.compactness, Some(&r.labels));
+            let l = frac_hierarchy::agglomerate(
+                &c,
+                &v,
+                adj,
+                settings.hierarchy.level2_target as usize,
+                settings.hierarchy.compactness,
+                Some(&r.labels),
+            );
             let mut l = frac_hierarchy::connected_labels(&l, adj);
-            let (moves, left) = manifold::repair_labels(comp, &infos[ci], adj, &mut l, Some(&r.labels));
+            let (moves, left) =
+                manifold::repair_labels(comp, &infos[ci], adj, &mut l, Some(&r.labels));
             if left > 0 {
                 warnings.push(format!("component '{}': level 2 manifold repair moved {moves} analysis cells, {left} defects left", comp.name));
             }
@@ -288,7 +374,13 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
         });
     }
     let bbox = asset_bbox(&asset);
-    asset.hierarchy = frac_hierarchy::build_hierarchy(&asset.cells, &parts, settings.levels, &bbox, settings.collision.min_rigid_size);
+    asset.hierarchy = frac_hierarchy::build_hierarchy(
+        &asset.cells,
+        &parts,
+        settings.levels,
+        &bbox,
+        settings.collision.min_rigid_size,
+    );
     tick("hierarchy", &mut t, &mut timings);
     // ---- Stage 6/10: bonds and spawn data
     let weibull = |im: Option<MaterialId>, m: MaterialId| -> f64 { lib.weibull(im.unwrap_or(m)) };
@@ -312,8 +404,13 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
     // (cells, hierarchy, bonds; no hulls) and stops, for collision
     // experiments with `prefracture hulls`
     if let Some(p) = std::env::var_os("FRAC_STOP_BEFORE_COLLISION") {
-        frac_io::write_asset_json(&asset, std::path::Path::new(&p)).map_err(|e| FracError::new(Stage::Export, input.name.clone(), e.to_string()))?;
-        return Err(FracError::new(Stage::Export, input.name.clone(), "stopped before collision (FRAC_STOP_BEFORE_COLLISION)"));
+        frac_io::write_asset_json(&asset, std::path::Path::new(&p))
+            .map_err(|e| FracError::new(Stage::Export, input.name.clone(), e.to_string()))?;
+        return Err(FracError::new(
+            Stage::Export,
+            input.name.clone(),
+            "stopped before collision (FRAC_STOP_BEFORE_COLLISION)",
+        ));
     }
     // ---- Stage 8: collision
     let cp = collision_params(settings);
@@ -350,23 +447,47 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
     let render = if keep_render { Some(render) } else { None };
     frac_io::release_free_memory();
     if log {
-        eprintln!("[{}] glb scene: {:.1} s", input.name, tg.elapsed().as_secs_f64());
+        eprintln!(
+            "[{}] glb scene: {:.1} s",
+            input.name,
+            tg.elapsed().as_secs_f64()
+        );
     }
-    let gltf = frac_io::write_glb_owned(scene, &frac_io::GltfOptions { meshopt_compression: settings.render.meshopt_compression })
-        .map_err(|e| FracError::new(Stage::Export, "glb", e.to_string()))?;
+    let gltf = frac_io::write_glb_owned(
+        scene,
+        &frac_io::GltfOptions {
+            meshopt_compression: settings.render.meshopt_compression,
+        },
+    )
+    .map_err(|e| FracError::new(Stage::Export, "glb", e.to_string()))?;
     if let Some(e) = report.timings.iter_mut().find(|x| x.stage == "export") {
         e.ms += tg.elapsed().as_secs_f64() * 1e3;
     }
     if log {
-        eprintln!("[{}] glb: {:.1} s, rss {:.0} MB", input.name, tg.elapsed().as_secs_f64(), rss_mb());
+        eprintln!(
+            "[{}] glb: {:.1} s, rss {:.0} MB",
+            input.name,
+            tg.elapsed().as_secs_f64(),
+            rss_mb()
+        );
     }
     report.total_ms = t0.elapsed().as_secs_f64() * 1e3;
     report.payload_bytes = (gltf.len(), physics.len());
-    Ok(PipelineOutput { asset, gltf, physics, report, render })
+    Ok(PipelineOutput {
+        asset,
+        gltf,
+        physics,
+        report,
+        render,
+    })
 }
 
 /// Render meshes of a baked asset with the bake settings (stage 9).
-pub fn render_asset(asset: &Asset, settings: &Settings, lib: &MaterialLibrary) -> frac_render::RenderOut {
+pub fn render_asset(
+    asset: &Asset,
+    settings: &Settings,
+    lib: &MaterialLibrary,
+) -> frac_render::RenderOut {
     let noise_for = |c: ComponentId| -> Option<frac_render::NoiseSpec> {
         let comp = &asset.components[c.idx()];
         let mat = lib.material(comp.material);
@@ -382,9 +503,23 @@ pub fn render_asset(asset: &Asset, settings: &Settings, lib: &MaterialLibrary) -
             },
         })
     };
-    let chip_for = |c: ComponentId| -> f64 { lib.material(asset.components[c.idx()].material).chipping_ratio.unwrap_or(0.0) };
-    let uv_for = |c: ComponentId| -> f64 { lib.material(asset.components[c.idx()].material).interior_uv_scale.unwrap_or(1.0) };
-    let rp = frac_render::RenderParams { settings: &settings.render, seed: settings.seed, noise_for: &noise_for, chipping_for: &chip_for, uv_scale_for: &uv_for };
+    let chip_for = |c: ComponentId| -> f64 {
+        lib.material(asset.components[c.idx()].material)
+            .chipping_ratio
+            .unwrap_or(0.0)
+    };
+    let uv_for = |c: ComponentId| -> f64 {
+        lib.material(asset.components[c.idx()].material)
+            .interior_uv_scale
+            .unwrap_or(1.0)
+    };
+    let rp = frac_render::RenderParams {
+        settings: &settings.render,
+        seed: settings.seed,
+        noise_for: &noise_for,
+        chipping_for: &chip_for,
+        uv_scale_for: &uv_for,
+    };
     frac_render::build_render(asset, &rp)
 }
 
@@ -393,7 +528,11 @@ pub fn render_asset(asset: &Asset, settings: &Settings, lib: &MaterialLibrary) -
 fn rss_mb() -> f64 {
     std::fs::read_to_string("/proc/self/statm")
         .ok()
-        .and_then(|x| x.split_whitespace().nth(1).and_then(|v| v.parse::<f64>().ok()))
+        .and_then(|x| {
+            x.split_whitespace()
+                .nth(1)
+                .and_then(|v| v.parse::<f64>().ok())
+        })
         .map(|pages| pages * 4096.0 / 1048576.0)
         .unwrap_or(0.0)
 }

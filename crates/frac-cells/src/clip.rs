@@ -11,7 +11,7 @@
 
 use crate::complex::Complex;
 use crate::delaunay::NONE;
-use crate::planes::{LineKey, PlaneId, P3};
+use crate::planes::{LineKey, P3, PlaneId};
 use crate::tri2d;
 use frac_geom::bvh::Bvh;
 use frac_geom::{Aabb, DVec3, TriMesh};
@@ -55,22 +55,35 @@ pub fn triangulate_poly(verts: &[DVec3], poly: &[u32]) -> Vec<[u32; 3]> {
     let pts: Vec<DVec3> = poly.iter().map(|&v| verts[v as usize]).collect();
     let n = frac_geom::polygon::newell(&pts);
     if n.length_squared() == 0.0 {
-        return (1..poly.len() - 1).map(|k| [poly[0], poly[k], poly[k + 1]]).collect();
+        return (1..poly.len() - 1)
+            .map(|k| [poly[0], poly[k], poly[k + 1]])
+            .collect();
     }
     let proj = frac_geom::polygon::drop_axis(n);
     let p2: Vec<[f64; 2]> = pts.iter().map(|&p| proj(p)).collect();
-    tri2d::triangulate(&p2, &[(0..poly.len()).collect()]).into_iter().map(|t| [poly[t[0]], poly[t[1]], poly[t[2]]]).collect()
+    tri2d::triangulate(&p2, &[(0..poly.len()).collect()])
+        .into_iter()
+        .map(|t| [poly[t[0]], poly[t[1]], poly[t[2]]])
+        .collect()
 }
 
 /// The vertex of an exactly collinear triangle that lies strictly between
 /// the other two, with the outer pair: `(w, u, v)`.
 fn collinear_middle(verts: &[DVec3], t: [u32; 3]) -> Option<(u32, u32, u32)> {
     let p = |i: u32| verts[i as usize].to_array();
-    if t[0] == t[1] || t[1] == t[2] || t[0] == t[2] || !frac_geom::predicates::collinear3(&p(t[0]), &p(t[1]), &p(t[2])) {
+    if t[0] == t[1]
+        || t[1] == t[2]
+        || t[0] == t[2]
+        || !frac_geom::predicates::collinear3(&p(t[0]), &p(t[1]), &p(t[2]))
+    {
         return None;
     }
     let d = |a: u32, b: u32| verts[a as usize].distance_squared(verts[b as usize]);
-    let k = (0..3).max_by(|&i, &j| d(t[(i + 1) % 3], t[(i + 2) % 3]).total_cmp(&d(t[(j + 1) % 3], t[(j + 2) % 3]))).unwrap();
+    let k = (0..3)
+        .max_by(|&i, &j| {
+            d(t[(i + 1) % 3], t[(i + 2) % 3]).total_cmp(&d(t[(j + 1) % 3], t[(j + 2) % 3]))
+        })
+        .unwrap();
     Some((t[k], t[(k + 1) % 3], t[(k + 2) % 3]))
 }
 
@@ -86,7 +99,10 @@ fn resolve_t_junctions(verts: &[DVec3], ext: &mut Vec<ExtPolyOut>, patches: &mut
     for _round in 0..8 {
         // undirected edge -> vertices strictly inside it
         let mut ins: BTreeMap<(u32, u32), BTreeSet<u32>> = BTreeMap::new();
-        let tris = ext.iter().flat_map(|e| e.tris.iter()).chain(patches.iter().flat_map(|p| p.tris.iter()));
+        let tris = ext
+            .iter()
+            .flat_map(|e| e.tris.iter())
+            .chain(patches.iter().flat_map(|p| p.tris.iter()));
         for &t in tris {
             if let Some((w, u, v)) = collinear_middle(verts, t) {
                 ins.entry((u.min(v), u.max(v))).or_default().insert(w);
@@ -105,7 +121,11 @@ fn resolve_t_junctions(verts: &[DVec3], ext: &mut Vec<ExtPolyOut>, patches: &mut
                 if let Some(ws) = ins.get(&(a.min(b), a.max(b))) {
                     let pa = verts[a as usize];
                     let mut add: Vec<u32> = ws.iter().copied().filter(|w| !l.contains(w)).collect();
-                    add.sort_by(|&x, &y| pa.distance_squared(verts[x as usize]).total_cmp(&pa.distance_squared(verts[y as usize])).then(x.cmp(&y)));
+                    add.sort_by(|&x, &y| {
+                        pa.distance_squared(verts[x as usize])
+                            .total_cmp(&pa.distance_squared(verts[y as usize]))
+                            .then(x.cmp(&y))
+                    });
                     changed |= !add.is_empty();
                     out.extend(add);
                 }
@@ -147,12 +167,17 @@ fn resolve_t_junctions(verts: &[DVec3], ext: &mut Vec<ExtPolyOut>, patches: &mut
                             .collect()
                     })
                     .collect();
-                p.tris = tri2d::triangulate(&pts2, &ll).iter().map(|t| [ids[t[0]], ids[t[1]], ids[t[2]]]).collect();
+                p.tris = tri2d::triangulate(&pts2, &ll)
+                    .iter()
+                    .map(|t| [ids[t[0]], ids[t[1]], ids[t[2]]])
+                    .collect();
                 any = true;
             }
         }
         // polygons that are nothing but collinear vertices (fins)
-        let flat = |tris: &[[u32; 3]]| !tris.is_empty() && tris.iter().all(|&t| collinear_middle(verts, t).is_some());
+        let flat = |tris: &[[u32; 3]]| {
+            !tris.is_empty() && tris.iter().all(|&t| collinear_middle(verts, t).is_some())
+        };
         let (ne, np) = (ext.len(), patches.len());
         ext.retain(|e| !flat(&e.tris));
         patches.retain(|p| !flat(&p.tris));
@@ -215,14 +240,30 @@ impl<'a> Clipper<'a> {
                 v.dedup();
             }
         }
-        let subdiv = cx.cells.iter().map(|c| c.facet_subdiv.iter().cloned().collect()).collect();
-        Clipper { mesh, cx, pts, bvh, bbox, nbr, subdiv }
+        let subdiv = cx
+            .cells
+            .iter()
+            .map(|c| c.facet_subdiv.iter().cloned().collect())
+            .collect();
+        Clipper {
+            mesh,
+            cx,
+            pts,
+            bvh,
+            bbox,
+            nbr,
+            subdiv,
+        }
     }
 
     #[inline]
     fn tri(&self, t: u32) -> [&P3; 3] {
         let [a, b, c] = self.mesh.tris[t as usize];
-        [&self.pts[a as usize], &self.pts[b as usize], &self.pts[c as usize]]
+        [
+            &self.pts[a as usize],
+            &self.pts[b as usize],
+            &self.pts[c as usize],
+        ]
     }
 
     /// Side of a symbolic vertex (lying on triangle `t`) w.r.t. plane `q`.
@@ -260,7 +301,10 @@ impl<'a> Clipper<'a> {
     /// half-space `sgn * f_q <= 0`.
     fn clip_poly(&self, t: u32, poly: &[(VKey, Tag)], q: PlaneId, sgn: i8) -> Vec<(VKey, Tag)> {
         let n = poly.len();
-        let s: Vec<i8> = poly.iter().map(|(k, _)| sgn * self.vsign(k, t, q)).collect();
+        let s: Vec<i8> = poly
+            .iter()
+            .map(|(k, _)| sgn * self.vsign(k, t, q))
+            .collect();
         if s.iter().all(|&x| x <= 0) {
             return poly.to_vec();
         }
@@ -273,7 +317,11 @@ impl<'a> Clipper<'a> {
             let (ki, tagi) = poly[i];
             let (si, sj) = (s[i], s[j]);
             if si <= 0 {
-                let tag = if si == 0 && sj > 0 { Tag::Plane(q) } else { tagi };
+                let tag = if si == 0 && sj > 0 {
+                    Tag::Plane(q)
+                } else {
+                    tagi
+                };
                 out.push((ki, tag));
             }
             if (si < 0 && sj > 0) || (si > 0 && sj < 0) {
@@ -292,7 +340,11 @@ impl<'a> Clipper<'a> {
     /// Clip triangle `t` by complex cell `c`; returns the tagged polygon.
     fn clip_tri_cell(&self, t: u32, c: u32) -> Vec<(VKey, Tag)> {
         let [a, b, cc] = self.mesh.tris[t as usize];
-        let mut poly = vec![(VKey::Orig(a), Tag::Mesh(a, b)), (VKey::Orig(b), Tag::Mesh(b, cc)), (VKey::Orig(cc), Tag::Mesh(cc, a))];
+        let mut poly = vec![
+            (VKey::Orig(a), Tag::Mesh(a, b)),
+            (VKey::Orig(b), Tag::Mesh(b, cc)),
+            (VKey::Orig(cc), Tag::Mesh(cc, a)),
+        ];
         for &(q, sgn) in &self.cx.cells[c as usize].halfspaces {
             poly = self.clip_poly(t, &poly, q, sgn);
             if poly.is_empty() {
@@ -318,7 +370,9 @@ impl<'a> Clipper<'a> {
                             }
                             let l = self.cx.planes.line(p, q);
                             let tri = self.tri(t);
-                            let within = ends.iter().all(|&(r, sg)| sg * self.cx.planes.side_tri_line(tri, l.0, l.1, r) < 0);
+                            let within = ends.iter().all(|&(r, sg)| {
+                                sg * self.cx.planes.side_tri_line(tri, l.0, l.1, r) < 0
+                            });
                             if within && !ins.iter().any(|x| x.0 == q) {
                                 ins.push((q, VKey::Tl(t, l)));
                             }
@@ -330,7 +384,9 @@ impl<'a> Clipper<'a> {
                             for it in ins {
                                 let pos = sorted
                                     .iter()
-                                    .position(|&(qa, _)| self.vsign(&it.1, t, qa) != self.vsign(&kj, t, qa))
+                                    .position(|&(qa, _)| {
+                                        self.vsign(&it.1, t, qa) != self.vsign(&kj, t, qa)
+                                    })
                                     .unwrap_or(sorted.len());
                                 sorted.insert(pos, it);
                             }
@@ -362,7 +418,10 @@ impl<'a> Clipper<'a> {
     fn locate_vertex(&self, v: u32, sites: &SiteGrid) -> Option<u32> {
         let p = self.pts[v as usize];
         let inside = |c: u32| {
-            self.cx.cells[c as usize].halfspaces.iter().all(|&(q, sgn)| sgn * self.cx.planes.side_vertex(&p, q) <= 0)
+            self.cx.cells[c as usize]
+                .halfspaces
+                .iter()
+                .all(|&(q, sgn)| sgn * self.cx.planes.side_vertex(&p, q) <= 0)
         };
         let start = sites.nearest(p)?;
         if inside(start) {
@@ -436,7 +495,10 @@ impl<'a> Clipper<'a> {
         let mut warnings = Vec::new();
         let ncell = cx.cells.len();
         // ---- 1. crossings on complex edges and in/out state of vertices
-        let crossings: Vec<Vec<VKey>> = (0..cx.edges.len() as u32).into_par_iter().map(|e| self.edge_crossings(e)).collect();
+        let crossings: Vec<Vec<VKey>> = (0..cx.edges.len() as u32)
+            .into_par_iter()
+            .map(|e| self.edge_crossings(e))
+            .collect();
         let nv = cx.verts.len();
         let mut adj: Vec<Vec<(u32, u32)>> = vec![Vec::new(); nv];
         for (ei, e) in cx.edges.iter().enumerate() {
@@ -470,7 +532,9 @@ impl<'a> Clipper<'a> {
             }
         }
         if conflicts > 0 {
-            return Err(format!("clip: inconsistent inside/outside parity on {conflicts} complex edges (solid not closed?)"));
+            return Err(format!(
+                "clip: inconsistent inside/outside parity on {conflicts} complex edges (solid not closed?)"
+            ));
         }
         if state.iter().any(|&s| s < 0) {
             warnings.push("clip: unreachable complex vertices".into());
@@ -482,7 +546,9 @@ impl<'a> Clipper<'a> {
             .into_par_iter()
             .map(|t| {
                 let v0 = self.mesh.tris[t as usize][0];
-                let start = self.locate_vertex(v0, &sites).ok_or_else(|| format!("clip: vertex {v0} not in any cell"))?;
+                let start = self
+                    .locate_vertex(v0, &sites)
+                    .ok_or_else(|| format!("clip: vertex {v0} not in any cell"))?;
                 let mut res = Vec::new();
                 let mut seen = BTreeSet::new();
                 let mut stack = vec![start];
@@ -518,8 +584,10 @@ impl<'a> Clipper<'a> {
 
         // ---- 3. face regions
         let face_ids: Vec<u32> = (0..cx.faces.len() as u32).collect();
-        let regions: Vec<Result<Vec<Vec<VKey>>, String>> =
-            face_ids.par_iter().map(|&f| self.face_region(f, &crossings, &state)).collect();
+        let regions: Vec<Result<Vec<Vec<VKey>>, String>> = face_ids
+            .par_iter()
+            .map(|&f| self.face_region(f, &crossings, &state))
+            .collect();
         let mut face_loops: Vec<(u32, Vec<Vec<VKey>>)> = Vec::new();
         for (f, r) in regions.into_iter().enumerate() {
             let loops = r?;
@@ -528,7 +596,9 @@ impl<'a> Clipper<'a> {
             }
             let fc = &cx.faces[f];
             if fc.cells[0] == NONE || fc.cells[1] == NONE {
-                return Err(format!("clip: solid reaches outside the complex (face {f})"));
+                return Err(format!(
+                    "clip: solid reaches outside the complex (face {f})"
+                ));
             }
             face_loops.push((f as u32, loops));
         }
@@ -552,7 +622,13 @@ impl<'a> Clipper<'a> {
         // Points closer than 1e-11 of the model scale are merged
         // (deterministic union-find, smallest key index wins).
         let eps = 1e-11 * self.bbox.diagonal().max(1e-300);
-        let cell = |p: &P3| [(p[0] / eps).floor() as i64, (p[1] / eps).floor() as i64, (p[2] / eps).floor() as i64];
+        let cell = |p: &P3| {
+            [
+                (p[0] / eps).floor() as i64,
+                (p[1] / eps).floor() as i64,
+                (p[2] / eps).floor() as i64,
+            ]
+        };
         let mut grid: BTreeMap<[i64; 3], Vec<u32>> = BTreeMap::new();
         for (i, p) in coords.iter().enumerate() {
             grid.entry(cell(p)).or_default().push(i as u32);
@@ -583,7 +659,8 @@ impl<'a> Clipper<'a> {
                                 }
                                 let q = coords[j as usize];
                                 if dist2(*p, q) <= eps * eps {
-                                    let (ra, rb) = (find(&mut parent, i as u32), find(&mut parent, j));
+                                    let (ra, rb) =
+                                        (find(&mut parent, i as u32), find(&mut parent, j));
                                     if ra != rb {
                                         parent[ra.max(rb) as usize] = ra.min(rb);
                                     }
@@ -621,7 +698,12 @@ impl<'a> Clipper<'a> {
             let v = clean(k);
             if v.len() >= 3 {
                 let tris = triangulate_poly(&verts, &v);
-                ext.push(ExtPolyOut { verts: v, cell: *c, src_tri: *t, tris });
+                ext.push(ExtPolyOut {
+                    verts: v,
+                    cell: *c,
+                    src_tri: *t,
+                    tris,
+                });
             }
         }
         // ---- 5. patches: group loops into outer+holes, triangulate
@@ -630,19 +712,34 @@ impl<'a> Clipper<'a> {
             .map(|(f, ls)| {
                 let fc = &cx.faces[*f as usize];
                 let n = DVec3::from_array(cx.planes.normal(fc.plane)).normalize();
-                let loops: Vec<Vec<u32>> = ls.iter().map(|l| clean(l)).filter(|l| l.len() >= 3).collect();
+                let loops: Vec<Vec<u32>> = ls
+                    .iter()
+                    .map(|l| clean(l))
+                    .filter(|l| l.len() >= 3)
+                    .collect();
                 build_patches(&verts, &loops, n, fc.cells, *f)
             })
             .collect();
         let mut patches: Vec<PatchOut> = patch_lists.into_iter().flatten().collect();
         let _ = ncell;
         resolve_t_junctions(&verts, &mut ext, &mut patches);
-        Ok(ClipOutput { verts, keys, ext, patches, warnings })
+        Ok(ClipOutput {
+            verts,
+            keys,
+            ext,
+            patches,
+            warnings,
+        })
     }
 
     /// Region of face `f` inside the solid, as closed loops (CCW about the
     /// plane gradient, holes CW).
-    fn face_region(&self, f: u32, crossings: &[Vec<VKey>], state: &[i8]) -> Result<Vec<Vec<VKey>>, String> {
+    fn face_region(
+        &self,
+        f: u32,
+        crossings: &[Vec<VKey>],
+        state: &[i8],
+    ) -> Result<Vec<Vec<VKey>>, String> {
         let cx = self.cx;
         let fc = &cx.faces[f as usize];
         let p = fc.plane;
@@ -775,18 +872,38 @@ impl<'a> Clipper<'a> {
                     Some(c) => c,
                     None => {
                         if std::env::var("FRAC_DEBUG").is_ok() {
-                            eprintln!("open loop face {f} plane {} cells {:?} at {:?}", p, fc.cells, cur);
+                            eprintln!(
+                                "open loop face {f} plane {} cells {:?} at {:?}",
+                                p, fc.cells, cur
+                            );
                             for (a, b) in &segs {
-                                eprintln!("  seg {:?} {:?} -> {:?} {:?}", a, self.key_point(a), b, self.key_point(b));
+                                eprintln!(
+                                    "  seg {:?} {:?} -> {:?} {:?}",
+                                    a,
+                                    self.key_point(a),
+                                    b,
+                                    self.key_point(b)
+                                );
                             }
                             for (k, &v) in fc.loop_verts.iter().enumerate() {
-                                eprintln!("  cv {} {:?} state {} edge {} cr {:?}", v, cx.verts[v as usize], state[v as usize], fc.loop_edges[k], crossings[fc.loop_edges[k] as usize]);
+                                eprintln!(
+                                    "  cv {} {:?} state {} edge {} cr {:?}",
+                                    v,
+                                    cx.verts[v as usize],
+                                    state[v as usize],
+                                    fc.loop_edges[k],
+                                    crossings[fc.loop_edges[k] as usize]
+                                );
                             }
                         }
                         return Err(format!("clip: open interface loop on face {f}"));
                     }
                 };
-                let nx = cand.iter().copied().find(|&i| !used[i]).ok_or_else(|| format!("clip: dangling interface loop on face {f}"))?;
+                let nx = cand
+                    .iter()
+                    .copied()
+                    .find(|&i| !used[i])
+                    .ok_or_else(|| format!("clip: dangling interface loop on face {f}"))?;
                 used[nx] = true;
                 cur = segs[nx].1;
                 guard += 1;
@@ -808,7 +925,13 @@ fn dist2(a: P3, b: P3) -> f64 {
 }
 
 /// Group loops into patches (outer CCW + contained CW holes) and triangulate.
-fn build_patches(verts: &[DVec3], loops: &[Vec<u32>], n: DVec3, cells: [u32; 2], face: u32) -> Vec<PatchOut> {
+fn build_patches(
+    verts: &[DVec3],
+    loops: &[Vec<u32>],
+    n: DVec3,
+    cells: [u32; 2],
+    face: u32,
+) -> Vec<PatchOut> {
     let proj = frac_geom::polygon::drop_axis(n);
     let mut local: BTreeMap<u32, usize> = BTreeMap::new();
     let mut pts2: Vec<[f64; 2]> = Vec::new();
@@ -822,13 +945,18 @@ fn build_patches(verts: &[DVec3], loops: &[Vec<u32>], n: DVec3, cells: [u32; 2],
             });
         }
     }
-    let ll: Vec<Vec<usize>> = loops.iter().map(|l| l.iter().map(|x| local[x]).collect()).collect();
+    let ll: Vec<Vec<usize>> = loops
+        .iter()
+        .map(|l| l.iter().map(|x| local[x]).collect())
+        .collect();
     let areas: Vec<f64> = ll.iter().map(|l| tri2d::signed_area(&pts2, l)).collect();
     // A loop is a hole only when it is clearly negative and contained in an
     // outer loop; degenerate (zero-area) loops from symbolic perturbation
     // stand alone as their own (zero-area) patches.
     let degen: Vec<bool> = ll.iter().map(|l| tri2d::is_degenerate(&pts2, l)).collect();
-    let outers: Vec<usize> = (0..ll.len()).filter(|&i| areas[i] > 0.0 && !degen[i]).collect();
+    let outers: Vec<usize> = (0..ll.len())
+        .filter(|&i| areas[i] > 0.0 && !degen[i])
+        .collect();
     let mut holes_of: Vec<Vec<usize>> = vec![Vec::new(); ll.len()];
     let mut standalone: Vec<usize> = (0..ll.len()).filter(|&i| degen[i]).collect();
     for i in 0..ll.len() {
@@ -839,7 +967,8 @@ fn build_patches(verts: &[DVec3], loops: &[Vec<u32>], n: DVec3, cells: [u32; 2],
         let p = pts2[ll[i][0]];
         let mut best: Option<usize> = None;
         for &o in &outers {
-            if point_in_loop(&pts2, &ll[o], p) && best.map(|b| areas[o] < areas[b]).unwrap_or(true) {
+            if point_in_loop(&pts2, &ll[o], p) && best.map(|b| areas[o] < areas[b]).unwrap_or(true)
+            {
                 best = Some(o);
             }
         }
@@ -859,10 +988,17 @@ fn build_patches(verts: &[DVec3], loops: &[Vec<u32>], n: DVec3, cells: [u32; 2],
         }
         let tris = tri2d::triangulate(&pts2, &pl);
         // projected area back to the plane
-        let area: f64 = pl.iter().map(|l| tri2d::signed_area(&pts2, l)).sum::<f64>() * n.length() / n.abs().max_element();
+        let area: f64 = pl.iter().map(|l| tri2d::signed_area(&pts2, l)).sum::<f64>() * n.length()
+            / n.abs().max_element();
         out.push(PatchOut {
-            loops: pl.iter().map(|l| l.iter().map(|&i| ids[i]).collect()).collect(),
-            tris: tris.iter().map(|t| [ids[t[0]], ids[t[1]], ids[t[2]]]).collect(),
+            loops: pl
+                .iter()
+                .map(|l| l.iter().map(|&i| ids[i]).collect())
+                .collect(),
+            tris: tris
+                .iter()
+                .map(|t| [ids[t[0]], ids[t[1]], ids[t[2]]])
+                .collect(),
             normal: n,
             cells,
             face,
@@ -908,13 +1044,23 @@ impl SiteGrid {
             }
         }
         let n = sites.len().max(1);
-        let ext = [(hi[0] - lo[0]).max(1e-12), (hi[1] - lo[1]).max(1e-12), (hi[2] - lo[2]).max(1e-12)];
+        let ext = [
+            (hi[0] - lo[0]).max(1e-12),
+            (hi[1] - lo[1]).max(1e-12),
+            (hi[2] - lo[2]).max(1e-12),
+        ];
         let vol = ext[0] * ext[1] * ext[2];
         let cell = (vol / n as f64).cbrt().max(1e-12);
         let dims = [0, 1, 2].map(|k| ((ext[k] / cell).ceil() as usize).clamp(1, 256));
         let inv = 1.0 / cell;
         let mut buckets = vec![Vec::new(); dims[0] * dims[1] * dims[2]];
-        let g = SiteGrid { sites: sites.to_vec(), lo, inv, dims, buckets: Vec::new() };
+        let g = SiteGrid {
+            sites: sites.to_vec(),
+            lo,
+            inv,
+            dims,
+            buckets: Vec::new(),
+        };
         for (i, s) in sites.iter().enumerate() {
             let b = g.bucket(s);
             buckets[b].push(i as u32);
@@ -922,7 +1068,9 @@ impl SiteGrid {
         SiteGrid { buckets, ..g }
     }
     fn coord(&self, p: &P3) -> [usize; 3] {
-        [0, 1, 2].map(|k| (((p[k] - self.lo[k]) * self.inv).floor().max(0.0) as usize).min(self.dims[k] - 1))
+        [0, 1, 2].map(|k| {
+            (((p[k] - self.lo[k]) * self.inv).floor().max(0.0) as usize).min(self.dims[k] - 1)
+        })
     }
     fn bucket(&self, p: &P3) -> usize {
         let c = self.coord(p);
@@ -939,13 +1087,17 @@ impl SiteGrid {
             for z in c[2].saturating_sub(r)..=(c[2] + r).min(self.dims[2] - 1) {
                 for y in c[1].saturating_sub(r)..=(c[1] + r).min(self.dims[1] - 1) {
                     for x in c[0].saturating_sub(r)..=(c[0] + r).min(self.dims[0] - 1) {
-                        let on_shell = x.abs_diff(c[0]) == r || y.abs_diff(c[1]) == r || z.abs_diff(c[2]) == r;
+                        let on_shell =
+                            x.abs_diff(c[0]) == r || y.abs_diff(c[1]) == r || z.abs_diff(c[2]) == r;
                         if !on_shell {
                             continue;
                         }
                         for &i in &self.buckets[(z * self.dims[1] + y) * self.dims[0] + x] {
                             let d = dist2(self.sites[i as usize], p);
-                            if best.map(|b| d < b.0 || (d == b.0 && i < b.1)).unwrap_or(true) {
+                            if best
+                                .map(|b| d < b.0 || (d == b.0 && i < b.1))
+                                .unwrap_or(true)
+                            {
                                 best = Some((d, i));
                             }
                         }

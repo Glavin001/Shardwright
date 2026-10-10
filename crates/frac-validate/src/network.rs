@@ -134,7 +134,9 @@ struct VolOp {
 pub fn kinematic_centers(asset: &Asset, level: u8) -> Vec<DVec3> {
     let r = asset.hierarchy.level_ranges[level as usize].clone();
     let n = (r.end - r.start) as usize;
-    let com: Vec<DVec3> = (0..n).map(|i| asset.hierarchy.fragments[r.start as usize + i].mass.com).collect();
+    let com: Vec<DVec3> = (0..n)
+        .map(|i| asset.hierarchy.fragments[r.start as usize + i].mass.com)
+        .collect();
     let mut edges: Vec<(usize, usize, f64, DVec3, f64)> = Vec::new();
     let mut a_i = vec![0.0f64; n];
     for b in asset.level_bonds(level) {
@@ -218,7 +220,12 @@ impl<'a> ReferenceSolver<'a> {
     /// Effective (normal, shear) moduli of a fragment's material for the
     /// selected stiffness model.
     fn mat_eg(&self, asset: &Asset, f: FragmentId) -> (f64, f64) {
-        let m = asset.fragment(f).material_mix.first().map(|x| x.0).unwrap_or(MaterialId(0));
+        let m = asset
+            .fragment(f)
+            .material_mix
+            .first()
+            .map(|x| x.0)
+            .unwrap_or(MaterialId(0));
         let e = self.lib.elastic(m);
         match self.model {
             StiffnessModel::Spec => (e.youngs, e.shear),
@@ -237,7 +244,12 @@ impl<'a> ReferenceSolver<'a> {
 
     /// Lamé constants of a fragment's material.
     fn lame(&self, asset: &Asset, f: FragmentId) -> (f64, f64) {
-        let m = asset.fragment(f).material_mix.first().map(|x| x.0).unwrap_or(MaterialId(0));
+        let m = asset
+            .fragment(f)
+            .material_mix
+            .first()
+            .map(|x| x.0)
+            .unwrap_or(MaterialId(0));
         let e = self.lib.elastic(m);
         let mu = e.youngs / (2.0 * (1.0 + e.poisson));
         let lam = e.youngs * e.poisson / ((1.0 + e.poisson) * (1.0 - 2.0 * e.poisson));
@@ -275,13 +287,19 @@ impl<'a> ReferenceSolver<'a> {
                 for (_, d, w) in &nb[i] {
                     m += DMat3::from_cols(*d * d.x, *d * d.y, *d * d.z) * *w;
                 }
-                let terms = if m.determinant().abs() > 1e-30 * m.col(0).length().max(1e-300).powi(3) {
+                let terms = if m.determinant().abs() > 1e-30 * m.col(0).length().max(1e-300).powi(3)
+                {
                     let mi = m.inverse();
                     nb[i].iter().map(|(k, d, w)| (*k, mi * *d * *w)).collect()
                 } else {
                     Vec::new()
                 };
-                VolOp { terms, lambda, mu, volume }
+                VolOp {
+                    terms,
+                    lambda,
+                    mu,
+                    volume,
+                }
             })
             .collect()
     }
@@ -325,7 +343,11 @@ impl<'a> ReferenceSolver<'a> {
             }
             FragmentOrWorld::World => {
                 let da = (b.centroid - pa).dot(b.normal);
-                if da > 0.25 * b.dist_a && da < 4.0 * b.dist_a { (da, 0.0) } else { (b.dist_a, b.dist_b) }
+                if da > 0.25 * b.dist_a && da < 4.0 * b.dist_a {
+                    (da, 0.0)
+                } else {
+                    (b.dist_a, b.dist_b)
+                }
             }
         }
     }
@@ -349,32 +371,81 @@ impl<'a> ReferenceSolver<'a> {
             })
             .unwrap_or((0.0, 1.0, 1.0));
         let da = dist_a.max(1e-9);
-        let db = if matches!(b.b, FragmentOrWorld::World) { 0.0 } else { dist_b.max(1e-9) };
-        let ce = da / ea + if eb.is_finite() { db / eb } else { 0.0 } + if tm > 0.0 { tm / em } else { 0.0 };
-        let cg = da / ga + if gb.is_finite() { db / gb } else { 0.0 } + if tm > 0.0 { tm / gm } else { 0.0 };
+        let db = if matches!(b.b, FragmentOrWorld::World) {
+            0.0
+        } else {
+            dist_b.max(1e-9)
+        };
+        let ce = da / ea
+            + if eb.is_finite() { db / eb } else { 0.0 }
+            + if tm > 0.0 { tm / em } else { 0.0 };
+        let cg = da / ga
+            + if gb.is_finite() { db / gb } else { 0.0 }
+            + if tm > 0.0 { tm / gm } else { 0.0 };
         if self.model == StiffnessModel::Tensorial {
             // facet bending/torsion integrate the true E and G over the facet
-            let ea_t = self.lib.elastic(asset.fragment(b.a).material_mix.first().map(|x| x.0).unwrap_or(MaterialId(0)));
+            let ea_t = self.lib.elastic(
+                asset
+                    .fragment(b.a)
+                    .material_mix
+                    .first()
+                    .map(|x| x.0)
+                    .unwrap_or(MaterialId(0)),
+            );
             let eb_t = match b.b {
-                FragmentOrWorld::Fragment(f) => Some(self.lib.elastic(asset.fragment(f).material_mix.first().map(|x| x.0).unwrap_or(MaterialId(0)))),
+                FragmentOrWorld::Fragment(f) => Some(
+                    self.lib.elastic(
+                        asset
+                            .fragment(f)
+                            .material_mix
+                            .first()
+                            .map(|x| x.0)
+                            .unwrap_or(MaterialId(0)),
+                    ),
+                ),
                 FragmentOrWorld::World => None,
             };
-            let cer = da / ea_t.youngs + eb_t.map(|e| db / e.youngs).unwrap_or(0.0) + if tm > 0.0 { tm / em } else { 0.0 };
-            let cgr = da / ea_t.shear + eb_t.map(|e| db / e.shear).unwrap_or(0.0) + if tm > 0.0 { tm / gm } else { 0.0 };
-            return BondSprings { kn: b.area / ce, ks: b.area / cg, ktu: b.i_uu / cer, ktv: b.i_vv / cer, kt: b.j / cgr };
+            let cer = da / ea_t.youngs
+                + eb_t.map(|e| db / e.youngs).unwrap_or(0.0)
+                + if tm > 0.0 { tm / em } else { 0.0 };
+            let cgr = da / ea_t.shear
+                + eb_t.map(|e| db / e.shear).unwrap_or(0.0)
+                + if tm > 0.0 { tm / gm } else { 0.0 };
+            return BondSprings {
+                kn: b.area / ce,
+                ks: b.area / cg,
+                ktu: b.i_uu / cer,
+                ktv: b.i_vv / cer,
+                kt: b.j / cgr,
+            };
         }
-        BondSprings { kn: b.area / ce, ks: b.area / cg, ktu: b.i_uu / ce, ktv: b.i_vv / ce, kt: b.j / cg }
+        BondSprings {
+            kn: b.area / ce,
+            ks: b.area / cg,
+            ktu: b.i_uu / ce,
+            ktv: b.i_vv / ce,
+            kt: b.j / cg,
+        }
     }
 
     fn arms(asset: &Asset, level: u8, centers: &[DVec3]) -> Vec<DVec3> {
-        asset.level_fragments(level).iter().zip(centers).map(|(f, p)| *p - f.mass.com).collect()
+        asset
+            .level_fragments(level)
+            .iter()
+            .zip(centers)
+            .map(|(f, p)| *p - f.mass.com)
+            .collect()
     }
 
     /// Kinematic centers for the Tensorial model where they help: the fit is
     /// used only when it removes most of the connector misalignment
     /// (Voronoi-like levels); clustered levels keep the centroids.
     fn centers(&self, asset: &Asset, level: u8) -> Vec<DVec3> {
-        let com: Vec<DVec3> = asset.level_fragments(level).iter().map(|f| f.mass.com).collect();
+        let com: Vec<DVec3> = asset
+            .level_fragments(level)
+            .iter()
+            .map(|f| f.mass.com)
+            .collect();
         if self.model != StiffnessModel::Tensorial {
             return com;
         }
@@ -392,7 +463,11 @@ impl<'a> ReferenceSolver<'a> {
             }
             num / den.max(1e-300)
         };
-        if misalignment(&fit) < 0.25 * misalignment(&com) { fit } else { com }
+        if misalignment(&fit) < 0.25 * misalignment(&com) {
+            fit
+        } else {
+            com
+        }
     }
 
     /// Coefficients of `tr ε̃_i` over the level's DOFs, with displacements
@@ -425,7 +500,13 @@ impl<'a> ReferenceSolver<'a> {
     /// Assemble the stiffness matrix (dense, 6N × 6N) for a level. `fv`
     /// selects the finite-volume volumetric coupling (statics) instead of the
     /// symmetric volumetric energy (modal).
-    fn assemble(&self, asset: &Asset, level: u8, centers: &[DVec3], fv: bool) -> (Vec<f64>, usize, Vec<(BondId, BondSprings)>) {
+    fn assemble(
+        &self,
+        asset: &Asset,
+        level: u8,
+        centers: &[DVec3],
+        fv: bool,
+    ) -> (Vec<f64>, usize, Vec<(BondId, BondSprings)>) {
         let r = asset.hierarchy.level_ranges[level as usize].clone();
         let n = (r.end - r.start) as usize;
         let dim = 6 * n;
@@ -464,11 +545,18 @@ impl<'a> ReferenceSolver<'a> {
             };
             // (stiffness, test vectors at c, trial vectors at q)
             #[allow(clippy::type_complexity)]
-            let mut rows: Vec<(f64, ([f64; 6], Option<[f64; 6]>), ([f64; 6], Option<[f64; 6]>))> = Vec::new();
+            let mut rows: Vec<(
+                f64,
+                ([f64; 6], Option<[f64; 6]>),
+                ([f64; 6], Option<[f64; 6]>),
+            )> = Vec::new();
             for qq in 0..3 {
                 let w = frame[qq];
                 rows.push((kd[qq], grad(c, w), grad(q, w)));
-                let g2 = ([0.0, 0.0, 0.0, -w.x, -w.y, -w.z], ib.map(|_| [0.0, 0.0, 0.0, w.x, w.y, w.z]));
+                let g2 = (
+                    [0.0, 0.0, 0.0, -w.x, -w.y, -w.z],
+                    ib.map(|_| [0.0, 0.0, 0.0, w.x, w.y, w.z]),
+                );
                 rows.push((kr[qq], g2, g2));
             }
             let expand = |g: ([f64; 6], Option<[f64; 6]>)| -> Vec<(usize, f64)> {
@@ -490,7 +578,11 @@ impl<'a> ReferenceSolver<'a> {
         if self.model == StiffnessModel::Tensorial {
             let arms = Self::arms(asset, level, centers);
             let ops = self.vol_ops(asset, level, centers);
-            let rows: Vec<Vec<(usize, f64)>> = ops.iter().enumerate().map(|(i, op)| Self::trace_row(op, i, &arms)).collect();
+            let rows: Vec<Vec<(usize, f64)>> = ops
+                .iter()
+                .enumerate()
+                .map(|(i, op)| Self::trace_row(op, i, &arms))
+                .collect();
             if fv {
                 // finite-volume volumetric coupling: every bond transmits the
                 // pressure p_b = ½(λ_a tr ε̃_a + λ_b tr ε̃_b) as the face force
@@ -587,17 +679,27 @@ impl<'a> ReferenceSolver<'a> {
     /// (σ = λ tr(ε) I + 2μ ε of the bond's first fragment). A consistent
     /// network returns zeros.
     pub fn patch_test(&self, asset: &Asset, level: u8, eps: DMat3) -> Vec<f64> {
-        self.patch_test_with(asset, level, eps, None).into_iter().map(|x| x.1).collect()
+        self.patch_test_with(asset, level, eps, None)
+            .into_iter()
+            .map(|x| x.1)
+            .collect()
     }
 
     /// Patch test with an explicit set of driven fragments (`None` = every
     /// fragment touching the free surface or the world). Returns
     /// `(bond centroid, error)` for every bond not between two driven
     /// fragments.
-    pub fn patch_test_with(&self, asset: &Asset, level: u8, eps: DMat3, driven: Option<&dyn Fn(&Fragment) -> bool>) -> Vec<(DVec3, f64)> {
+    pub fn patch_test_with(
+        &self,
+        asset: &Asset,
+        level: u8,
+        eps: DMat3,
+        driven: Option<&dyn Fn(&Fragment) -> bool>,
+    ) -> Vec<(DVec3, f64)> {
         let e = (eps + eps.transpose()) * 0.5;
         let (lam, mu) = self.lame(asset, asset.level_fragments(level)[0].id);
-        let sig = DMat3::from_diagonal(DVec3::splat(lam * (e.x_axis.x + e.y_axis.y + e.z_axis.z))) + e * (2.0 * mu);
+        let sig = DMat3::from_diagonal(DVec3::splat(lam * (e.x_axis.x + e.y_axis.y + e.z_axis.z)))
+            + e * (2.0 * mu);
         let w = (eps - eps.transpose()) * 0.5;
         let omega = DVec3::new(w.y_axis.z, w.z_axis.x, w.x_axis.y);
         self.patch_test_field(asset, level, &|x| eps * x, &|_| omega, &|_| sig, driven)
@@ -641,8 +743,12 @@ impl<'a> ReferenceSolver<'a> {
             }
         }
         let boundary: Vec<bool> = match driven {
-            Some(d) => (0..n).map(|i| d(&asset.hierarchy.fragments[r.start as usize + i])).collect(),
-            None => (0..n).map(|i| world[i] || avec[i].length() > 1e-6 * asum[i].max(1e-300)).collect(),
+            Some(d) => (0..n)
+                .map(|i| d(&asset.hierarchy.fragments[r.start as usize + i]))
+                .collect(),
+            None => (0..n)
+                .map(|i| world[i] || avec[i].length() > 1e-6 * asum[i].max(1e-300))
+                .collect(),
         };
         let mut f = vec![0.0f64; dim];
         let big = k.iter().cloned().fold(0.0, f64::max).max(1.0) * 1e10;
@@ -661,21 +767,40 @@ impl<'a> ReferenceSolver<'a> {
                 f[6 * i + 3 + a] += big * th[a];
             }
         }
-        let Some(u) = dense_solve(&k, &f, dim) else { return Vec::new() };
-        let disp: Vec<(DVec3, DVec3)> = (0..n).map(|i| (DVec3::new(u[6 * i], u[6 * i + 1], u[6 * i + 2]), DVec3::new(u[6 * i + 3], u[6 * i + 4], u[6 * i + 5]))).collect();
+        let Some(u) = dense_solve(&k, &f, dim) else {
+            return Vec::new();
+        };
+        let disp: Vec<(DVec3, DVec3)> = (0..n)
+            .map(|i| {
+                (
+                    DVec3::new(u[6 * i], u[6 * i + 1], u[6 * i + 2]),
+                    DVec3::new(u[6 * i + 3], u[6 * i + 4], u[6 * i + 5]),
+                )
+            })
+            .collect();
         let ops = self.vol_ops(asset, level, &centers);
         let arms = Self::arms(asset, level, &centers);
         let tr: Vec<f64> = (0..n)
-            .map(|i| if ops[i].terms.is_empty() { 0.0 } else {
-                let g = Self::grad(&ops[i], i, &disp, &arms);
-                g.x_axis.x + g.y_axis.y + g.z_axis.z
+            .map(|i| {
+                if ops[i].terms.is_empty() {
+                    0.0
+                } else {
+                    let g = Self::grad(&ops[i], i, &disp, &arms);
+                    g.x_axis.x + g.y_axis.y + g.z_axis.z
+                }
             })
             .collect();
         let mut errs = Vec::new();
         for b in asset.level_bonds(level) {
-            let FragmentOrWorld::Fragment(fb) = b.b else { continue };
+            let FragmentOrWorld::Fragment(fb) = b.b else {
+                continue;
+            };
             let (ia, ib) = ((b.a.0 - r.start) as usize, (fb.0 - r.start) as usize);
-            if if driven.is_some() { boundary[ia] && boundary[ib] } else { boundary[ia] || boundary[ib] } {
+            if if driven.is_some() {
+                boundary[ia] && boundary[ib]
+            } else {
+                boundary[ia] || boundary[ib]
+            } {
                 continue;
             }
             let (da, db) = self.bond_lengths(b, &centers, r.start);
@@ -684,12 +809,16 @@ impl<'a> ReferenceSolver<'a> {
             let xb = asset.fragment(fb).mass.com;
             let q = b.centroid;
             let d = disp[ib].0 + disp[ib].1.cross(q - xb) - disp[ia].0 - disp[ia].1.cross(q - xa);
-            let fvec = b.normal * (s.kn * d.dot(b.normal)) + (d - b.normal * d.dot(b.normal)) * s.ks;
+            let fvec =
+                b.normal * (s.kn * d.dot(b.normal)) + (d - b.normal * d.dot(b.normal)) * s.ks;
             let (lam, _) = self.lame(asset, b.a);
             let t_net = fvec / b.area + b.normal * (lam * 0.5 * (tr[ia] + tr[ib]));
             let sig = sig_of(b.centroid);
             let t_ex = sig * b.normal;
-            let snorm = (0..3).map(|c| sig.col(c).length_squared()).sum::<f64>().sqrt();
+            let snorm = (0..3)
+                .map(|c| sig.col(c).length_squared())
+                .sum::<f64>()
+                .sqrt();
             errs.push((b.centroid, (t_net - t_ex).length() / snorm.max(1e-300)));
         }
         errs
@@ -713,7 +842,11 @@ impl<'a> BondNetworkSolver for ReferenceSolver<'a> {
         for (q, &(fid, force)) in loads.forces.iter().enumerate() {
             let i = (fid.0 - r.start) as usize;
             let x = asset.hierarchy.fragments[r.start as usize + i].mass.com;
-            let m = loads.force_points.get(q).map(|p| (*p - x).cross(force)).unwrap_or(DVec3::ZERO);
+            let m = loads
+                .force_points
+                .get(q)
+                .map(|p| (*p - x).cross(force))
+                .unwrap_or(DVec3::ZERO);
             for a in 0..3 {
                 f[6 * i + a] += force[a];
                 f[6 * i + 3 + a] += m[a];
@@ -734,12 +867,25 @@ impl<'a> BondNetworkSolver for ReferenceSolver<'a> {
             }
         }
         // tiny regularization for floating mechanisms
-        let reg = k.iter().step_by(dim + 1).cloned().fold(0.0, f64::max).max(1.0) * 1e-12;
+        let reg = k
+            .iter()
+            .step_by(dim + 1)
+            .cloned()
+            .fold(0.0, f64::max)
+            .max(1.0)
+            * 1e-12;
         for i in 0..dim {
             k[i * dim + i] += reg;
         }
         let u = dense_solve(&k, &f, dim).unwrap_or_else(|| vec![0.0; dim]);
-        let disp: Vec<(DVec3, DVec3)> = (0..n).map(|i| (DVec3::new(u[6 * i], u[6 * i + 1], u[6 * i + 2]), DVec3::new(u[6 * i + 3], u[6 * i + 4], u[6 * i + 5]))).collect();
+        let disp: Vec<(DVec3, DVec3)> = (0..n)
+            .map(|i| {
+                (
+                    DVec3::new(u[6 * i], u[6 * i + 1], u[6 * i + 2]),
+                    DVec3::new(u[6 * i + 3], u[6 * i + 4], u[6 * i + 5]),
+                )
+            })
+            .collect();
         let mut forces = Vec::new();
         let mut stress = vec![DMat3::ZERO; n];
         let sym = |f: DVec3, r: DVec3| -> DMat3 {
@@ -765,7 +911,9 @@ impl<'a> BondNetworkSolver for ReferenceSolver<'a> {
             let dth = thb - disp[ia].1;
             let fnrm = s.kn * d.dot(b.normal);
             let shear = (b.frame_u * d.dot(b.frame_u) + b.frame_v * d.dot(b.frame_v)) * s.ks;
-            let moment = b.frame_u * (s.ktu * dth.dot(b.frame_u)) + b.frame_v * (s.ktv * dth.dot(b.frame_v)) + b.normal * (s.kt * dth.dot(b.normal));
+            let moment = b.frame_u * (s.ktu * dth.dot(b.frame_u))
+                + b.frame_v * (s.ktv * dth.dot(b.frame_v))
+                + b.normal * (s.kt * dth.dot(b.normal));
             // force exerted on A by the bond (tension pulls A towards B)
             let f_on_a = b.normal * fnrm + shear;
             stress[ia] += sym(f_on_a, c - xa);
@@ -792,7 +940,10 @@ impl<'a> BondNetworkSolver for ReferenceSolver<'a> {
             stress[i] += sym(force, p - x);
         }
         for i in 0..n {
-            let v = asset.hierarchy.fragments[r.start as usize + i].mass.volume.max(1e-300);
+            let v = asset.hierarchy.fragments[r.start as usize + i]
+                .mass
+                .volume
+                .max(1e-300);
             stress[i] = stress[i] * (1.0 / v);
         }
         let mut tr_eps = vec![0.0f64; n];
@@ -807,7 +958,8 @@ impl<'a> BondNetworkSolver for ReferenceSolver<'a> {
                 let e = (g + g.transpose()) * 0.5;
                 let tr = e.x_axis.x + e.y_axis.y + e.z_axis.z;
                 tr_eps[i] = tr;
-                stress[i] = DMat3::from_diagonal(DVec3::splat(ops[i].lambda * tr)) + e * (2.0 * ops[i].mu);
+                stress[i] =
+                    DMat3::from_diagonal(DVec3::splat(ops[i].lambda * tr)) + e * (2.0 * ops[i].mu);
             }
             // bond traction includes the volumetric pressure term
             for bf in forces.iter_mut() {
@@ -815,7 +967,10 @@ impl<'a> BondNetworkSolver for ReferenceSolver<'a> {
                 let ia = (b.a.0 - r.start) as usize;
                 let (lam_a, _) = self.lame(asset, b.a);
                 let pb = match b.b {
-                    FragmentOrWorld::Fragment(fb) => 0.5 * (lam_a * tr_eps[ia] + self.lame(asset, fb).0 * tr_eps[(fb.0 - r.start) as usize]),
+                    FragmentOrWorld::Fragment(fb) => {
+                        0.5 * (lam_a * tr_eps[ia]
+                            + self.lame(asset, fb).0 * tr_eps[(fb.0 - r.start) as usize])
+                    }
                     FragmentOrWorld::World => lam_a * tr_eps[ia],
                 };
                 bf.traction_vec += b.normal * pb;
@@ -832,7 +987,12 @@ impl<'a> BondNetworkSolver for ReferenceSolver<'a> {
             };
             bf.recovered_traction = (sa + sb) * 0.5 * b.normal;
         }
-        NetworkResult { level, displacements: disp, stress, bond_forces: forces }
+        NetworkResult {
+            level,
+            displacements: disp,
+            stress,
+            bond_forces: forces,
+        }
     }
 
     fn modal(&self, asset: &Asset, level: u8, nmodes: usize) -> Vec<f64> {
@@ -849,17 +1009,25 @@ impl<'a> BondNetworkSolver for ReferenceSolver<'a> {
         // generalized symmetric eigenproblem via Cholesky of M: L^-1 K L^-T
         let mm = Mat::<f64>::from_fn(dim, dim, |i, j| m[i * dim + j]);
         let km = Mat::<f64>::from_fn(dim, dim, |i, j| k[i * dim + j]);
-        let Ok(llt) = mm.llt(faer::Side::Lower) else { return Vec::new() };
+        let Ok(llt) = mm.llt(faer::Side::Lower) else {
+            return Vec::new();
+        };
         let l = llt.L().to_owned();
         let linv = l.as_ref().partial_piv_lu().inverse();
         let a = &linv * &km * linv.transpose();
         let a = Mat::<f64>::from_fn(dim, dim, |i, j| 0.5 * (a[(i, j)] + a[(j, i)]));
-        let Ok(evd) = a.self_adjoint_eigen(faer::Side::Lower) else { return Vec::new() };
+        let Ok(evd) = a.self_adjoint_eigen(faer::Side::Lower) else {
+            return Vec::new();
+        };
         let s = evd.S();
         let mut w: Vec<f64> = (0..dim).map(|i| s[i]).collect();
         w.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let tol = w.last().cloned().unwrap_or(0.0).abs() * 1e-10;
-        w.into_iter().filter(|&x| x > tol).take(nmodes).map(|x| x.sqrt() / std::f64::consts::TAU).collect()
+        w.into_iter()
+            .filter(|&x| x > tol)
+            .take(nmodes)
+            .map(|x| x.sqrt() / std::f64::consts::TAU)
+            .collect()
     }
 }
 
@@ -872,13 +1040,18 @@ fn modal_subspace(k: &[f64], m: &[f64], dim: usize, nmodes: usize) -> Vec<f64> {
     use faer::Mat;
     let km = Mat::<f64>::from_fn(dim, dim, |i, j| k[i * dim + j]);
     let mm = Mat::<f64>::from_fn(dim, dim, |i, j| m[i * dim + j]);
-    let scale = (0..dim).map(|i| k[i * dim + i]).sum::<f64>() / (0..dim).map(|i| m[i * dim + i]).sum::<f64>().max(1e-300);
+    let scale = (0..dim).map(|i| k[i * dim + i]).sum::<f64>()
+        / (0..dim).map(|i| m[i * dim + i]).sum::<f64>().max(1e-300);
     let shift = 1e-8 * scale;
     let ks = Mat::<f64>::from_fn(dim, dim, |i, j| k[i * dim + j] + shift * m[i * dim + j]);
-    let Ok(llt) = ks.llt(faer::Side::Lower) else { return Vec::new() };
+    let Ok(llt) = ks.llt(faer::Side::Lower) else {
+        return Vec::new();
+    };
     let b = (2 * nmodes + 8).min(dim);
     // deterministic start block
-    let mut x = Mat::<f64>::from_fn(dim, b, |i, j| (((i * 7919 + j * 104_729 + 13) % 1009) as f64 / 1009.0) - 0.5);
+    let mut x = Mat::<f64>::from_fn(dim, b, |i, j| {
+        (((i * 7919 + j * 104_729 + 13) % 1009) as f64 / 1009.0) - 0.5
+    });
     let mut prev: Vec<f64> = Vec::new();
     let mut lam: Vec<f64> = Vec::new();
     for _ in 0..200 {
@@ -887,11 +1060,15 @@ fn modal_subspace(k: &[f64], m: &[f64], dim: usize, nmodes: usize) -> Vec<f64> {
         let mr = y.transpose() * &mm * &y;
         // small generalized problem kr q = λ mr q via Cholesky of mr
         let mr = Mat::<f64>::from_fn(b, b, |i, j| 0.5 * (mr[(i, j)] + mr[(j, i)]));
-        let Ok(lr) = mr.llt(faer::Side::Lower) else { return Vec::new() };
+        let Ok(lr) = mr.llt(faer::Side::Lower) else {
+            return Vec::new();
+        };
         let linv = lr.L().to_owned().as_ref().partial_piv_lu().inverse();
         let a = &linv * &kr * linv.transpose();
         let a = Mat::<f64>::from_fn(b, b, |i, j| 0.5 * (a[(i, j)] + a[(j, i)]));
-        let Ok(evd) = a.self_adjoint_eigen(faer::Side::Lower) else { return Vec::new() };
+        let Ok(evd) = a.self_adjoint_eigen(faer::Side::Lower) else {
+            return Vec::new();
+        };
         let mut order: Vec<usize> = (0..b).collect();
         let sv = evd.S();
         order.sort_by(|&p, &q| sv[p].partial_cmp(&sv[q]).unwrap());
@@ -899,12 +1076,18 @@ fn modal_subspace(k: &[f64], m: &[f64], dim: usize, nmodes: usize) -> Vec<f64> {
         let qs = Mat::<f64>::from_fn(b, b, |i, j| q[(i, order[j])]);
         x = &y * &qs;
         lam = order.iter().map(|&o| sv[o]).collect();
-        let conv = prev.len() == lam.len() && (0..nmodes.min(b)).all(|i| (lam[i] - prev[i]).abs() <= 1e-10 * lam[i].abs().max(1e-300));
+        let conv = prev.len() == lam.len()
+            && (0..nmodes.min(b))
+                .all(|i| (lam[i] - prev[i]).abs() <= 1e-10 * lam[i].abs().max(1e-300));
         prev = lam.clone();
         if conv {
             break;
         }
     }
     let tol = 1e-8 * scale;
-    lam.into_iter().filter(|&l| l > tol).take(nmodes).map(|l| l.sqrt() / std::f64::consts::TAU).collect()
+    lam.into_iter()
+        .filter(|&l| l > tol)
+        .take(nmodes)
+        .map(|l| l.sqrt() / std::f64::consts::TAU)
+        .collect()
 }

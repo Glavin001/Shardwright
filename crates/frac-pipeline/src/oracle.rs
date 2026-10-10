@@ -7,21 +7,30 @@ use frac_bonds::polygon_integrals;
 use frac_core::*;
 use frac_geom::polygon::plane_basis;
 use frac_geom::{Aabb, DVec3};
-use glam::DMat3;
 use frac_material::MaterialLibrary;
 use frac_validate::network::{BondNetworkSolver, LoadCase, ReferenceSolver, StiffnessModel};
-use serde_json::{json, Value};
+use glam::DMat3;
+use serde_json::{Value, json};
 use smallvec::SmallVec;
 
 /// Principal axis (longest bbox extent) and its range.
 fn axis_of(asset: &Asset) -> (usize, f64, f64, Aabb) {
-    let bb = asset.components.iter().fold(Aabb::EMPTY, |a, c| a.union(&c.aabb));
+    let bb = asset
+        .components
+        .iter()
+        .fold(Aabb::EMPTY, |a, c| a.union(&c.aabb));
     let ax = bb.longest_axis();
     (ax, bb.min[ax], bb.max[ax], bb)
 }
 
 /// Exterior polygons of fragment cells lying on the end plane `x[ax] = v`.
-fn end_face_polys(asset: &Asset, level: u8, ax: usize, v: f64, tol: f64) -> Vec<(FragmentId, Polygon3)> {
+fn end_face_polys(
+    asset: &Asset,
+    level: u8,
+    ax: usize,
+    v: f64,
+    tol: f64,
+) -> Vec<(FragmentId, Polygon3)> {
     let h = &asset.hierarchy;
     let mut out = Vec::new();
     for c in &asset.components {
@@ -31,7 +40,13 @@ fn end_face_polys(asset: &Asset, level: u8, ax: usize, v: f64, tol: f64) -> Vec<
             if pts.iter().all(|p| (p[ax] - v).abs() <= tol) {
                 let n = frac_geom::polygon::newell(&pts).normalize_or_zero();
                 let f = h.cell_fragment[level as usize][e.cell.idx()];
-                out.push((f, Polygon3 { loops: vec![pts], normal: n }));
+                out.push((
+                    f,
+                    Polygon3 {
+                        loops: vec![pts],
+                        normal: n,
+                    },
+                ));
             }
         }
     }
@@ -40,7 +55,8 @@ fn end_face_polys(asset: &Asset, level: u8, ax: usize, v: f64, tol: f64) -> Vec<
 
 /// Synthetic world bonds clamping the fragments that touch an end face.
 fn support_bonds(asset: &Asset, level: u8, polys: &[(FragmentId, Polygon3)]) -> Vec<Bond> {
-    let mut by_frag: std::collections::BTreeMap<FragmentId, Vec<Polygon3>> = std::collections::BTreeMap::new();
+    let mut by_frag: std::collections::BTreeMap<FragmentId, Vec<Polygon3>> =
+        std::collections::BTreeMap::new();
     for (f, p) in polys {
         by_frag.entry(*f).or_default().push(p.clone());
     }
@@ -98,7 +114,11 @@ fn harness_script() -> std::path::PathBuf {
         roots.extend(exe.ancestors().skip(1).take(4).map(|p| p.to_path_buf()));
     }
     roots.push(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."));
-    roots.iter().map(|r| r.join(rel)).find(|p| p.exists()).unwrap_or_else(|| rel.to_path_buf())
+    roots
+        .iter()
+        .map(|r| r.join(rel))
+        .find(|p| p.exists())
+        .unwrap_or_else(|| rel.to_path_buf())
 }
 
 /// `benchmarks/golden/<asset>` next to the harness (the frozen oracle set),
@@ -148,8 +168,10 @@ pub fn network_export_with(asset: &Asset, lib: &MaterialLibrary, model: Stiffnes
             b.id = BondId(i as u32);
         }
         // load distribution: by end-face area per fragment
-        let mut area: std::collections::BTreeMap<FragmentId, (f64, DVec3)> = std::collections::BTreeMap::new();
-        let mut second: std::collections::BTreeMap<FragmentId, DMat3> = std::collections::BTreeMap::new();
+        let mut area: std::collections::BTreeMap<FragmentId, (f64, DVec3)> =
+            std::collections::BTreeMap::new();
+        let mut second: std::collections::BTreeMap<FragmentId, DMat3> =
+            std::collections::BTreeMap::new();
         for (f, p) in &load_polys {
             let ai = polygon_integrals(p);
             let e = area.entry(*f).or_insert((0.0, DVec3::ZERO));
@@ -162,7 +184,10 @@ pub fn network_export_with(asset: &Asset, lib: &MaterialLibrary, model: Stiffnes
             .iter()
             .map(|(f, v)| {
                 let c = v.1 / v.0.max(1e-300);
-                (*f, second[f] - DMat3::from_cols(c * c.x, c * c.y, c * c.z) * v.0)
+                (
+                    *f,
+                    second[f] - DMat3::from_cols(c * c.x, c * c.y, c * c.z) * v.0,
+                )
             })
             .collect();
         let total_area: f64 = area.values().map(|v| v.0).sum::<f64>().max(1e-300);
@@ -178,24 +203,43 @@ pub fn network_export_with(asset: &Asset, lib: &MaterialLibrary, model: Stiffnes
             let forces: Vec<(FragmentId, DVec3)> = if case["kind"] == "torque" {
                 let polar = |f: &FragmentId| {
                     let i = central[f];
-                    (DMat3::from_diagonal(DVec3::splat(i.x_axis.x + i.y_axis.y + i.z_axis.z)) - i) * dir
+                    (DMat3::from_diagonal(DVec3::splat(i.x_axis.x + i.y_axis.y + i.z_axis.z)) - i)
+                        * dir
                 };
-                let jt: f64 = area.iter().map(|(f, v)| {
-                    let c = v.1 / v.0.max(1e-300) - face_c;
-                    (c - dir * c.dot(dir)).length_squared() * v.0 + dir.dot(polar(f))
-                }).sum::<f64>().max(1e-300);
+                let jt: f64 = area
+                    .iter()
+                    .map(|(f, v)| {
+                        let c = v.1 / v.0.max(1e-300) - face_c;
+                        (c - dir * c.dot(dir)).length_squared() * v.0 + dir.dot(polar(f))
+                    })
+                    .sum::<f64>()
+                    .max(1e-300);
                 let kappa = mag / jt;
                 moments = area.keys().map(|f| (*f, polar(f) * kappa)).collect();
-                area.iter().map(|(f, v)| {
-                    let c = v.1 / v.0.max(1e-300) - face_c;
-                    let r = c - dir * c.dot(dir);
-                    (*f, dir.cross(r) * (kappa * v.0))
-                }).collect()
+                area.iter()
+                    .map(|(f, v)| {
+                        let c = v.1 / v.0.max(1e-300) - face_c;
+                        let r = c - dir * c.dot(dir);
+                        (*f, dir.cross(r) * (kappa * v.0))
+                    })
+                    .collect()
             } else {
-                area.iter().map(|(f, v)| (*f, dir * (mag * v.0 / total_area))).collect()
+                area.iter()
+                    .map(|(f, v)| (*f, dir * (mag * v.0 / total_area)))
+                    .collect()
             };
-            let points: Vec<DVec3> = forces.iter().map(|(f, _)| area[f].1 / area[f].0.max(1e-300)).collect();
-            let lc = LoadCase { name: case["name"].as_str().unwrap().into(), gravity: DVec3::ZERO, forces: forces.clone(), force_points: points, moments, fixed: Vec::new() };
+            let points: Vec<DVec3> = forces
+                .iter()
+                .map(|(f, _)| area[f].1 / area[f].0.max(1e-300))
+                .collect();
+            let lc = LoadCase {
+                name: case["name"].as_str().unwrap().into(),
+                gravity: DVec3::ZERO,
+                forces: forces.clone(),
+                force_points: points,
+                moments,
+                fixed: Vec::new(),
+            };
             let r = solver.static_solve(&a2, level, &lc);
             let r0 = a2.hierarchy.level_ranges[level as usize].start;
             // response at the loaded end: area-weighted displacement (rotation for torque)
@@ -205,7 +249,12 @@ pub fn network_export_with(asset: &Asset, lib: &MaterialLibrary, model: Stiffnes
                 let c = v.1 / v.0.max(1e-300);
                 let fr = a2.fragment(*f);
                 let disp = t + rot.cross(c - fr.mass.com);
-                resp += if case["kind"] == "torque" { rot.dot(dir) } else { disp.dot(dir) } * v.0 / total_area;
+                resp += if case["kind"] == "torque" {
+                    rot.dot(dir)
+                } else {
+                    disp.dot(dir)
+                } * v.0
+                    / total_area;
             }
             let tractions: Vec<Value> = r
                 .bond_forces
@@ -219,7 +268,14 @@ pub fn network_export_with(asset: &Asset, lib: &MaterialLibrary, model: Stiffnes
             results.push(json!({"case": case["name"], "response": resp, "stiffness": if resp != 0.0 { mag / resp } else { 0.0 }, "bonds": tractions}));
         }
         // self weight with the same clamp
-        let lc = LoadCase { name: "self_weight".into(), gravity: DVec3::new(0.0, -9.81, 0.0), forces: Vec::new(), force_points: Vec::new(), moments: Vec::new(), fixed: Vec::new() };
+        let lc = LoadCase {
+            name: "self_weight".into(),
+            gravity: DVec3::new(0.0, -9.81, 0.0),
+            forces: Vec::new(),
+            force_points: Vec::new(),
+            moments: Vec::new(),
+            fixed: Vec::new(),
+        };
         let r = solver.static_solve(&a2, level, &lc);
         let sw: Vec<Value> = r
             .bond_forces
@@ -256,21 +312,35 @@ pub fn network_export_with(asset: &Asset, lib: &MaterialLibrary, model: Stiffnes
 }
 
 /// Run the Python oracle harness (Kratos FEM) if available.
-pub fn run_harness(asset_json: &std::path::Path, network_json: &std::path::Path, cache: &std::path::Path) -> String {
+pub fn run_harness(
+    asset_json: &std::path::Path,
+    network_json: &std::path::Path,
+    cache: &std::path::Path,
+) -> String {
     run_harness_with(asset_json, network_json, cache, &[])
 }
 
 /// [`run_harness`] with extra harness flags (e.g. `--write-golden`,
 /// `--no-golden`).
-pub fn run_harness_with(asset_json: &std::path::Path, network_json: &std::path::Path, cache: &std::path::Path, extra: &[&str]) -> String {
+pub fn run_harness_with(
+    asset_json: &std::path::Path,
+    network_json: &std::path::Path,
+    cache: &std::path::Path,
+    extra: &[&str],
+) -> String {
     // PREFRACTURE_PYTHON, else $FRACENV/bin/python (tools/setup.sh), else
     // /opt/fracenv/bin/python, else python3
     let py = std::env::var("PREFRACTURE_PYTHON").unwrap_or_else(|_| {
         let env = std::env::var("FRACENV").unwrap_or_else(|_| "/opt/fracenv".into());
         let p = format!("{env}/bin/python");
-        if std::path::Path::new(&p).exists() { p } else { "python3".into() }
+        if std::path::Path::new(&p).exists() {
+            p
+        } else {
+            "python3".into()
+        }
     });
-    let script = std::env::var("PREFRACTURE_HARNESS").unwrap_or_else(|_| harness_script().to_string_lossy().into_owned());
+    let script = std::env::var("PREFRACTURE_HARNESS")
+        .unwrap_or_else(|_| harness_script().to_string_lossy().into_owned());
     let out = std::process::Command::new(&py)
         .arg(&script)
         .arg("--asset")
@@ -283,7 +353,10 @@ pub fn run_harness_with(asset_json: &std::path::Path, network_json: &std::path::
         .output();
     match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
-        Ok(o) => format!("harness failed:\n```\n{}\n```\n", String::from_utf8_lossy(&o.stderr)),
+        Ok(o) => format!(
+            "harness failed:\n```\n{}\n```\n",
+            String::from_utf8_lossy(&o.stderr)
+        ),
         Err(e) => format!("harness not runnable ({py} {script}): {e}\n"),
     }
 }
