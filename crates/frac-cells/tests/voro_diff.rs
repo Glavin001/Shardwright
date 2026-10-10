@@ -1,7 +1,11 @@
 //! Differential test against Voro++ (spec §13.2): cell volumes and vertex
-//! sets must match within 1e-9 relative. Runs when the oracle binary is
+//! sets must match within 1e-9 relative.
+//!
+//! The Voro++ output for each case is frozen in `tests/golden/` (a golden
+//! oracle dataset), so the test always runs. When the oracle binary is
 //! available (`VORO_ORACLE`, else `$ORACLES/voro_oracle`, else
-//! /opt/oracles/voro_oracle; `tools/setup.sh` builds it).
+//! /opt/oracles/voro_oracle; `tools/setup.sh` builds it) it is run as well
+//! and must reproduce the frozen output; `VORO_WRITE_GOLDEN=1` refreshes it.
 
 use frac_cells::clip::Clipper;
 use frac_cells::complex::Complex;
@@ -16,11 +20,41 @@ fn oracle() -> Option<String> {
     if std::path::Path::new(&p).exists() { Some(p) } else { None }
 }
 
-fn run_case(seed: u64, n: usize, lo: DVec3, hi: DVec3) {
-    let Some(bin) = oracle() else {
-        eprintln!("voro oracle not found; skipping");
-        return;
-    };
+fn run_oracle(bin: &str, seeds: &[[f64; 3]], lo: DVec3, hi: DVec3) -> String {
+    let mut child = Command::new(bin)
+        .args([lo.x, hi.x, lo.y, hi.y, lo.z, hi.z].map(|v| format!("{v:.17e}")))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    {
+        let mut si = child.stdin.take().unwrap();
+        for (i, s) in seeds.iter().enumerate() {
+            writeln!(si, "{} {:.17e} {:.17e} {:.17e}", i, s[0], s[1], s[2]).unwrap();
+        }
+    }
+    String::from_utf8(child.wait_with_output().unwrap().stdout).unwrap()
+}
+
+/// Voro++ output for a case: frozen golden file, cross-checked against (or
+/// refreshed from) the live oracle when it is installed.
+fn oracle_output(name: &str, seeds: &[[f64; 3]], lo: DVec3, hi: DVec3) -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("golden").join(format!("voro_{name}.txt"));
+    let live = oracle().map(|bin| run_oracle(&bin, seeds, lo, hi));
+    if std::env::var_os("VORO_WRITE_GOLDEN").is_some() {
+        let text = live.expect("VORO_WRITE_GOLDEN needs the voro_oracle binary");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, &text).unwrap();
+        return text;
+    }
+    let frozen = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("missing golden {}: {e} (run with VORO_WRITE_GOLDEN=1 and the oracle installed)", path.display()));
+    if let Some(text) = live {
+        assert_eq!(text, frozen, "live Voro++ output differs from the frozen golden file {}", path.display());
+    }
+    frozen
+}
+
+fn run_case(name: &str, seed: u64, n: usize, lo: DVec3, hi: DVec3) {
     let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed);
     let seeds: Vec<[f64; 3]> = (0..n).map(|_| [rng.gen_range(lo.x..hi.x), rng.gen_range(lo.y..hi.y), rng.gen_range(lo.z..hi.z)]).collect();
     // ours
@@ -38,20 +72,7 @@ fn run_case(seed: u64, n: usize, lo: DVec3, hi: DVec3) {
         }
     }
     // oracle
-    let mut child = Command::new(&bin)
-        .args([lo.x, hi.x, lo.y, hi.y, lo.z, hi.z].map(|v| format!("{v:.17e}")))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    {
-        let mut si = child.stdin.take().unwrap();
-        for (i, s) in seeds.iter().enumerate() {
-            writeln!(si, "{} {:.17e} {:.17e} {:.17e}", i, s[0], s[1], s[2]).unwrap();
-        }
-    }
-    let o = child.wait_with_output().unwrap();
-    let text = String::from_utf8(o.stdout).unwrap();
+    let text = oracle_output(name, &seeds, lo, hi);
     let scale = (hi - lo).length();
     let mut max_vol_err: f64 = 0.0;
     let mut max_vert_err: f64 = 0.0;
@@ -99,10 +120,10 @@ fn run_case(seed: u64, n: usize, lo: DVec3, hi: DVec3) {
 
 #[test]
 fn voro_pp_unit_box() {
-    run_case(5, 400, DVec3::ZERO, DVec3::ONE);
+    run_case("unit_box", 5, 400, DVec3::ZERO, DVec3::ONE);
 }
 
 #[test]
 fn voro_pp_offset_box() {
-    run_case(6, 1500, DVec3::new(10.0, -3.0, 100.0), DVec3::new(12.5, -1.0, 101.0));
+    run_case("offset_box", 6, 1500, DVec3::new(10.0, -3.0, 100.0), DVec3::new(12.5, -1.0, 101.0));
 }
