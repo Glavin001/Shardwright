@@ -147,6 +147,7 @@ def main():
     ap.add_argument("--materials", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../crates/frac-material/materials.toml"))
     ap.add_argument("--cache", required=True)
     ap.add_argument("--impacts", type=int, default=6)
+    ap.add_argument("--impact-seed", type=int, default=7, help="seed of the impact-location draw (7: the frozen golden set)")
     ap.add_argument("--json", default="")
     ap.add_argument("--golden", default="", help="golden directory (default benchmarks/golden/<asset>); reused when it matches the solid")
     ap.add_argument("--no-golden", action="store_true")
@@ -231,7 +232,7 @@ def main():
         d = np.zeros(3)
         d[axis] = 1.0
         cases.append({"name": "torsion", "kind": "torque", "direction": d})
-        rng = np.random.default_rng(7)
+        rng = np.random.default_rng(args.impact_seed)
         side = ~((np.abs(fc[:, axis] - lo) <= tol) | (np.abs(fc[:, axis] - hi) <= tol))
         mid = side & (fc[:, axis] > lo + 0.2 * L) & (fc[:, axis] < hi - 0.2 * L)
         cand = np.nonzero(mid)[0]

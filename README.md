@@ -76,16 +76,16 @@ dump), peak RSS and gates against a per-asset budget (`BUDGET_S`, default
 | timber_beam | bake.toml | 3.1 | 83 |
 | rc_slab_on_columns | bake.toml | 30.6 | 880 |
 | messy_scan | bake.toml | 71.7 | 946 |
-| two_storey_building (60,920 cells) | bake.toml | 240.0 | 7,452 |
+| two_storey_building (60,920 cells) | bake.toml | 256.9 | 7,494 |
 | held-out: concrete_pipe / drywall_door / stone_arch | bake.toml | 5.7 / 2.0 / 8.7 | ≤ 156 |
 | building_v0 (2 storeys, 132 parts) | building_lite.toml | 13.8 | 318 |
-| building_v0 (2 storeys, 132 parts) | building.toml | 46.6 | 1,088 |
-| building_v1 (5 storeys, 419 parts, 42,547 cells) | building.toml | 145.4 | 3,444 |
+| building_v0 (2 storeys, 132 parts) | building.toml | 45.1 | 1,086 |
+| building_v1 (5 storeys, 419 parts, 42,547 cells) | building.toml | 139.4 | 3,512 |
 
 bake.toml and building.toml use a collision budget of 128 hulls per
 fragment (the library default is 8). Two-storey stages (bake.toml): cells
-11 s, hierarchy with fracture modes 33 s, collision 31 s, render 41 s,
-validation 55 s, glTF and external validators ~63 s.
+11 s, hierarchy with fracture modes 32 s, collision 41 s, render 39 s,
+validation 59 s, glTF and external validators ~69 s.
 `FRAC_LOG=1` prints per-stage times, sub-stage breakdowns and RSS.
 
 ## Previews

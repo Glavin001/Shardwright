@@ -233,6 +233,14 @@ impl ModesOutput {
     /// mesh (coarse meshes). Pairs involving a cell without DOFs (no tets)
     /// fall back to the group's jump, or 0. `None` for the P1 models.
     pub fn pair_max_jump(&self, pairs: &[(u32, u32)]) -> Option<Vec<f64>> {
+        let w = vec![1.0; self.mode_fields.len().max(self.jumps.len())];
+        self.pair_weighted_max_jump(pairs, &w)
+    }
+
+    /// `max_i w_i · jump_i` per pair, like [`Self::pair_max_jump`] with a
+    /// weight per mode (`None` unless the discretization is per-cell
+    /// constant).
+    pub fn pair_weighted_max_jump(&self, pairs: &[(u32, u32)], w: &[f64]) -> Option<Vec<f64>> {
         if self.discretization != Discretization::CellPolynomial(0) {
             return None;
         }
@@ -248,7 +256,7 @@ impl ModesOutput {
                 first[c as usize] = j;
             }
         }
-        let group_max = self.max_jump();
+        let group_max = self.weighted_max_jump(w);
         Some(
             pairs
                 .iter()
@@ -261,9 +269,10 @@ impl ModesOutput {
                         (Some(ja), Some(jb)) if ja != usize::MAX && jb != usize::MAX => self
                             .mode_fields
                             .iter()
-                            .map(|f| {
+                            .zip(w)
+                            .map(|(f, &wi)| {
                                 let (u, v) = (f[ja], f[jb]);
-                                ((u[0] - v[0]).powi(2)
+                                wi * ((u[0] - v[0]).powi(2)
                                     + (u[1] - v[1]).powi(2)
                                     + (u[2] - v[2]).powi(2))
                                 .sqrt()
@@ -282,13 +291,43 @@ impl ModesOutput {
 
     /// `max_i jumps[i][g]` per group.
     pub fn max_jump(&self) -> Vec<f64> {
+        self.weighted_max_jump(&vec![1.0; self.jumps.len()])
+    }
+
+    /// `max_i w_i · jumps[i][g]` per group.
+    pub fn weighted_max_jump(&self, w: &[f64]) -> Vec<f64> {
         let mut m = vec![0.0f64; self.groups.len()];
-        for j in &self.jumps {
+        for (j, &wi) in self.jumps.iter().zip(w) {
             for (g, &v) in j.iter().enumerate() {
-                m[g] = m[g].max(v);
+                m[g] = m[g].max(wi * v);
             }
         }
         m
+    }
+
+    /// Per-mode weights for energy-ranked segmentation: `E_min / E_i`.
+    /// The energy is 1-homogeneous in the mode, so `jump_i / E_i` does not
+    /// depend on the mode's normalization; for a clean cut it is inversely
+    /// proportional to the (material-weighted) cut area. Ranking interfaces
+    /// by it puts the weakest cuts first, whereas the unit-mass jumps alone
+    /// grow as the detached mass shrinks.
+    pub fn energy_weights(&self) -> Vec<f64> {
+        let e_min = self
+            .energies
+            .iter()
+            .copied()
+            .filter(|e| *e > 0.0)
+            .fold(f64::INFINITY, f64::min);
+        self.energies
+            .iter()
+            .map(|&e| {
+                if e > 0.0 && e_min.is_finite() {
+                    e_min / e
+                } else {
+                    0.0
+                }
+            })
+            .collect()
     }
 }
 

@@ -133,6 +133,14 @@ pub struct ModeSettings {
     /// ICCM multi-start over degenerate initial eigenspaces (keeps the
     /// lowest-energy mode; matters for symmetric parts).
     pub multi_start: bool,
+    /// Level-1 segmentation ranks interfaces by energy-weighted jumps
+    /// `max_k jump_k · E_min / E_k`. This is independent of each mode's
+    /// normalization and ranks the weakest (smallest weighted area) cuts
+    /// first. With unit-mass modes the plain jump grows as the detached mass
+    /// shrinks, which ranks the cut freeing most of an anchored part (often
+    /// its weakest, e.g. a column's root) last. `false`: the plain maximum
+    /// jump over modes.
+    pub energy_weighted_segmentation: bool,
     pub target_level1_fragments: u32,
     pub max_iccm_iters: usize,
     pub iccm_tolerance: f64,
@@ -164,6 +172,7 @@ impl Default for ModeSettings {
             discretization: "translational".into(),
             area_weighting: true,
             multi_start: true,
+            energy_weighted_segmentation: true,
             target_level1_fragments: 12,
             max_iccm_iters: 50,
             iccm_tolerance: 1e-4,

@@ -420,9 +420,14 @@ fn run_modes(
     // displacements; for P1, groups missing from the tet staircase get zero
     // jump and are never cut first
     let adj_pairs: Vec<(u32, u32)> = adj.iter().map(|&(a, b, _, _)| (a, b)).collect();
-    let (seg_groups, max_jump) = match out.pair_max_jump(&adj_pairs) {
+    let w = if s.energy_weighted_segmentation {
+        out.energy_weights()
+    } else {
+        vec![1.0; out.jumps.len()]
+    };
+    let (seg_groups, max_jump) = match out.pair_weighted_max_jump(&adj_pairs, &w) {
         Some(mj) => (adj_pairs, mj),
-        None => (out.groups.clone(), out.max_jump()),
+        None => (out.groups.clone(), out.weighted_max_jump(&w)),
     };
     let (l1, groups, mj) = frac_modes::segment_from_jumps(
         info.n_analysis,

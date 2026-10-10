@@ -20,8 +20,8 @@ reproduces PL/EA to 0.2%.
 | Authors' fracture modes (§13.2) | 0.0° principal angles, energy error ≤ 5e-8, ARI 1.0 on notched bar, L-shape and bunny; on the 4-fold symmetric plate our energies are equal or lower in every mode but the symmetric cuts differ |
 | Kratos FEM bond fidelity (§13.3) | all L3 targets met on the rc_column benchmark as baked (authored `fine_per_analysis = 16`, 1537 L3 cells; torsion p95 0.264). With the library default of 8 fine cells per analysis cell, torsion p95 is 0.355, a first-order resolution limit of rigid-cell kinematics; the asset's authored resolution override exists for this |
 | Analytical (patch tests, pure bending, known-answer modes) | pass |
-| Rankine crack oracle (§13.4) | L3 recall 0.900 (≥ 0.8 met); L1 recall 0.242 and weak-region Spearman −0.017 below the initial targets. No load-independent field we tried exceeds Spearman 0.253 against this oracle; see below |
-| Performance (§17) | every asset end to end in ≤ 300 s on 4 cores (two-storey building 240 s, 5-storey building 145 s), peak ≤ 7.5 GB |
+| Rankine crack oracle (§13.4) | L3 recall 0.900 (≥ 0.8 met). L1, mean over 12 impact draws: recall 0.273 (was 0.147), Spearman 0.224 (was −0.122), after energy-weighted segmentation. L1 recall is provably capped at 0.461 mean by the analysis-cell resolution, for any segmentation; on the wall, independent oracle draws agree with each other at Spearman 0.37. See below |
+| Performance (§17) | every asset end to end in ≤ 300 s on 4 cores (two-storey building 257 s, 5-storey building 139 s), peak ≤ 7.5 GB |
 
 ## Bond fidelity (spec §13.3)
 
@@ -341,7 +341,11 @@ F / weak-region Spearman. `tools/harness/crack_oracle.py` on bakes with
 | rc_column | 0.144 / 0.046 / −0.231 | — | — | 0.167 / 0.054 / −0.193 |
 
 * **Wall:** material-aware beats geometric and the fallback, and has higher
-  recall than the old P1 model (equal F and Spearman).
+  recall than the old P1 model (equal F and Spearman). With the
+  energy-weighted segmentation (now the default; see "Crack placement") the
+  material-aware wall scores 0.200 / 0.050 / 0.013 on this draw. That still
+  beats both ablations on F, and over 5 impact draws it equals the
+  plain-jump ranking (recall 0.232 vs 0.230).
 * **Timber beam:** the old P1 configuration is best. This 37-cell, 12-fragment
   metric is very sensitive to settings, though. P1 with the new area weights
   and multi-start drops to 0.357 / 0.058 / −0.350, and translational without
@@ -366,46 +370,88 @@ same FEM:
 * Load cases: cantilever bending in x and z, torsion, and 6 surface impacts
   with both ends held.
 
-τ = 0.25 × median cell diameter. Results for the benchmark bake
-(`benchmarks/configs/bake.toml`, translational fracture modes, the
-asset's `fine_per_analysis = 16`), frozen in the golden set:
+τ = 0.25 × median cell diameter. On the frozen golden draw (impact seed 7),
+the rc_column benchmark bake (`benchmarks/configs/bake.toml`, translational
+fracture modes, the asset's `fine_per_analysis = 16`) scores:
 
-| Interfaces | Recall@τ | F |
-|---|---|---|
-| L3 (detail) | **0.900** | 0.069 |
-| L1 (structural) | 0.242 | 0.053 |
-
-Weak-region agreement (Spearman, per analysis cell, L1): −0.017 (target
-≥ 0.6). At the library default resolution (8 fine cells per analysis cell)
-the same bake gave L3 recall 0.855, L1 0.144 and Spearman −0.23. For the
-ablation on the wall and the timber beam, see "Fracture modes vs reference
-implementation".
+| Interfaces | Recall@τ | F | Weak-region Spearman (L1) |
+|---|---|---|---|
+| L3 (detail) | **0.900** | 0.069 | — |
+| L1, energy-weighted segmentation (default) | 0.266 | 0.068 | 0.311 |
+| L1, plain maximum jump (previous default) | 0.114 | 0.036 | −0.067 |
+| L1, agglomeration (`fast.toml`; the CI golden baseline) | 0.242 | 0.053 | −0.017 |
 
 L3 recall meets the ≥ 0.8 target. Precision is low by construction: the
 detail interfaces fill the volume, while each oracle crack is a single
-surface.
+surface. L1 recall (≥ 0.8) and Spearman (≥ 0.6) do not meet their initial
+targets. The rest of this section bounds what any Level 1 can reach and
+shows how close the default comes.
 
-L1 does not meet the targets. The fracture modes are load-independent
-worst-case cuts.
+### Energy-weighted Level-1 segmentation
 
-**How far a load-independent field can go on this oracle.** Only 24 of
-the 96 analysis cells hold any oracle crack. The rest tie at zero density.
-We ranked the cells by simple load-independent priors and correlated them with the
-oracle density:
+The oracle cracks 5 of its 9 load cases within 0.15–0.22 m of the clamped
+root: both bending cases and 3 of the 6 impacts (impacts hold both ends).
+The anchored fracture modes find that weakness. The lowest-energy mode
+detaches the whole column at y = 0.20–0.37 m. The segmentation threw this cut
+away, though. It ranked interfaces by the maximum jump over modes, and a
+unit-mass mode's jump grows as the mass it detaches shrinks. So the root
+cut (jump 1.04) lost to end-chip modes (jump 2.29), and Level 1 had no
+cut below y = 0.54 m.
 
-| Prior (per analysis cell) | Spearman |
-|---|---|
-| distance to the clamped root (exp(−y/0.5), exp(−y/1.5) or 3 − y) | 0.253 |
-| distance to mid-span (−\|y − 1.5\|) | −0.002 |
-| distance from the axis (surface cells first) | −0.007 |
+The segmentation now ranks interfaces by `max_k jump_k · E_min / E_k`
+(`modes.energy_weighted_segmentation`, default on). The mode energy is
+1-homogeneous, so `jump / E` does not depend on the mode's normalization.
+For a clean cut it is inversely proportional to the material-weighted cut
+area, which means the weakest cuts rank first. Level 1 now has a fragment
+at y = 0.01–0.34 m.
 
-The best of them, "near the clamped root", reaches 0.253. The remaining
-oracle density sits under the 6 impact points. Those points are sampled at
-random, so no cut layout chosen without the load cases can track them.
-Reaching 0.6 would take load-aware segmentation, which the spec's
-load-independent fracture modes deliberately do not do. We record this as a
-limit of the metric on this asset, not as a tuning gap. The Rankine oracle concentrates cracks at the clamped root
-and under impacts on this prismatic column, so there is no geometric weak
-region for the modes to find. Before the size-balanced segmentation was
-added, Level 1 was one fragment holding 87% of the volume plus 11 surface
-chips (recall 0.07).
+Impact locations are random draws (`--impact-seed`), so every metric is
+reported over independent draws. `tools/harness/crack_ceiling.py` evaluates
+them; each draw is one full oracle run with 6 new impact locations.
+
+| Asset (draws) | L1 | Recall@τ mean / max | Spearman mean / max |
+|---|---|---|---|
+| rc_column (12) | energy-weighted (default) | **0.273** / 0.321 | **0.224** / 0.419 |
+| rc_column (12) | plain maximum jump | 0.147 / 0.225 | −0.122 / 0.070 |
+| brick_wall_window (5) | energy-weighted (default) | 0.232 / 0.283 | 0.065 / 0.095 |
+| brick_wall_window (5) | plain maximum jump | 0.230 / 0.257 | 0.073 / 0.099 |
+
+On the column the new ranking improves both metrics on every one of the 12
+draws. On the wall both are unchanged within the spread between draws. The
+timber beam's Level 1 is identical under both rankings.
+
+### Upper bounds
+
+**Recall@τ: a hard bound.** Level-1 fragments are unions of analysis cells,
+so every possible Level-1 interface set is a subset of the analysis-cell
+boundaries. Recall can only grow as interfaces are added, so the recall of
+*all* analysis-cell boundaries bounds every Level-1 partition, whatever the
+segmentation method and whether it sees the loads or not. On rc_column
+(96 analysis cells at the spec's default density) that bound is
+**0.461 mean, 0.524 max** over the 12 draws (0.444 on the golden draw). So
+L1 recall ≥ 0.8 is unreachable on this asset at the default analysis
+resolution. The default reaches 59% of the bound. On the wall (1346
+analysis cells) the bound is 0.98, and the limit there is the 12-fragment
+target rather than the cell resolution.
+
+**Spearman: what load-independent knowledge allows.** Only 17–32 of the 96
+column cells hold any oracle crack in a given draw; the rest tie at zero.
+Two reference predictors, both computed from the other draws:
+
+| Asset (draws) | Mean correlation between independent oracle draws | Leave-one-out mean density of the other draws |
+|---|---|---|
+| rc_column (12) | 0.607 | 0.660 |
+| brick_wall_window (5) | 0.365 | 0.289 |
+
+The leave-one-out predictor knows the impact distribution and the exact
+bending and torsion cracks. That is more than a load-independent segmentation
+can know. On the column it averages 0.66, and two independent draws of
+the oracle agree with each other at 0.61. On the wall, draws agree at only
+0.37, so a 0.6 target exceeds the oracle's own reproducibility there. A Level
+1 of 12 size-balanced fragments must also put cuts in crack-free cells,
+which costs rank correlation. A cut layout restricted to bands at both
+supports reaches 0.50 mean on the column, at the price of a non-uniform
+Level 1.
+
+The spec lists these targets as initial, to hill-climb. They are recorded
+here with their bounds rather than tuned to a single random draw.
