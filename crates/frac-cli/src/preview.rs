@@ -19,6 +19,10 @@ pub enum BondColour {
     Kind,
     /// Tensile capacity (interface/material strength × Weibull scale), log heat map.
     Strength,
+    /// Where breaks are favoured: bonds on coarser boundaries (L1 cuts, L0
+    /// joints, anchors) by class, and their capacity relative to the bonds
+    /// inside the coarser fragments.
+    Weakening,
 }
 
 pub struct PreviewOptions {
@@ -194,7 +198,7 @@ fn bond_tris(
             BondColour::Kind => kind_colour(bond_kind(b)),
             BondColour::Strength if b.anchor => [0.05, 0.05, 0.05],
             BondColour::Strength if c < NO_TENSION => NO_TENSION_RGB,
-            BondColour::Strength => heat(log_t(c, lo, hi)),
+            BondColour::Strength | BondColour::Weakening => heat(log_t(c, lo, hi)),
         };
         let shade = (0.55 + 0.45 * b.normal.dot(light).abs()) as f32;
         for &i in &b.interfaces {
@@ -473,6 +477,41 @@ fn text_w(s: &str, scale: i64) -> i64 {
     s.chars().count() as i64 * 8 * scale
 }
 
+/// Greedy word wrap of `s` to lines at most `max_w` pixels wide.
+fn wrap(s: &str, scale: i64, max_w: i64) -> Vec<String> {
+    let max_chars = (max_w / (8 * scale)).max(8) as usize;
+    let mut lines = Vec::new();
+    let mut cur = String::new();
+    for word in s.split_whitespace() {
+        if !cur.is_empty() && cur.chars().count() + 1 + word.chars().count() > max_chars {
+            lines.push(std::mem::take(&mut cur));
+        }
+        if !cur.is_empty() {
+            cur.push(' ');
+        }
+        cur.push_str(word);
+    }
+    if !cur.is_empty() {
+        lines.push(cur);
+    }
+    lines
+}
+
+const WEAKENING_NOTES: [(&str, i64); 3] = [
+    (
+        "Left: bonds on coarser boundaries, by class (bonds inside L1 fragments are hidden).",
+        2,
+    ),
+    (
+        "Right: the same bonds coloured by tensile capacity / median capacity of interior bonds.",
+        2,
+    ),
+    (
+        "Weibull weakest-link size effect: a bond on a coarser boundary takes the strength of that whole surface, (A_surface / A_ref)^(-1/m); joints also carry their joint material's strength.",
+        1,
+    ),
+];
+
 /// What the colours of an image mean.
 enum Legend {
     /// One arbitrary colour per fragment.
@@ -483,6 +522,12 @@ enum Legend {
     Debris,
     /// Joint kinds present, with bond counts.
     Kind(Vec<(InterfaceKind, usize)>),
+    /// Bond classes with (count, median capacity Pa, median ratio to the
+    /// interior median), and the ratio colour bar range.
+    Weakening {
+        rows: Vec<(String, [f32; 3], usize, f64, f64)>,
+        lo: f64,
+    },
     /// Log colour bar over [lo, hi] Pa, and the numbers of anchor bonds and
     /// of bonds without tensile capacity.
     Strength {
@@ -494,10 +539,17 @@ enum Legend {
 }
 
 impl Legend {
-    fn height(&self) -> u32 {
+    fn height(&self, w: u32) -> u32 {
         match self {
             Legend::Fragments | Legend::Parts | Legend::Debris => 44,
             Legend::Kind(k) => 52 + 30 * k.len().div_ceil(3) as u32,
+            Legend::Weakening { rows, .. } => {
+                let notes: i64 = WEAKENING_NOTES
+                    .iter()
+                    .map(|&(t, sc)| wrap(t, sc, w as i64 - 48).len() as i64 * (10 * sc + 2))
+                    .sum();
+                (notes + 24 + 28 * (rows.len() as i64 + 1) + 70) as u32
+            }
             Legend::Strength { .. } => 130,
         }
     }
@@ -546,6 +598,59 @@ fn draw_legend(c: &mut Canvas, y0: i64, lg: &Legend) {
                 "Input mesh as imported. Colour = part (arbitrary, no scale)",
                 INK,
             );
+        }
+        Legend::Weakening { rows, lo } => {
+            let max_w = c.w as i64 - 2 * x0;
+            let mut y = y0 + 10;
+            for &(t, sc) in &WEAKENING_NOTES {
+                for line in wrap(t, sc, max_w) {
+                    c.text(x0, y, sc, &line, if sc == 2 { INK } else { DIM });
+                    y += 10 * sc + 2;
+                }
+            }
+            y += 12;
+            // table columns sized to their content
+            let name_w = rows
+                .iter()
+                .map(|r| text_w(&r.0, 2))
+                .max()
+                .unwrap_or(0)
+                .max(text_w("class", 2));
+            let cols = [
+                x0 + 34,
+                x0 + 34 + name_w + 32,
+                x0 + 34 + name_w + 32 + 140,
+                x0 + 34 + name_w + 32 + 140 + 200,
+            ];
+            c.text(cols[0], y, 2, "class", DIM);
+            c.text(cols[1], y, 2, "bonds", DIM);
+            c.text(cols[2], y, 2, "median MPa", DIM);
+            c.text(cols[3], y, 2, "x interior", DIM);
+            y += 26;
+            for (name, col, n, cap, ratio) in rows {
+                c.rect(x0, y, 22, 20, rgb8(*col));
+                c.text(cols[0], y + 2, 2, name, INK);
+                c.text(cols[1], y + 2, 2, &format!("{n}"), INK);
+                c.text(cols[2], y + 2, 2, &fmt_mpa(*cap), INK);
+                c.text(cols[3], y + 2, 2, &format!("{ratio:.2}"), INK);
+                y += 28;
+            }
+            // ratio colour bar (log), lo .. 1
+            let bw = (max_w - 220).clamp(200, 900);
+            let (bx, by) = (x0 + 30, y + 6);
+            for i in 0..bw {
+                c.rect(bx + i, by, 1, 18, rgb8(heat(i as f64 / (bw - 1) as f64)));
+            }
+            for v in [*lo, 0.2, 0.3, 0.5, 0.7, 1.0] {
+                if v < *lo {
+                    continue;
+                }
+                let x = bx + (log_t(v, *lo, 1.0) * (bw - 1) as f64).round() as i64;
+                c.rect(x, by + 18, 2, 6, INK);
+                let label = format!("{v:.1}");
+                c.text(x - text_w(&label, 1) / 2, by + 28, 1, &label, INK);
+            }
+            c.text(bx + bw + 12, by + 4, 1, "capacity ratio (log)", DIM);
         }
         Legend::Kind(kinds) => {
             c.text(
@@ -681,11 +786,23 @@ fn compose(
 ) -> Result<(u32, u32), String> {
     let head = 40u32;
     let total_w = o.width * panels.len() as u32;
-    let total_h = head + o.height + lg.height();
+    let total_h = head + o.height + lg.height(total_w);
     let mut c = Canvas::new(total_w, total_h);
     for (k, (p, t)) in panels.iter().zip(titles).enumerate() {
         c.blit(p, k as u32 * o.width, head, o.width, o.height);
-        c.text(k as i64 * o.width as i64 + 16, 12, 2, t, INK);
+        // titles shrink to fit their panel
+        let sc = if text_w(t, 2) <= o.width as i64 - 24 {
+            2
+        } else {
+            1
+        };
+        c.text(
+            k as i64 * o.width as i64 + 16,
+            if sc == 2 { 12 } else { 16 },
+            sc,
+            t,
+            INK,
+        );
         if k > 0 {
             c.rect(
                 k as i64 * o.width as i64,
@@ -743,6 +860,105 @@ pub fn preview(
         let (w, h) = compose(&[panel], &titles, o, &Legend::Debris, out)?;
         return Ok(format!("wrote {} ({w}x{h}; {})", out.display(), titles[0]));
     }
+    if o.bonds == Some(BondColour::Weakening) {
+        let l = levels[levels.len() - 1];
+        let bonds = level_bonds(asset, lib, l, o.clip_z);
+        // class of a bond: the level of the top of its parent chain
+        let class_of = |b: &frac_core::Bond| -> (u8, &'static str, [f32; 3]) {
+            if b.anchor {
+                return (0, "anchor (to ground)", [0.05, 0.05, 0.05]);
+            }
+            let mut top = b;
+            while let Some(p) = top.parent_bond {
+                top = &asset.bonds[p.idx()];
+            }
+            match top.level {
+                lv if lv == b.level => (3, "interior", [0.78, 0.78, 0.80]),
+                0 => (1, "L0 joint (between parts)", [0.85, 0.15, 0.15]),
+                _ => (2, "L1 boundary", [0.98, 0.55, 0.05]),
+            }
+        };
+        let interior: Vec<f64> = bonds
+            .iter()
+            .filter(|(b, _)| class_of(b).0 == 3)
+            .map(|&(_, c)| c)
+            .collect();
+        let median = |mut v: Vec<f64>| -> f64 {
+            if v.is_empty() {
+                return f64::NAN;
+            }
+            v.sort_by(|x, y| x.total_cmp(y));
+            v[v.len() / 2]
+        };
+        let ref_cap = median(interior).max(1.0);
+        let lo = 0.1;
+        let shown: Vec<&(&frac_core::Bond, f64)> =
+            bonds.iter().filter(|(b, _)| class_of(b).0 != 3).collect();
+        let mk = |colour: &dyn Fn(&frac_core::Bond, f64) -> [f32; 3]| -> Vec<Tri> {
+            let mut tris = Vec::new();
+            for (k, &&(b, cap)) in shown.iter().enumerate() {
+                let rgb = colour(b, cap);
+                let shade = (0.55 + 0.45 * b.normal.dot(light).abs()) as f32;
+                for &i in &b.interfaces {
+                    for poly in &asset.interfaces[i.idx()].polygons {
+                        let Some(outer) = poly.loops.first() else {
+                            continue;
+                        };
+                        for t in 1..outer.len().saturating_sub(1) {
+                            tris.push(Tri {
+                                p: [outer[0], outer[t], outer[t + 1]],
+                                frag: k as u32,
+                                shade,
+                                rgb: Some(rgb),
+                            });
+                        }
+                    }
+                }
+            }
+            tris
+        };
+        let left = mk(&|b, _| class_of(b).2);
+        let right = mk(&|b, cap| {
+            if b.anchor {
+                [0.05, 0.05, 0.05]
+            } else {
+                heat(log_t((cap / ref_cap).clamp(lo, 1.0), lo, 1.0))
+            }
+        });
+        let panels = vec![
+            render_panel(&left, o.width, o.height, view, DVec3::Y),
+            render_panel(&right, o.width, o.height, view, DVec3::Y),
+        ];
+        titles.push(format!(
+            "L{l} bonds on coarser boundaries ({} of {})",
+            shown.len(),
+            bonds.len()
+        ));
+        titles.push("capacity / interior median".to_string());
+        let mut rows = Vec::new();
+        for cls in [3u8, 2, 1, 0] {
+            let sel: Vec<f64> = bonds
+                .iter()
+                .filter(|(b, _)| class_of(b).0 == cls)
+                .map(|&(_, c)| c)
+                .collect();
+            if sel.is_empty() {
+                continue;
+            }
+            let (_, name, col) =
+                class_of(bonds.iter().find(|(b, _)| class_of(b).0 == cls).unwrap().0);
+            let n = sel.len();
+            let m = median(sel);
+            rows.push((name.to_string(), col, n, m, m / ref_cap));
+        }
+        let legend = Legend::Weakening { rows, lo };
+        let (w, h) = compose(&panels, &titles, o, &legend, out)?;
+        return Ok(format!(
+            "wrote {} ({w}x{h}; {})",
+            out.display(),
+            titles.join(", ")
+        ));
+    }
     let (panels, legend): (Vec<Vec<[u8; 3]>>, Legend) = match o.bonds {
         Some(mode) => {
             let per: Vec<Vec<(&frac_core::Bond, f64)>> = levels
@@ -783,7 +999,7 @@ pub fn preview(
                 .collect();
             let legend = match mode {
                 BondColour::Kind => Legend::Kind(kinds.into_values().collect()),
-                BondColour::Strength => Legend::Strength {
+                BondColour::Strength | BondColour::Weakening => Legend::Strength {
                     lo,
                     hi,
                     anchors,

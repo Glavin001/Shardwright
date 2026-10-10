@@ -214,6 +214,11 @@ pub struct BondSettings {
     /// Crack spawn samples per m² of interface (capped per bond).
     pub spawn_density: f64,
     pub max_spawn_per_bond: u32,
+    /// Weibull weakest-link size effect: a bond on a coarser boundary takes
+    /// the strength of that whole boundary surface, `(A_surface /
+    /// A_ref)^(-1/m)` times its own (capped at 1). Breaks then favour the
+    /// coarse cuts (L0 joints, then L1 boundaries) over chunk interiors.
+    pub size_effect: bool,
 }
 
 impl Default for BondSettings {
@@ -222,6 +227,7 @@ impl Default for BondSettings {
             loop_simplify: 0.02,
             spawn_density: 400.0,
             max_spawn_per_bond: 64,
+            size_effect: false,
         }
     }
 }

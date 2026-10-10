@@ -531,3 +531,57 @@ pub fn outer_product(a: DVec3, b: DVec3) -> DMat3 {
 pub fn eigen_sym(m: &DMat3) -> (DVec3, DMat3) {
     sym_eigen3(m)
 }
+
+/// Weibull weakest-link size effect on bond strength (Weibull 1939): a
+/// brittle surface of area `A` fails at `σ0 (A / A_ref)^(-1/m)`, with `m` the
+/// Weibull modulus, because a larger surface is more likely to hold a
+/// critical flaw. A bond whose two sides belong to different fragments at a
+/// coarser level lies on that coarser boundary. The boundary is one
+/// through-going surface (the top of the bond's `parent_bond` chain), so the
+/// bond gets that surface's strength. A bond inside a coarser fragment keeps
+/// its own area. `A_ref` is the median area of the finest level's
+/// fragment-fragment bonds. Factors are capped at 1, so this only weakens.
+/// The factor multiplies `strength_scale`; returns the factor per bond.
+pub fn apply_size_effect(
+    asset: &mut Asset,
+    weibull: &dyn Fn(Option<MaterialId>, MaterialId) -> f64,
+) -> Vec<f32> {
+    let leaf = asset.hierarchy.levels.saturating_sub(1);
+    let mut leaf_areas: Vec<f64> = asset
+        .bonds
+        .iter()
+        .filter(|b| b.level == leaf && matches!(b.b, FragmentOrWorld::Fragment(_)))
+        .map(|b| b.area)
+        .collect();
+    if leaf_areas.is_empty() {
+        return vec![1.0; asset.bonds.len()];
+    }
+    leaf_areas.sort_by(|x, y| x.total_cmp(y));
+    let a_ref = leaf_areas[leaf_areas.len() / 2].max(1e-300);
+    let factors: Vec<f32> = asset
+        .bonds
+        .iter()
+        .map(|b| {
+            let mut top = b;
+            while let Some(p) = top.parent_bond {
+                top = &asset.bonds[p.idx()];
+            }
+            let base = asset
+                .fragment(b.a)
+                .material_mix
+                .first()
+                .map(|m| m.0)
+                .unwrap_or(MaterialId(0));
+            let m = weibull(
+                b.composition.first().and_then(|c| c.interface_material),
+                base,
+            )
+            .max(0.5);
+            libm::pow(top.area / a_ref, -1.0 / m).min(1.0) as f32
+        })
+        .collect();
+    for (b, f) in asset.bonds.iter_mut().zip(&factors) {
+        b.strength_scale *= f;
+    }
+    factors
+}

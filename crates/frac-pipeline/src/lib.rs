@@ -396,6 +396,9 @@ pub fn run_with(
     asset.bond_children = bo.bond_children;
     asset.loops = bo.loops;
     asset.spawn = bo.spawn;
+    if settings.bonds.size_effect {
+        frac_bonds::apply_size_effect(&mut asset, &weibull);
+    }
     for (i, a) in bo.interior_area.into_iter().enumerate() {
         asset.hierarchy.fragments[i].interior_area = a;
     }

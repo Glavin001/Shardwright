@@ -24,6 +24,12 @@ target_level1_fragments = 12
 max_iccm_iters = 50
 tet_edge_ratio = 0.33
 
+[bonds]
+# Weibull weakest-link size effect: chunk bonds on L1 boundaries and L0
+# joints take the strength of the whole boundary surface they lie on, so
+# they are weaker per area than bonds inside an L1 fragment
+size_effect = true
+
 [collision]
 method = "coacd"
 concavity = 0.02

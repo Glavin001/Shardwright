@@ -187,7 +187,9 @@ enum Cmd {
         azimuth: f64,
         #[arg(long, default_value_t = 25.0)]
         elevation: f64,
-        /// Draw bonds (contact surfaces) instead of fragments: `kind` or `strength`.
+        /// Draw bonds (contact surfaces) instead of fragments: `kind`, `strength`
+        /// or `weakening` (boundary bonds by class and their capacity relative
+        /// to interior bonds).
         #[arg(long)]
         bonds: Option<String>,
         /// Cutaway: hide geometry whose centroid z is above this value.
@@ -1116,7 +1118,10 @@ fn main() -> ExitCode {
                 None => None,
                 Some("kind") => Some(preview::BondColour::Kind),
                 Some("strength") => Some(preview::BondColour::Strength),
-                Some(x) => return Err(format!("--bonds {x}: expected kind or strength")),
+                Some("weakening") => Some(preview::BondColour::Weakening),
+                Some(x) => {
+                    return Err(format!("--bonds {x}: expected kind, strength or weakening"));
+                }
             };
             let o = preview::PreviewOptions {
                 debris: *debris,
