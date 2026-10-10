@@ -94,25 +94,43 @@ axis-aligned candidate planes, `ComputeBestRvClippingPlane`, `clip_by_path`,
 `TernaryMCTS`, the iterative cut loop `Compute`, and `MergeConvexHulls`.
 `coacd::decompose` runs the whole stand-alone pipeline on a closed mesh.
 
-Deviations from upstream:
+Two estimator settings (`CoacdParams::hb`, `CoacdParams::merge_cost`):
 
-* `Hb` uses exact point-to-triangle distances (BVH) instead of the
-  10-nearest-sample approximation, recognizes hull faces lying on the part
-  surface (and part triangles lying on the hull) as zero-distance, and uses
-  deterministic low-discrepancy samples instead of random + Sobol samples.
+* **faithful** (default of the stand-alone `coacd::decompose` /
+  `prefracture decompose`): upstream's `ComputeHb` estimator —
+  `ExtractPointSet` sampling (small triangles sampled every other one) and
+  `face_hausdorff_distance` (distance to the triangles of the 10 nearest
+  samples of the other surface) — and the 1.0.x hull-vs-hull merge cost
+  `ComputeHCost(cvx1, cvx2, CH)`. This is the 1:1 port checked against
+  coacd 1.0.14 below.
+* **pipeline** (`build_hulls`): exact point-to-triangle distances (BVH)
+  with zero-distance face recognition (hull faces lying on the part surface
+  and part triangles lying on the hull), deterministic low-discrepancy
+  samples, and the collision-aware merge cost above (as upstream's current
+  master, the cost is measured against the original geometry). The upstream
+  estimator overestimates distances wherever triangles are small (the true
+  nearest triangle is often not among the 10 sampled ones), so upstream
+  cuts more: on SnowFlake the exact estimator stops at 28 parts before
+  merging, the upstream one (ours) at 58 (upstream 60).
+
+Other deviations, in both settings:
+
 * Inside the tree search, halves are produced by a fast clip with fan caps
   (exact signed volume and convex hull, the only quantities the Rv-based
-  search uses); the parts kept are clipped exactly with CDT caps.
-* The merge cost is measured against the original geometry (as in
-  upstream's current master, not the hull-vs-hull cost of 1.0.x), plus the
-  terms above; upstream's `MeshDist < 0.01` candidate filter is replaced by
-  cell adjacency in the pipeline (kept in `decompose`).
-* Randomness (plane shuffles) uses ChaCha8 seeded per cell from the bake
-  seed; no wall clock; parallel loops collect in index order. Output is
-  bit-identical across runs and thread counts.
-* No manifold preprocessing: fragment and cell meshes are already clean,
-  closed and consistently oriented. Decimation / extrusion options are not
-  ported (hulls stay exact, non-overlap is handled separately).
+  search uses); the parts kept are clipped exactly with CDT caps; when a
+  cut section cannot be triangulated (pinched loops through vertices) the
+  plane is retried with offsets up to 1e-3 (upstream throws).
+* Randomness (plane shuffles, upstream-style samples) uses ChaCha8 seeded
+  from `seed` (per cell from the bake seed in the pipeline) instead of
+  mt19937, so the plane order differs from upstream's run for run; no wall
+  clock; parallel loops collect in index order. Output is bit-identical
+  across runs and thread counts.
+* No manifold preprocessing (fragment and cell meshes are already clean and
+  closed; the baseline script thickens open example meshes for both
+  methods). Upstream's `MeshDist < 0.01` merge-candidate filter is kept in
+  `decompose` and replaced by cell adjacency in the pipeline. Decimation /
+  extrusion options are not ported (the 64-vertex cap replaces decimation;
+  non-overlap is handled separately).
 
 ## Search effort (`[collision]` settings)
 

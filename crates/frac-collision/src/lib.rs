@@ -581,7 +581,17 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
             // clipping and shrinking can add vertices: re-apply the cap
             // (inner approximation, keeps the separation)
             let s = coacd::limit_vertices(&s, p.max_hull_vertices);
-            hulls.push(to_hull(FragmentId(fi as u32), &s));
+            let mut hull = to_hull(FragmentId(fi as u32), &s);
+            // sliver faces (near-duplicate vertices from clipping) have
+            // unreliable planes: rebuild from significant vertices only
+            let scale = s.scale().max(1e-300);
+            for eps in [1e-7, 1e-6, 1e-5, 1e-4, 1e-3] {
+                if coacd::stored_hull_is_convex(&hull.vertices, &hull.faces) {
+                    break;
+                }
+                hull = to_hull(FragmentId(fi as u32), &coacd::greedy_subset(&s, p.max_hull_vertices, eps * scale));
+            }
+            hulls.push(hull);
         }
         ranges[fi] = start..hulls.len() as u32;
     }

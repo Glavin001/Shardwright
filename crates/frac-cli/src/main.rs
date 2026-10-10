@@ -380,6 +380,10 @@ fn hulls_cmd(asset: &Path, config: &Option<PathBuf>, out: &Path, coacd_threshold
         }
     }
     frac_io::write_asset_json(&a, out).map_err(|e| e.to_string())?;
+    // collision-shape limits (as the collision_shapes gate)
+    let nonconvex = a.hulls.iter().filter(|h| !frac_pipeline::frac_collision::coacd::stored_hull_is_convex(&h.vertices, &h.faces)).count();
+    let maxv = a.hulls.iter().map(|h| h.vertices.len()).max().unwrap_or(0);
+    println!("collision shapes: {nonconvex} non-convex, max {maxv} vertices");
     println!("{}: {} hulls in {secs:.2} s; max neighbour hull overlap {worst:.3e} m3 over {pairs} pairs ({})", out.display(), a.hulls.len(), if worst <= 1e-9 { "PASS" } else { "FAIL" });
     Ok(worst <= 1e-9)
 }

@@ -570,17 +570,29 @@ pub fn hull_tri(points: &[DVec3]) -> Option<Ch> {
 /// approximation it never adds overshoot and keeps any separation from
 /// neighbouring hulls. Deterministic (ties by vertex order).
 pub fn limit_vertices(poly: &ConvexPolytope, max_v: usize) -> ConvexPolytope {
-    let vs = poly.vertices();
-    if max_v == 0 || vs.len() <= max_v || poly.is_empty() {
+    let n = poly.vertices().len();
+    if max_v == 0 || n <= max_v || poly.is_empty() {
         return poly.clone();
     }
-    let max_v = max_v.max(4);
+    greedy_subset(poly, max_v, 0.0)
+}
+
+/// Hull of a greedy vertex subset of `poly` (see [`limit_vertices`]): only
+/// vertices farther than `eps` outside the current hull are added, so
+/// near-duplicate and near-coplanar vertices (the source of sliver faces)
+/// are dropped; at most `max_v` vertices (0: unlimited).
+pub fn greedy_subset(poly: &ConvexPolytope, max_v: usize, eps: f64) -> ConvexPolytope {
+    let vs = poly.vertices();
+    if vs.len() < 4 || poly.is_empty() {
+        return poly.clone();
+    }
+    let max_v = if max_v == 0 { usize::MAX } else { max_v.max(4) };
     let mut chosen: Vec<usize> = Vec::new();
     for k in 0..3 {
         let lo = (0..vs.len()).min_by(|&a, &b| vs[a][k].total_cmp(&vs[b][k]).then(a.cmp(&b))).unwrap();
         let hi = (0..vs.len()).max_by(|&a, &b| vs[a][k].total_cmp(&vs[b][k]).then(b.cmp(&a))).unwrap();
         for i in [lo, hi] {
-            if !chosen.contains(&i) {
+            if !chosen.iter().any(|&c| c == i || (vs[c] - vs[i]).length() <= eps) {
                 chosen.push(i);
             }
         }
@@ -595,11 +607,12 @@ pub fn limit_vertices(poly: &ConvexPolytope, max_v: usize) -> ConvexPolytope {
             Some(h) => (0..vs.len())
                 .filter(|i| !chosen.contains(i))
                 .map(|i| (i, h.poly.faces.iter().map(|(f, _)| f.dist(vs[i])).fold(f64::NEG_INFINITY, f64::max)))
-                .filter(|x| x.1 > 0.0)
+                .filter(|x| x.1 > eps)
                 .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0))),
             None => (0..vs.len())
                 .filter(|i| !chosen.contains(i))
                 .map(|i| (i, chosen.iter().map(|&c| (vs[i] - vs[c]).length()).fold(f64::INFINITY, f64::min)))
+                .filter(|x| x.1 > eps)
                 .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0))),
         };
         if let Some(h) = h {
@@ -609,11 +622,26 @@ pub fn limit_vertices(poly: &ConvexPolytope, max_v: usize) -> ConvexPolytope {
             cur = Some(h);
         }
         match far {
-            Some((i, _)) if chosen.len() < 4 * max_v => chosen.push(i),
+            Some((i, _)) if chosen.len() < 4 * max_v.min(1 << 20) => chosen.push(i),
             _ => break,
         }
     }
     cur.map(|c| c.poly).unwrap_or_else(|| poly.clone())
+}
+
+/// Convexity of a stored hull (vertices, polygon faces) as checked by the
+/// `collision_shapes` validation gate: every vertex on or behind every face
+/// plane (Newell normal through the face centroid), relative 1e-9.
+pub fn stored_hull_is_convex(verts: &[DVec3], faces: &[Vec<u32>]) -> bool {
+    let scale = Aabb::from_points(verts.iter()).diagonal().max(1e-300);
+    let tol = 1e-9 * scale;
+    !faces.is_empty()
+        && faces.iter().all(|f| {
+            let pts: Vec<DVec3> = f.iter().map(|&i| verts[i as usize]).collect();
+            let n = frac_geom::polygon::newell(&pts).normalize_or_zero();
+            let c = pts.iter().fold(DVec3::ZERO, |a, p| a + *p) / pts.len().max(1) as f64;
+            n != DVec3::ZERO && verts.iter().all(|v| (*v - c).dot(n) <= tol)
+        })
 }
 
 /// Hull volume only (MCTS rewards need nothing else).
