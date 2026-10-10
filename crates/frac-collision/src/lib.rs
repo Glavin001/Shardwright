@@ -783,7 +783,7 @@ fn separate_level(asset: &Asset, level: u8, recs: &mut [Vec<HullRec>], atoms: &[
                 for poly in &it.polygons {
                     extra.push(poly.normal * s);
                 }
-                if extra.len() > 32 {
+                if extra.len() > 8 {
                     break;
                 }
             }

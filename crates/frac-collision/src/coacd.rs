@@ -1165,14 +1165,19 @@ fn process_part(s: Solid, p: &CoacdParams, allow_cut: bool) -> Outcome {
         return Outcome::Done(Box::new(CutPart { solid: s, ch, cost }));
     };
     ternary_refine(&arc, p, &mut plane, &path, quality);
-    match clip(&arc, &plane) {
-        Some((pos, neg, _)) if !pos.is_empty() && !neg.is_empty() => Outcome::Split(pos, neg),
-        _ => {
-            let s = Arc::try_unwrap(arc).unwrap_or_else(|a| (*a).clone());
-            let cost = h_cost(&s, &ch, p, f64::INFINITY);
-            Outcome::Done(Box::new(CutPart { solid: s, ch, cost }))
+    // degenerate cut sections (pinched loops through vertices) can defeat
+    // the cap triangulation: retry with slightly offset planes
+    for k in [0.0, 1e-4, -1e-4, 3e-4, -3e-4, 1e-3, -1e-3] {
+        let pl = Plane { n: plane.n, d: plane.d + k };
+        if let Some((pos, neg, _)) = clip(&arc, &pl) {
+            if !pos.is_empty() && !neg.is_empty() {
+                return Outcome::Split(pos, neg);
+            }
         }
     }
+    let s = Arc::try_unwrap(arc).unwrap_or_else(|a| (*a).clone());
+    let cost = h_cost(&s, &ch, p, f64::INFINITY);
+    Outcome::Done(Box::new(CutPart { solid: s, ch, cost }))
 }
 
 /// Cut a closed solid (already in the normalized frame) until every part's
@@ -1665,8 +1670,15 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
         cost: f64,
         stage: u8,
         ch: Option<Ch>,
+        /// Final only for the cheap phase (stage-1 cost).
+        cheap: bool,
     }
     let budget = budget.max(1);
+    // With many pieces, merge by the stage-1 cost (no hull-surface branch
+    // and bound) until `exact_below` remain; those bounds become lower
+    // bounds again for the exact phase.
+    let exact_below = budget.saturating_mul(2).max(16);
+    let mut cheap_phase = true;
     let mut alive: BTreeMap<usize, Piece> = pieces.into_iter().enumerate().collect();
     let mut next_id = alive.len();
     let mut cache: BTreeMap<(usize, usize), Entry> = BTreeMap::new();
@@ -1677,7 +1689,7 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
         for (pr, ok) in pairs.into_iter().zip(ok) {
             if ok && !cache.contains_key(&pr) {
                 let base = alive[&pr.0].own.max(alive[&pr.1].own);
-                cache.insert(pr, Entry { cost: base, stage: 0, ch: None });
+                cache.insert(pr, Entry { cost: base, stage: 0, ch: None, cheap: false });
                 heap.push(Reverse(Key(base, pr.0, pr.1)));
             }
         }
@@ -1710,6 +1722,16 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
             break;
         };
         let (cost, i, j) = (*cost, *i, *j);
+        if cheap_phase && alive.len() <= exact_below {
+            cheap_phase = false;
+            for e in cache.values_mut() {
+                if e.cheap {
+                    e.cheap = false;
+                    e.stage = 1;
+                }
+            }
+            continue;
+        }
         // the stop rules only need a lower bound
         if carry.is_none() && cost > threshold && alive.len() <= carry_cap {
             carry = Some(alive.values().cloned().collect());
@@ -1738,6 +1760,7 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
             for k in popped {
                 heap.push(Reverse(k));
             }
+            let cheap = cheap_phase && alive.len() > exact_below;
             let res: Vec<(f64, u8, Option<Ch>)> = batch
                 .par_iter()
                 .map(|k| {
@@ -1745,7 +1768,7 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
                     let (a, b) = (&alive[&k.0], &alive[&k.1]);
                     if e.stage == 0 {
                         match ctx.stage1(a, b) {
-                            Some((c, ch)) => (c, 1, Some(ch)),
+                            Some((c, ch)) => (c, if cheap { 2 } else { 1 }, Some(ch)),
                             None => (f64::INFINITY, 2, None),
                         }
                     } else {
@@ -1758,10 +1781,11 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
             for (k, (c, st, ch)) in batch.into_iter().zip(res) {
                 let e = cache.get_mut(&k).unwrap();
                 e.cost = e.cost.max(c);
-                e.stage = st;
                 if ch.is_some() {
+                    e.cheap = cheap && st == 2;
                     e.ch = ch;
                 }
+                e.stage = st;
                 if e.ch.is_none() {
                     cache.remove(&k);
                 } else {
