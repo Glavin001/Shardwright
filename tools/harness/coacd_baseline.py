@@ -11,9 +11,12 @@ normalized frame (longest bounding-box side = 2):
 
   * hulls       number of convex hulls;
   * h           CoACD concavity of the decomposition, max(Rv, Hb):
-                Rv = 0.3·∛(3|V(mesh) − V(∪hulls)|/4π), Hb = symmetric
-                Hausdorff distance between the mesh surface and the surface of
-                ∪hulls (40k samples each);
+                Rv = 0.3·∛(3|V(mesh) − V(∪hulls)|/4π), Hb = collision-aware
+                symmetric surface deviation: max distance from the surface of
+                (∪hulls − mesh) to the mesh surface and from the surface of
+                (mesh − ∪hulls) to the hull surface (dense samples; crevices
+                between touching hulls inside the mesh do not count, as in
+                CoACD where every part is scored against its own hull);
   * vol_ratio   Σ V(hull) / V(mesh) (overlap counted, like CoACD's merge Rv);
   * seconds     wall time of the decomposition call.
 
@@ -51,6 +54,30 @@ def shapes():
     return out
 
 
+def load_obj(path):
+    """Closed mesh from an OBJ. Open surfaces are turned into thin solids by a
+    level set of the unsigned distance (offset 1% of the longest side, grid
+    2% — like upstream's manifold preprocessing), so both methods get the
+    same closed input."""
+    import trimesh
+    m = trimesh.load(path, force="mesh", process=True)
+    if m.is_watertight and m.is_winding_consistent:
+        if m.volume < 0:
+            m.invert()
+        return np.asarray(m.vertices, float), np.asarray(m.faces, int), False
+    import manifold3d as m3
+    from scipy.spatial import cKDTree
+    L = float((m.bounds[1] - m.bounds[0]).max())
+    pts, _ = trimesh.sample.sample_surface(m, 200000, seed=1)
+    tree = cKDTree(np.vstack([pts, m.vertices]))
+    r = 0.01 * L
+    sdf = lambda x, y, z: r - float(tree.query((x, y, z))[0])
+    lo, hi = m.bounds[0] - 2 * r, m.bounds[1] + 2 * r
+    man = m3.Manifold.level_set(sdf, [*lo, *hi], 0.02 * L)
+    mm = man.to_mesh()
+    return np.asarray(mm.vert_properties, float)[:, :3], np.asarray(mm.tri_verts, int), True
+
+
 def key_of(V, T, extra):
     h = hashlib.sha1()
     h.update(np.ascontiguousarray(V, np.float64).tobytes())
@@ -68,7 +95,7 @@ def run_ours(cli, V, T, threshold, cache):
         subprocess.run([cli, "decompose", "--mesh", mp, "--out", path, "--threshold", str(threshold), "--seed", "0"], check=True, stdout=subprocess.DEVNULL)
         os.remove(mp)
     d = json.load(open(path))
-    return d["hulls"], d["seconds"]
+    return d["hulls"], d["seconds"], d.get("hulls_capped64")
 
 
 def run_upstream(V, T, threshold, cache):
@@ -106,7 +133,20 @@ def evaluate(V, T, hulls, rng):
     seed = int(rng.integers(1 << 31))
     fs, _ = trimesh.sample.sample_surface(tm, 40000, seed=seed)
     us, _ = trimesh.sample.sample_surface(ut, 40000, seed=seed + 1)
-    hb = max(cKDTree(np.vstack([fs, V])).query(us)[0].max(), cKDTree(np.vstack([us, ut.vertices])).query(fs)[0].max()) * s
+    # collision-aware symmetric deviation: surface of (∪hulls − mesh) to the
+    # mesh surface and surface of (mesh − ∪hulls) to the hull surface
+    # (crevices between touching hulls inside the mesh are not surface)
+    hb = 0.0
+    for region, ref in ((union - mesh, np.vstack([fs, V])), (mesh - union, np.vstack([us, ut.vertices]))):
+        if region.volume() <= 1e-12 * vm:
+            continue
+        rm = region.to_mesh()
+        rt = trimesh.Trimesh(np.asarray(rm.vert_properties)[:, :3], np.asarray(rm.tri_verts), process=False)
+        if rt.area <= 0:
+            continue
+        rs, _ = trimesh.sample.sample_surface(rt, 20000, seed=seed + 2)
+        hb = max(hb, float(cKDTree(ref).query(rs)[0].max()))
+    hb *= s
     return {"hulls": len(hulls), "h": float(max(rv, hb)), "rv": float(rv), "hb": float(hb), "vol_ratio": float(sum(h.volume() for h in hs) / vm)}
 
 
@@ -119,10 +159,14 @@ def main():
     ap.add_argument("--cache", default="")
     ap.add_argument("--json", default="")
     ap.add_argument("--no-shapes", action="store_true")
+    ap.add_argument("--obj", action="append", default=[], help="OBJ mesh (e.g. upstream examples/*.obj)")
     args = ap.parse_args()
     cache = args.cache or os.path.join(os.getcwd(), ".coacd_baseline_cache")
     os.makedirs(cache, exist_ok=True)
     meshes = [] if args.no_shapes else list(shapes().items())
+    for path in args.obj:
+        V, T, thick = load_obj(path)
+        meshes.append((os.path.basename(path) + (" (thickened)" if thick else ""), (V, T)))
     if args.bowl:
         a = json.load(open(args.bowl))
         f = [f for f in a["hierarchy"]["fragments"] if f["level"] == 0][0]
@@ -136,12 +180,14 @@ def main():
     rng = np.random.default_rng(1)
     rows = []
     for name, (V, T) in meshes:
-        ho, so = run_ours(args.cli, V, T, args.threshold, cache)
+        ho, so, hc = run_ours(args.cli, V, T, args.threshold, cache)
         hu, su = run_upstream(V, T, args.threshold, cache)
         eo, eu = evaluate(V, T, ho, rng), evaluate(V, T, hu, rng)
+        ec = evaluate(V, T, hc, rng) if hc else None
         if eo and eu:
             eo["seconds"], eu["seconds"] = so, su
-            rows.append({"mesh": name, "tris": int(len(T)), "ours": eo, "coacd": eu})
+            eo["max_verts"], eu["max_verts"] = max(len(h) for h in ho), max(len(h) for h in hu)
+            rows.append({"mesh": name, "tris": int(len(T)), "ours": eo, "coacd": eu, "ours_capped64": ec})
             print(f"{name}: ours {eo['hulls']} hulls h={eo['h']:.4f} ({so:.1f}s) | coacd {eu['hulls']} hulls h={eu['h']:.4f} ({su:.1f}s)", file=sys.stderr)
     print(f"### Stand-alone port vs upstream CoACD 1.0.14 (threshold {args.threshold}, upstream defaults)\n")
     print("| Mesh | Tris | Hulls ours / CoACD | h ours / CoACD | Rv ours / CoACD | Hb ours / CoACD | Σ hull vol / V ours / CoACD | Seconds ours / CoACD |")
@@ -155,6 +201,12 @@ def main():
         print(f"| **median** | | {med('hulls','ours'):.0f} / {med('hulls','coacd'):.0f} | {med('h','ours'):.4f} / {med('h','coacd'):.4f} | "
               f"{med('rv','ours'):.4f} / {med('rv','coacd'):.4f} | {med('hb','ours'):.4f} / {med('hb','coacd'):.4f} | "
               f"{med('vol_ratio','ours'):.3f} / {med('vol_ratio','coacd'):.3f} | {med('seconds','ours'):.1f} / {med('seconds','coacd'):.1f} |")
+    capped = [r for r in rows if r.get("ours_capped64")]
+    if capped:
+        print("\n| Mesh | max hull vertices ours / CoACD | h ours (≤64 vertices) | Σ hull vol / V ours (≤64 vertices) |\n|---|---|---|---|")
+        for r in capped:
+            c = r["ours_capped64"]
+            print(f"| {r['mesh']} | {r['ours']['max_verts']} / {r['coacd']['max_verts']} | {c['h']:.4f} | {c['vol_ratio']:.3f} |")
     if args.json:
         json.dump(rows, open(args.json, "w"), indent=2)
 

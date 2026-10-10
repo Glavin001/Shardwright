@@ -308,7 +308,12 @@ fn decompose_cmd(mesh: &Path, out: &Path, threshold: f64, max_ch: usize, iters: 
     let secs = t.elapsed().as_secs_f64();
     let hulls: Vec<Vec<[f64; 3]>> = res.iter().map(|(h, _)| h.vertices().iter().map(|q| [q.x, q.y, q.z]).collect()).collect();
     let conc: Vec<f64> = res.iter().map(|x| x.1).collect();
-    let doc = serde_json::json!({ "hulls": hulls, "concavity": conc, "seconds": secs });
+    // the same hulls under the 64-vertex physics cap
+    let capped: Vec<Vec<[f64; 3]>> = res
+        .iter()
+        .map(|(h, _)| frac_pipeline::frac_collision::coacd::limit_vertices(h, 64).vertices().iter().map(|q| [q.x, q.y, q.z]).collect())
+        .collect();
+    let doc = serde_json::json!({ "hulls": hulls, "hulls_capped64": capped, "concavity": conc, "seconds": secs });
     std::fs::write(out, doc.to_string()).map_err(|e| e.to_string())?;
     println!("{}: {} hulls in {secs:.2} s", out.display(), res.len());
     Ok(true)
