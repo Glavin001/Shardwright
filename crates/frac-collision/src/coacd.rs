@@ -71,9 +71,9 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering as AO};
 use std::sync::Arc;
 
-/// Profiling counters (pair evaluations of the merge, cumulative ns).
+/// Profiling counters (`FRAC_PROFILE`): merged hulls evaluated, cumulative
+/// CPU ns per cost component, out-term evaluations, clips.
 pub static N_PAIR: AtomicU64 = AtomicU64::new(0);
-pub static T_PAIR: AtomicU64 = AtomicU64::new(0);
 pub static T_HULLC: AtomicU64 = AtomicU64::new(0);
 pub static T_IN: AtomicU64 = AtomicU64::new(0);
 pub static T_OUT: AtomicU64 = AtomicU64::new(0);
@@ -1327,13 +1327,11 @@ impl MergeCtx<'_> {
         c.max(o)
     }
 
-    /// Cost of merging two pieces and the merged hull.
+    /// Cost of merging two pieces and the merged hull (stops above `cap`).
     pub fn pair_cost(&self, a: &Piece, b: &Piece, cap: f64) -> Option<(f64, Ch)> {
-        let t0 = std::time::Instant::now();
-        let r = self.pair_cost_inner(a, b, cap);
-        N_PAIR.fetch_add(1, AO::Relaxed);
-        T_PAIR.fetch_add(t0.elapsed().as_nanos() as u64, AO::Relaxed);
-        r
+        let (c1, ch) = self.stage1(a, b)?;
+        let c = if c1 > cap { c1 } else { self.stage2(a, b, &ch, c1, cap) };
+        Some((c, ch))
     }
 
     /// Lower bound of a merge cost from the merged hull (Rv, covered-surface
@@ -1365,30 +1363,14 @@ impl MergeCtx<'_> {
         if c > cap {
             return c;
         }
+        // the merged hull is covered by the pieces' geometry (convex union):
+        // no part of its surface lies outside the solid
+        if ch.volume - (a.vol + b.vol) <= 1e-9 * ch.volume {
+            return c;
+        }
         let o = self.out_term(&ch.poly, &[&a.poly, &b.poly], c, cap);
         T_OUT.fetch_add(t2.elapsed().as_nanos() as u64, AO::Relaxed);
         c.max(o)
-    }
-
-    fn pair_cost_inner(&self, a: &Piece, b: &Piece, cap: f64) -> Option<(f64, Ch)> {
-        let t0 = std::time::Instant::now();
-        let mut pts = a.pts.clone();
-        pts.extend_from_slice(&b.pts);
-        let ch = hull(&pts)?;
-        T_HULLC.fetch_add(t0.elapsed().as_nanos() as u64, AO::Relaxed);
-        let t1 = std::time::Instant::now();
-        let base = a.own.max(b.own);
-        let r = rv(a.vol + b.vol, ch.volume, self.rv_k);
-        let i = Self::in_term(&ch.poly, &[&a.samples, &b.samples]);
-        let c = base.max(r).max(i);
-        T_IN.fetch_add(t1.elapsed().as_nanos() as u64, AO::Relaxed);
-        if c > cap {
-            return Some((c, ch));
-        }
-        let t2 = std::time::Instant::now();
-        let o = self.out_term(&ch.poly, &[&a.poly, &b.poly], c, cap);
-        T_OUT.fetch_add(t2.elapsed().as_nanos() as u64, AO::Relaxed);
-        Some((c.max(o), ch))
     }
 }
 
@@ -1400,6 +1382,79 @@ fn merged_piece(a: &Piece, b: &Piece, ch: Ch, cost: f64) -> Piece {
     tags.sort_unstable();
     let bbox = Aabb::from_points(ch.pts.iter());
     Piece { poly: ch.poly, pts: ch.pts, bbox, vol: a.vol + b.vol, own: cost, samples, tags }
+}
+
+/// Cheap pre-merging for fragments with very many pieces: greedily merge
+/// the adjacent pair whose bounding box grows least (box volume excess,
+/// no hull or distance evaluation) until `target` pieces remain; merged
+/// hulls are computed once per merge. Deterministic (ties by ids).
+pub fn coarsen(pieces: Vec<Piece>, target: usize, adjacent: &(dyn Fn(&Piece, &Piece) -> bool + Sync)) -> Vec<Piece> {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    if pieces.len() <= target {
+        return pieces;
+    }
+    #[derive(PartialEq)]
+    struct Key(f64, usize, usize);
+    impl Eq for Key {}
+    impl PartialOrd for Key {
+        fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> {
+            Some(self.cmp(o))
+        }
+    }
+    impl Ord for Key {
+        fn cmp(&self, o: &Self) -> std::cmp::Ordering {
+            self.0.total_cmp(&o.0).then(self.1.cmp(&o.1)).then(self.2.cmp(&o.2))
+        }
+    }
+    let excess = |a: &Piece, b: &Piece| -> f64 {
+        let u = a.bbox.union(&b.bbox);
+        let v = |bb: &Aabb| {
+            let e = bb.extent();
+            e.x * e.y * e.z
+        };
+        v(&u) - a.vol - b.vol
+    };
+    let mut alive: BTreeMap<usize, Piece> = pieces.into_iter().enumerate().collect();
+    let mut next_id = alive.len();
+    let mut heap: BinaryHeap<Reverse<Key>> = BinaryHeap::new();
+    let ids: Vec<usize> = alive.keys().copied().collect();
+    let found: Vec<Vec<Key>> = ids
+        .par_iter()
+        .enumerate()
+        .map(|(k, &i)| ids[k + 1..].iter().filter(|&&j| adjacent(&alive[&i], &alive[&j])).map(|&j| Key(excess(&alive[&i], &alive[&j]), i, j)).collect())
+        .collect();
+    for v in found {
+        for k in v {
+            heap.push(Reverse(k));
+        }
+    }
+    while alive.len() > target {
+        let Some(Reverse(Key(_, i, j))) = heap.pop() else { break };
+        if !alive.contains_key(&i) || !alive.contains_key(&j) {
+            continue;
+        }
+        let a = alive.remove(&i).unwrap();
+        let b = alive.remove(&j).unwrap();
+        let mut pts = a.pts.clone();
+        pts.extend_from_slice(&b.pts);
+        let Some(ch) = hull(&pts) else {
+            alive.insert(i, a);
+            alive.insert(j, b);
+            continue;
+        };
+        let own = a.own.max(b.own).max(rv(a.vol + b.vol, ch.volume, 0.3));
+        let m = merged_piece(&a, &b, ch, own);
+        let nid = next_id;
+        next_id += 1;
+        let others: Vec<usize> = alive.keys().copied().collect();
+        let keys: Vec<Option<Key>> = others.par_iter().map(|&o| if adjacent(&alive[&o], &m) { Some(Key(excess(&alive[&o], &m), o, nid)) } else { None }).collect();
+        for k in keys.into_iter().flatten() {
+            heap.push(Reverse(k));
+        }
+        alive.insert(nid, m);
+    }
+    alive.into_values().collect()
 }
 
 /// Result of a greedy merge.
@@ -1419,8 +1474,25 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
     // Lazy evaluation: every candidate pair holds a lower bound of its cost
     // that is refined in stages (0: max of the parts' own costs; 1: merged
     // hull, Rv and the covered-surface term; 2: exact, with the hull-surface
-    // term) only while it competes for the minimum. The selected merge is
-    // the same as with eager evaluation.
+    // term) only while it competes for the minimum. Bounds live in a binary
+    // heap ordered by (bound, pair); entries of merged-away pieces are
+    // dropped when popped. The selected merges are those of eager
+    // evaluation.
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    #[derive(PartialEq)]
+    struct Key(f64, usize, usize);
+    impl Eq for Key {}
+    impl PartialOrd for Key {
+        fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> {
+            Some(self.cmp(o))
+        }
+    }
+    impl Ord for Key {
+        fn cmp(&self, o: &Self) -> std::cmp::Ordering {
+            self.0.total_cmp(&o.0).then(self.1.cmp(&o.1)).then(self.2.cmp(&o.2))
+        }
+    }
     struct Entry {
         cost: f64,
         stage: u8,
@@ -1430,38 +1502,46 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
     let mut alive: BTreeMap<usize, Piece> = pieces.into_iter().enumerate().collect();
     let mut next_id = alive.len();
     let mut cache: BTreeMap<(usize, usize), Entry> = BTreeMap::new();
+    let mut heap: BinaryHeap<Reverse<Key>> = BinaryHeap::new();
     let mut all_pairs = false;
-    let add_pairs = |alive: &BTreeMap<usize, Piece>, cache: &mut BTreeMap<(usize, usize), Entry>, pairs: Vec<(usize, usize)>, all: bool| {
+    let add_pairs = |alive: &BTreeMap<usize, Piece>, cache: &mut BTreeMap<(usize, usize), Entry>, heap: &mut BinaryHeap<Reverse<Key>>, pairs: Vec<(usize, usize)>, all: bool| {
         let ok: Vec<bool> = pairs.par_iter().map(|&(i, j)| all || adjacent(&alive[&i], &alive[&j])).collect();
         for (pr, ok) in pairs.into_iter().zip(ok) {
-            if ok {
+            if ok && !cache.contains_key(&pr) {
                 let base = alive[&pr.0].own.max(alive[&pr.1].own);
                 cache.insert(pr, Entry { cost: base, stage: 0, ch: None });
+                heap.push(Reverse(Key(base, pr.0, pr.1)));
             }
         }
     };
     let ids: Vec<usize> = alive.keys().copied().collect();
     let pairs: Vec<(usize, usize)> = ids.iter().enumerate().flat_map(|(k, &i)| ids[k + 1..].iter().map(move |&j| (i, j))).collect();
-    add_pairs(&alive, &mut cache, pairs, false);
+    add_pairs(&alive, &mut cache, &mut heap, pairs, false);
     let batch_min = rayon::current_num_threads().max(1) * 2;
     let mut carry: Option<Vec<Piece>> = None;
+    // a heap key is current when it matches its cache entry
+    let current = |cache: &BTreeMap<(usize, usize), Entry>, k: &Key| cache.get(&(k.1, k.2)).map(|e| e.cost.total_cmp(&k.0).is_eq()).unwrap_or(false);
     loop {
         if alive.len() <= 1 {
             break;
         }
-        // smallest entries (by bound, then key)
-        let mut order: Vec<(f64, (usize, usize), u8)> = cache.iter().map(|(k, e)| (e.cost, *k, e.stage)).collect();
-        order.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
-        let Some(&(cost, (i, j), stage)) = order.first() else {
+        while let Some(Reverse(k)) = heap.peek() {
+            if current(&cache, k) {
+                break;
+            }
+            heap.pop();
+        }
+        let Some(Reverse(Key(cost, i, j))) = heap.peek() else {
             if alive.len() > budget && !all_pairs {
                 all_pairs = true;
                 let ids: Vec<usize> = alive.keys().copied().collect();
                 let pairs: Vec<(usize, usize)> = ids.iter().enumerate().flat_map(|(k, &i)| ids[k + 1..].iter().map(move |&j| (i, j))).collect();
-                add_pairs(&alive, &mut cache, pairs, true);
+                add_pairs(&alive, &mut cache, &mut heap, pairs, true);
                 continue;
             }
             break;
         };
+        let (cost, i, j) = (*cost, *i, *j);
         // the stop rules only need a lower bound
         if carry.is_none() && cost > threshold && alive.len() <= carry_cap {
             carry = Some(alive.values().cloned().collect());
@@ -1469,11 +1549,27 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
         if cost > threshold && alive.len() <= budget {
             break;
         }
-        if stage < 2 {
-            // refine a batch of the smallest non-final bounds in parallel;
-            // the smallest exact cost so far caps the exact evaluations
-            let batch: Vec<(usize, usize)> = order.iter().filter(|e| e.2 < 2).take(batch_min).map(|e| e.1).collect();
-            let cap = order.iter().filter(|e| e.2 == 2).map(|e| e.0).next().unwrap_or(f64::INFINITY);
+        if cache[&(i, j)].stage < 2 {
+            // refine the smallest non-final bounds (up to the first exact
+            // one, whose cost caps the exact evaluations) in parallel
+            let mut batch: Vec<(usize, usize)> = Vec::new();
+            let mut cap = f64::INFINITY;
+            let mut popped: Vec<Key> = Vec::new();
+            while batch.len() < batch_min {
+                let Some(Reverse(k)) = heap.pop() else { break };
+                if !current(&cache, &k) {
+                    continue;
+                }
+                if cache[&(k.1, k.2)].stage == 2 {
+                    cap = k.0;
+                    popped.push(k);
+                    break;
+                }
+                batch.push((k.1, k.2));
+            }
+            for k in popped {
+                heap.push(Reverse(k));
+            }
             let res: Vec<(f64, u8, Option<Ch>)> = batch
                 .par_iter()
                 .map(|k| {
@@ -1500,20 +1596,28 @@ pub fn greedy_merge(pieces: Vec<Piece>, ctx: &MergeCtx, threshold: f64, budget: 
                 }
                 if e.ch.is_none() {
                     cache.remove(&k);
+                } else {
+                    heap.push(Reverse(Key(e.cost, k.0, k.1)));
                 }
             }
             continue;
         }
+        heap.pop();
         let ch = cache.remove(&(i, j)).unwrap().ch.unwrap();
         let a = alive.remove(&i).unwrap();
         let b = alive.remove(&j).unwrap();
-        cache.retain(|k, _| k.0 != i && k.1 != i && k.0 != j && k.1 != j);
+        // drop the cache entries of the merged pieces (their heap keys
+        // become stale)
+        let dead: Vec<(usize, usize)> = cache.keys().filter(|k| k.0 == i || k.1 == i || k.0 == j || k.1 == j).copied().collect();
+        for k in dead {
+            cache.remove(&k);
+        }
         let m = merged_piece(&a, &b, ch, cost);
         let nid = next_id;
         next_id += 1;
         let pairs: Vec<(usize, usize)> = alive.keys().map(|&o| (o, nid)).collect();
         alive.insert(nid, m);
-        add_pairs(&alive, &mut cache, pairs, all_pairs);
+        add_pairs(&alive, &mut cache, &mut heap, pairs, all_pairs);
     }
     let pieces: Vec<Piece> = alive.into_values().collect();
     let carry = carry.unwrap_or_else(|| pieces.clone());

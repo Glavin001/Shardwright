@@ -94,4 +94,13 @@ fn nonconvex_u_block_hulls() {
     for f in &a.hierarchy.fragments {
         assert!(f.hulls.len() <= settings.collision.max_hulls_per_fragment as usize);
     }
+    // determinism: recomputing the hulls gives bit-identical results
+    let cp = frac_pipeline::collision_params(&settings);
+    let (h1, r1) = frac_pipeline::build_hulls(a, &cp);
+    let (h2, r2) = frac_pipeline::build_hulls(a, &cp);
+    assert_eq!(r1, r2);
+    assert_eq!(h1.len(), a.hulls.len());
+    let bits = |h: &[frac_core::Hull]| -> Vec<u64> { h.iter().flat_map(|x| x.vertices.iter().flat_map(|v| [v.x.to_bits(), v.y.to_bits(), v.z.to_bits()])).collect() };
+    assert_eq!(bits(&h1), bits(&h2));
+    assert_eq!(bits(&h1), bits(&a.hulls));
 }

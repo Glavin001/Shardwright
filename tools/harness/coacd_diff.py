@@ -12,7 +12,13 @@ fragment meshes. Per fragment and method:
                 samples each; CoACD's boundary term);
   * concavity_norm = the same distance in CoACD's normalized units (divided by
                 half the longest bounding-box side), comparable to the CoACD
-                threshold.
+                threshold;
+  * cw_concavity = collision-aware variant: max distance from the surface of
+                (∪hulls − fragment) to the fragment surface and from the
+                surface of (fragment − ∪hulls) to the hull surface / diameter
+                (ignores crevices between hulls inside the fragment, which
+                dominate `concavity` for many-hull decompositions); cw_norm in
+                CoACD units.
 
 Budget modes:
   * equal (default): CoACD runs with `max_convex_hull` = our hull count for the
@@ -103,8 +109,22 @@ def metrics(V, T, hulls, rng):
     d_in = cKDTree(np.vstack([us, ut.vertices])).query(fs)[0].max()
     worst = max(float(d_out), float(d_in))
     half_longest = 0.5 * float((V.max(0) - V.min(0)).max())
+    # collision-aware deviation (ignores crevices between hulls inside the
+    # fragment): surface of (∪hulls − fragment) to the fragment surface, and
+    # surface of (fragment − ∪hulls) to the hull surface
+    cw = 0.0
+    for region, ref in ((union - frag, np.vstack([fs, V])), (frag - union, np.vstack([us, ut.vertices]))):
+        if region.volume() <= 0:
+            continue
+        rm = region.to_mesh()
+        rt = trimesh.Trimesh(np.asarray(rm.vert_properties)[:, :3], np.asarray(rm.tri_verts), process=False)
+        if rt.area <= 0:
+            continue
+        rs, _ = trimesh.sample.sample_surface(rt, 20000, seed=seed + 2)
+        cw = max(cw, float(cKDTree(ref).query(rs)[0].max()))
     return {"hulls": len(hulls), "coverage": inside / fv, "outside": outside / fv, "concavity": worst / max(diam, 1e-12),
-            "concavity_norm": worst / max(half_longest, 1e-12)}
+            "concavity_norm": worst / max(half_longest, 1e-12), "cw_concavity": cw / max(diam, 1e-12),
+            "cw_norm": cw / max(half_longest, 1e-12)}
 
 
 def run_upstream(job):
@@ -176,7 +196,7 @@ def main():
 
     out = {"asset": asset["meta"]["name"], "level": args.level, "fragments": len(rows), "threshold": args.threshold,
            "budget": "none" if args.no_budget else "equal"}
-    keys = ("hulls", "coverage", "outside", "concavity", "concavity_norm")
+    keys = ("hulls", "coverage", "outside", "concavity", "concavity_norm", "cw_concavity", "cw_norm")
     for name, i in (("ours", 1), ("coacd", 2)):
         out[name] = {k: {"median": agg(k, i), "p95": agg(k, i, lambda x: np.percentile(x, 95)),
                          "total" if k == "hulls" else "max": agg(k, i, np.sum if k == "hulls" else np.max)} for k in keys}
@@ -184,13 +204,14 @@ def main():
     mode = "no hull limit" if args.no_budget else "equal hull budget"
     print(f"### Convex decomposition vs upstream CoACD: {out['asset']} L{args.level} ({len(rows)} largest fragments, "
           f"CoACD threshold {args.threshold}, {mode})\n")
-    print("| Method | Hulls (total) | Hulls/frag median | Coverage median | Outside median | Outside p95 | Concavity median | Concavity p95 | Conc. norm max |\n"
-          "|---|---|---|---|---|---|---|---|---|")
+    print("| Method | Hulls (total) | Hulls/frag median | Coverage median | Outside median | Outside p95 | Concavity median | Concavity p95 | Conc. norm max | CW conc. median | CW conc. p95 | CW norm max |\n"
+          "|---|---|---|---|---|---|---|---|---|---|---|---|")
     for name in ("ours", "coacd"):
         o = out[name]
         print(f"| {name} | {o['hulls']['total']:.0f} | {o['hulls']['median']:.0f} | {o['coverage']['median']:.4f} | "
               f"{o['outside']['median']:.4f} | {o['outside']['p95']:.4f} | {o['concavity']['median']:.4f} | "
-              f"{o['concavity']['p95']:.4f} | {o['concavity_norm']['max']:.4f} |")
+              f"{o['concavity']['p95']:.4f} | {o['concavity_norm']['max']:.4f} | {o['cw_concavity']['median']:.4f} | "
+              f"{o['cw_concavity']['p95']:.4f} | {o['cw_norm']['max']:.4f} |")
     if args.json:
         json.dump(out, open(args.json, "w"), indent=2)
 
