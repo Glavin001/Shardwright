@@ -60,6 +60,22 @@ See [`docs/DESIGN.md`](docs/DESIGN.md) for the crate map, algorithms and
 every deviation from the spec. See [`docs/VALIDATION.md`](docs/VALIDATION.md)
 for oracle results: the benchmark suite, FEM bond fidelity, the convex
 decomposition against upstream CoACD, and crack placement.
+[`docs/TESTING.md`](docs/TESTING.md) covers the test tiers and the golden
+oracle dataset, which scores builds against frozen FEM, crack and Voro++
+answers without the slow oracles.
+
+### Docker
+
+```sh
+docker build -t shardwright .
+docker run --rm -v "$PWD/out:/work/out" shardwright bake \
+    --input benchmarks/assets/rc_column.glb --config benchmarks/configs/bake.toml --out /work/out
+```
+
+The image contains the CLI and every oracle (Kratos FEM, CoACD, flatc,
+Voro++, Khronos validator). Behind a TLS-intercepting proxy, put its CA
+certificate in `tools/docker/certs/` and build with
+`--network host --build-arg HTTPS_PROXY=…`.
 
 | Path | Contents |
 |---|---|
