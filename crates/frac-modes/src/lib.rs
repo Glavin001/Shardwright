@@ -64,11 +64,12 @@
 
 mod admm;
 mod clarabel_solver;
+pub mod dump;
 mod level1;
 pub mod problem;
 mod reduce;
 
-pub use level1::{segment_level1, segment_level1_balanced, Level1};
+pub use level1::{adjusted_rand_index, segment_from_jumps, segment_level1, segment_level1_balanced, Level1};
 
 use problem::{mdot, Problem};
 use std::time::Instant;
@@ -95,11 +96,25 @@ pub struct ModesParams {
     pub solver: Solver,
     /// Seed for the eigensolver's starting block.
     pub seed: u64,
+    /// Problems with more unknowns than this are solved by ADMM alone (no
+    /// Clarabel confirmation solves) with ICCM tolerance
+    /// `max(eps, eps_large)`; see [`iccm`] for the schedule.
+    pub large_dofs: usize,
+    pub eps_large: f64,
 }
 
 impl Default for ModesParams {
     fn default() -> Self {
-        ModesParams { k: 10, omega: 1e-3, eps: 1e-4, max_iters: 50, solver: Solver::Auto, seed: 0x5eed_f2ac }
+        ModesParams {
+            k: 10,
+            omega: 1e-3,
+            eps: 1e-4,
+            max_iters: 50,
+            solver: Solver::Auto,
+            seed: 0x5eed_f2ac,
+            large_dofs: 3000,
+            eps_large: 1e-3,
+        }
     }
 }
 
@@ -298,8 +313,44 @@ fn orthogonalize(v: &mut [f64], basis: &[Vec<f64>], m: &[f64]) {
     }
 }
 
+/// ICCM stopping/certification schedule.
+struct Schedule {
+    /// ICCM tolerance on `‖u − c‖_M̂`.
+    eps: f64,
+    /// Inner (ADMM) tolerance a subproblem must be solved to for its ICCM
+    /// step to certify convergence.
+    tol_min: f64,
+    /// Certify with Clarabel (hybrid mode) instead of a tight ADMM solve.
+    clarabel_confirm: bool,
+    scale_warm: bool,
+}
+
+impl Schedule {
+    /// `hybrid`: Clarabel confirmation solves are allowed (small/reduced
+    /// problems). Problems above `p.large_dofs` unknowns run ADMM only: an
+    /// interior-point solve costs ~35 s at 16k unknowns (vs 0.2 s at 1k), and
+    /// a tight ADMM tail thousands of iterations; ICCM then stops at
+    /// `max(eps, eps_large)` with subproblems certified to a tenth of it,
+    /// which leaves the Level-1 segmentation unchanged on the benchmark
+    /// masonry wall (ARI 1.0 against the tight reference).
+    fn new(p: &ModesParams, n: usize, backend: &Backend, hybrid: bool) -> Schedule {
+        let large = matches!(backend, Backend::Admm(_)) && n > p.large_dofs;
+        if large {
+            let eps = p.eps.max(p.eps_large);
+            Schedule { eps, tol_min: (0.1 * eps).clamp(1e-8, ADMM_TOL_MAX), clarabel_confirm: false, scale_warm: scale_warm_enabled() }
+        } else {
+            Schedule { eps: p.eps, tol_min: (0.01 * p.eps).clamp(1e-8, 1e-4), clarabel_confirm: hybrid, scale_warm: scale_warm_enabled() }
+        }
+    }
+}
+
+fn scale_warm_enabled() -> bool {
+    std::env::var_os("FX_WSCALE").is_some()
+}
+
 fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> Result<IccmResult, String> {
     let n = pb.n;
+    let sched = Schedule::new(p, n, backend, hybrid);
     let m = &pb.m;
     // M̂-orthonormal basis of the rigid space (rows are M̂R; recover R)
     let rigid_basis: Vec<Vec<f64>> = pb.rigid_rows.iter().map(|r| (0..n).map(|i| r[i] / m[i]).collect()).collect();
@@ -340,8 +391,8 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> R
         let mut u = c.clone();
         let mut its = 0;
         let mut conv = false;
-        let tol_min = (0.01 * p.eps).clamp(1e-8, 1e-4);
-        let mut tol = ADMM_TOL_MAX.max(tol_min);
+        let mut tol = ADMM_TOL_MAX.max(sched.tol_min);
+        let mut tol_sched = tol;
         let mut last_diff = f64::INFINITY;
         let mut confirm = false;
         let mut inner_total = 0usize;
@@ -355,16 +406,27 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> R
                     clarabel_solver::solve(pb, &rows, &rhs)?
                 }
                 Backend::Admm(a) => {
-                    // inexact ICCM: the inner tolerance follows the outer progress;
-                    // convergence is only accepted after a tight solve
-                    tol = if confirm { tol_min } else { (0.1 * last_diff).clamp(tol_min, tol) };
-                    if confirm && hybrid {
+                    // inexact ICCM: the inner tolerance follows the outer progress
+                    // (never loosening); convergence is only accepted after a
+                    // solve to `tol_min`. A failed confirmation does not pin the
+                    // schedule to `tol_min`.
+                    if confirm {
+                        tol = sched.tol_min;
+                    } else {
+                        tol_sched = (0.1 * last_diff).clamp(sched.tol_min, tol_sched);
+                        tol = tol_sched;
+                    }
+                    if confirm && sched.clarabel_confirm {
                         // ADMM's tail is slow; for small (e.g. reduced) problems the
                         // tight confirmation solve is done by the interior-point
                         // reference solver, then ADMM is re-warmed from it
                         let mut rows = persistent.clone();
                         rows.push(&cur);
+                        let tc = Instant::now();
                         let r = clarabel_solver::solve(pb, &rows, &rhs)?;
+                        if admm::debug_enabled() {
+                            eprintln!("[clarabel] confirm {} iterations ok {} time {:.3}s", r.iterations, r.ok, tc.elapsed().as_secs_f64());
+                        }
                         a.warm_from(pb, &r.u);
                         r
                     } else {
@@ -385,12 +447,18 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> R
                 return Err(format!("mode {i}: degenerate subproblem solution"));
             }
             c = u.iter().map(|x| x / nu).collect();
+            if sched.scale_warm {
+                if let Backend::Admm(a) = backend {
+                    // the next solution is ≈ u/‖u‖: rescale the warm-start jumps
+                    a.scale_warm(1.0 / nu);
+                }
+            }
             last_diff = d2.sqrt();
             if admm::debug_enabled() {
                 eprintln!("[iccm] mode {i} it {it} diff {last_diff:.3e} obj {:.6e}", pb.objective(&u));
             }
-            if last_diff <= p.eps {
-                if matches!(backend, Backend::Clarabel) || tol <= tol_min {
+            if last_diff <= sched.eps {
+                if matches!(backend, Backend::Clarabel) || tol <= sched.tol_min {
                     // only a subproblem solved to tolerance certifies convergence
                     conv = sub_ok;
                     break;
