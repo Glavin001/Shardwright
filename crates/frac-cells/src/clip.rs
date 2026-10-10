@@ -57,9 +57,109 @@ pub fn triangulate_poly(verts: &[DVec3], poly: &[u32]) -> Vec<[u32; 3]> {
     if n.length_squared() == 0.0 {
         return (1..poly.len() - 1).map(|k| [poly[0], poly[k], poly[k + 1]]).collect();
     }
-    let (u, v) = frac_geom::polygon::plane_basis(n.normalize());
-    let p2: Vec<[f64; 2]> = pts.iter().map(|p| [p.dot(u), p.dot(v)]).collect();
+    let proj = frac_geom::polygon::drop_axis(n);
+    let p2: Vec<[f64; 2]> = pts.iter().map(|&p| proj(p)).collect();
     tri2d::triangulate(&p2, &[(0..poly.len()).collect()]).into_iter().map(|t| [poly[t[0]], poly[t[1]], poly[t[2]]]).collect()
+}
+
+/// The vertex of an exactly collinear triangle that lies strictly between
+/// the other two, with the outer pair: `(w, u, v)`.
+fn collinear_middle(verts: &[DVec3], t: [u32; 3]) -> Option<(u32, u32, u32)> {
+    let p = |i: u32| verts[i as usize].to_array();
+    if t[0] == t[1] || t[1] == t[2] || t[0] == t[2] || !frac_geom::predicates::collinear3(&p(t[0]), &p(t[1]), &p(t[2])) {
+        return None;
+    }
+    let d = |a: u32, b: u32| verts[a as usize].distance_squared(verts[b as usize]);
+    let k = (0..3).max_by(|&i, &j| d(t[(i + 1) % 3], t[(i + 2) % 3]).total_cmp(&d(t[(j + 1) % 3], t[(j + 2) % 3]))).unwrap();
+    Some((t[k], t[(k + 1) % 3], t[(k + 2) % 3]))
+}
+
+/// Remove T-junctions: a vertex lying exactly on a polygon edge but missing
+/// from that polygon shows up as a zero-area triangle (a collinear ear, or a
+/// zero-area "fin" patch from symbolic perturbation) that keeps the meshes
+/// closed. Two real triangles then touch along a segment without sharing
+/// the vertex. Insert every such vertex into each loop with that edge,
+/// re-triangulate, and drop polygons that are entirely zero-area. Loop
+/// areas, moments and the shared-interface property are unchanged (only
+/// collinear vertices are added, identically for both sides of a patch).
+fn resolve_t_junctions(verts: &[DVec3], ext: &mut Vec<ExtPolyOut>, patches: &mut Vec<PatchOut>) {
+    for _round in 0..8 {
+        // undirected edge -> vertices strictly inside it
+        let mut ins: BTreeMap<(u32, u32), BTreeSet<u32>> = BTreeMap::new();
+        let tris = ext.iter().flat_map(|e| e.tris.iter()).chain(patches.iter().flat_map(|p| p.tris.iter()));
+        for &t in tris {
+            if let Some((w, u, v)) = collinear_middle(verts, t) {
+                ins.entry((u.min(v), u.max(v))).or_default().insert(w);
+            }
+        }
+        if ins.is_empty() {
+            return;
+        }
+        let split = |l: &mut Vec<u32>| -> bool {
+            let n = l.len();
+            let mut out = Vec::with_capacity(n + 2);
+            let mut changed = false;
+            for k in 0..n {
+                let (a, b) = (l[k], l[(k + 1) % n]);
+                out.push(a);
+                if let Some(ws) = ins.get(&(a.min(b), a.max(b))) {
+                    let pa = verts[a as usize];
+                    let mut add: Vec<u32> = ws.iter().copied().filter(|w| !l.contains(w)).collect();
+                    add.sort_by(|&x, &y| pa.distance_squared(verts[x as usize]).total_cmp(&pa.distance_squared(verts[y as usize])).then(x.cmp(&y)));
+                    changed |= !add.is_empty();
+                    out.extend(add);
+                }
+            }
+            if changed {
+                *l = out;
+            }
+            changed
+        };
+        let mut any = false;
+        for e in ext.iter_mut() {
+            if split(&mut e.verts) {
+                e.tris = triangulate_poly(verts, &e.verts);
+                any = true;
+            }
+        }
+        for p in patches.iter_mut() {
+            let mut changed = false;
+            for l in p.loops.iter_mut() {
+                changed |= split(l);
+            }
+            if changed {
+                let proj = frac_geom::polygon::drop_axis(p.normal);
+                let mut local: BTreeMap<u32, usize> = BTreeMap::new();
+                let mut pts2: Vec<[f64; 2]> = Vec::new();
+                let mut ids: Vec<u32> = Vec::new();
+                let ll: Vec<Vec<usize>> = p
+                    .loops
+                    .iter()
+                    .map(|l| {
+                        l.iter()
+                            .map(|&x| {
+                                *local.entry(x).or_insert_with(|| {
+                                    pts2.push(proj(verts[x as usize]));
+                                    ids.push(x);
+                                    pts2.len() - 1
+                                })
+                            })
+                            .collect()
+                    })
+                    .collect();
+                p.tris = tri2d::triangulate(&pts2, &ll).iter().map(|t| [ids[t[0]], ids[t[1]], ids[t[2]]]).collect();
+                any = true;
+            }
+        }
+        // polygons that are nothing but collinear vertices (fins)
+        let flat = |tris: &[[u32; 3]]| !tris.is_empty() && tris.iter().all(|&t| collinear_middle(verts, t).is_some());
+        let (ne, np) = (ext.len(), patches.len());
+        ext.retain(|e| !flat(&e.tris));
+        patches.retain(|p| !flat(&p.tris));
+        if !any && ext.len() == ne && patches.len() == np {
+            return;
+        }
+    }
 }
 
 /// One connected planar interface patch (outer loop + holes).
@@ -534,8 +634,9 @@ impl<'a> Clipper<'a> {
                 build_patches(&verts, &loops, n, fc.cells, *f)
             })
             .collect();
-        let patches: Vec<PatchOut> = patch_lists.into_iter().flatten().collect();
+        let mut patches: Vec<PatchOut> = patch_lists.into_iter().flatten().collect();
         let _ = ncell;
+        resolve_t_junctions(&verts, &mut ext, &mut patches);
         Ok(ClipOutput { verts, keys, ext, patches, warnings })
     }
 
@@ -708,15 +809,14 @@ fn dist2(a: P3, b: P3) -> f64 {
 
 /// Group loops into patches (outer CCW + contained CW holes) and triangulate.
 fn build_patches(verts: &[DVec3], loops: &[Vec<u32>], n: DVec3, cells: [u32; 2], face: u32) -> Vec<PatchOut> {
-    let (u, v) = frac_geom::polygon::plane_basis(n);
+    let proj = frac_geom::polygon::drop_axis(n);
     let mut local: BTreeMap<u32, usize> = BTreeMap::new();
     let mut pts2: Vec<[f64; 2]> = Vec::new();
     let mut ids: Vec<u32> = Vec::new();
     for l in loops {
         for &x in l {
             local.entry(x).or_insert_with(|| {
-                let p = verts[x as usize];
-                pts2.push([p.dot(u), p.dot(v)]);
+                pts2.push(proj(verts[x as usize]));
                 ids.push(x);
                 pts2.len() - 1
             });
@@ -758,7 +858,8 @@ fn build_patches(verts: &[DVec3], loops: &[Vec<u32>], n: DVec3, cells: [u32; 2],
             pl.push(ll[h].clone());
         }
         let tris = tri2d::triangulate(&pts2, &pl);
-        let area: f64 = pl.iter().map(|l| tri2d::signed_area(&pts2, l)).sum();
+        // projected area back to the plane
+        let area: f64 = pl.iter().map(|l| tri2d::signed_area(&pts2, l)).sum::<f64>() * n.length() / n.abs().max_element();
         out.push(PatchOut {
             loops: pl.iter().map(|l| l.iter().map(|&i| ids[i]).collect()).collect(),
             tris: tris.iter().map(|t| [ids[t[0]], ids[t[1]], ids[t[2]]]).collect(),

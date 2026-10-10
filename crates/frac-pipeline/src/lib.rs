@@ -9,6 +9,7 @@
 pub mod assemble;
 pub mod export;
 pub mod level1;
+pub mod manifold;
 pub mod oracle;
 pub mod report;
 
@@ -242,7 +243,12 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
             let anchor_h = asset.interfaces.iter().filter(|it| it.cells.1 == CellOrWorld::World && comp.cells.contains(&it.cells.0 .0)).flat_map(|it| it.polygons.iter().flat_map(|p| p.loops[0].iter().map(|v| v.y))).fold(None, |a: Option<f64>, y| Some(a.map_or(y, |a| a.max(y))));
             let r = if has_structural {
                 let cfg = level1::ModesConfig { settings: &settings.modes, seed: settings.seed, component: ci as u32, anchor_height: anchor_h };
-                level1::level1(&asset, comp, info, &adj, lib, &metas[ci], &cfg, settings.modes.target_level1_fragments as usize, settings.hierarchy.compactness)
+                let mut r = level1::level1(&asset, comp, info, &adj, lib, &metas[ci], &cfg, settings.modes.target_level1_fragments as usize, settings.hierarchy.compactness);
+                let (moves, left) = manifold::repair_labels(comp, info, &adj, &mut r.labels, None);
+                if left > 0 {
+                    r.warnings.push(format!("component '{}': level 1 manifold repair moved {moves} analysis cells, {left} defects left", comp.name));
+                }
+                r
             } else {
                 level1::Level1Result { labels: vec![0; info.n_analysis as usize], method: "none".into(), jumps: Vec::new(), warnings: Vec::new() }
             };
@@ -263,7 +269,12 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
             let c: Vec<DVec3> = ac.iter().map(|a| a.mass.com).collect();
             let v: Vec<f64> = ac.iter().map(|a| a.mass.volume).collect();
             let l = frac_hierarchy::agglomerate(&c, &v, adj, settings.hierarchy.level2_target as usize, settings.hierarchy.compactness, Some(&r.labels));
-            frac_hierarchy::connected_labels(&l, adj)
+            let mut l = frac_hierarchy::connected_labels(&l, adj);
+            let (moves, left) = manifold::repair_labels(comp, &infos[ci], adj, &mut l, Some(&r.labels));
+            if left > 0 {
+                warnings.push(format!("component '{}': level 2 manifold repair moved {moves} analysis cells, {left} defects left", comp.name));
+            }
+            l
         } else {
             (0..na as u32).collect()
         };
