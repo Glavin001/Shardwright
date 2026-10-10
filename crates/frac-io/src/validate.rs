@@ -30,6 +30,25 @@ fn runs(cmd: &Path, arg: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Remove `frac-io-{tag}-{pid}-*` scratch directories left behind by killed
+/// processes (Linux: the pid has no `/proc` entry); the flatc dumps of
+/// building-scale assets are gigabytes each.
+fn remove_stale_scratch(tag: &str) {
+    if !Path::new("/proc/self").exists() {
+        return;
+    }
+    let prefix = format!("frac-io-{tag}-");
+    let Ok(rd) = std::fs::read_dir(std::env::temp_dir()) else { return };
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        let Some(rest) = name.strip_prefix(&prefix) else { continue };
+        let Some(pid) = rest.split('-').next().and_then(|p| p.parse::<u32>().ok()) else { continue };
+        if pid != std::process::id() && !Path::new(&format!("/proc/{pid}")).exists() {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+}
+
 fn scratch_dir(tag: &str) -> std::io::Result<PathBuf> {
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
     let nanos = std::time::SystemTime::now()
@@ -66,6 +85,7 @@ pub fn find_flatc() -> Option<PathBuf> {
 /// unavailable; `Some(Err(msg))` when decoding fails.
 pub fn flatc_validate(path: &Path) -> Option<Result<(), String>> {
     let flatc = find_flatc()?;
+    remove_stale_scratch("flatc");
     Some((|| {
         let dir = scratch_dir("flatc").map_err(|e| e.to_string())?;
         let schema = dir.join("frac.fbs");
@@ -94,8 +114,10 @@ pub fn flatc_validate(path: &Path) -> Option<Result<(), String>> {
                 String::from_utf8_lossy(&out.stderr)
             ))
         } else {
-            match std::fs::read_to_string(&json_out) {
-                Ok(s) => serde_json::from_str::<Value>(&s)
+            // streamed syntax check (the dump reaches gigabytes on
+            // building-scale assets; no in-memory document)
+            match std::fs::File::open(&json_out) {
+                Ok(f) => serde_json::from_reader::<_, serde::de::IgnoredAny>(std::io::BufReader::with_capacity(1 << 20, f))
                     .map(|_| ())
                     .map_err(|e| format!("flatc JSON output invalid: {e}")),
                 Err(e) => Err(format!("flatc produced no JSON output: {e}")),

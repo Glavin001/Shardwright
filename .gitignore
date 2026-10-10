@@ -6,3 +6,5 @@
 node_modules/
 /out_full
 /.claude/worktrees
+/downloads
+/determinism.sha256

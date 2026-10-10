@@ -1,7 +1,9 @@
 //! `prefracture` — offline pre-fracture baking tool.
 
 mod bench;
+mod buildings;
 mod meshgen;
+mod preview;
 
 use clap::{Parser, Subcommand};
 use frac_core::input::AuthoringMeta;
@@ -95,10 +97,93 @@ enum Cmd {
         #[arg(long, default_value_t = 1337)]
         seed: u64,
     },
+    /// Recompute the collision hulls of a baked asset (`.asset.json`) and
+    /// write the asset with the new hulls (for decomposition experiments and
+    /// the CoACD differential harness).
+    Hulls {
+        #[arg(long)]
+        asset: PathBuf,
+        /// Bake settings TOML (collision section used).
+        #[arg(long)]
+        config: Option<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+        /// Concavity threshold in CoACD's normalized units (overrides `concavity`).
+        #[arg(long)]
+        coacd_threshold: Option<f64>,
+        /// Hull budget per fragment (0 = unlimited).
+        #[arg(long)]
+        max_hulls: Option<usize>,
+        /// Levels to compute (comma separated; default: settings).
+        #[arg(long)]
+        levels: Option<String>,
+    },
+    /// Stand-alone convex decomposition of a closed mesh with the CoACD port
+    /// (upstream default parameters unless overridden). Input/output JSON:
+    /// `{"vertices": [[x,y,z],...], "faces": [[i,j,k],...]}` ->
+    /// `{"hulls": [[[x,y,z],...],...], "concavity": [...], "seconds": t}`.
+    Decompose {
+        #[arg(long)]
+        mesh: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long, default_value_t = 0.05)]
+        threshold: f64,
+        /// Hull limit (0 = none, merge only below the threshold).
+        #[arg(long, default_value_t = 0)]
+        max_convex_hull: usize,
+        #[arg(long, default_value_t = 150)]
+        mcts_iterations: u32,
+        #[arg(long, default_value_t = 3)]
+        mcts_depth: u32,
+        #[arg(long, default_value_t = 20)]
+        mcts_nodes: u32,
+        #[arg(long, default_value_t = 2000)]
+        resolution: u32,
+        #[arg(long, default_value_t = 0)]
+        seed: u64,
+        /// Merge cost: "upstream" (CoACD 1.0.x hull-vs-hull) or "collision"
+        /// (collision-aware, against the input surface).
+        #[arg(long, default_value = "upstream")]
+        merge_cost: String,
+    },
     /// Generate the procedural benchmark suite (spec §13.8).
+    /// Render a PNG preview of a baked asset (one colour per fragment).
+    Preview {
+        /// Baked asset JSON (`<name>.asset.json`).
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        /// Hierarchy level (default: finest); `--all-levels` renders every level side by side.
+        #[arg(long)]
+        level: Option<u8>,
+        #[arg(long)]
+        all_levels: bool,
+        /// Push fragments apart from the centre by this fraction of their offset (e.g. 0.15).
+        #[arg(long, default_value_t = 0.0)]
+        explode: f64,
+        #[arg(long, default_value_t = 1200)]
+        width: u32,
+        #[arg(long, default_value_t = 900)]
+        height: u32,
+        #[arg(long, default_value_t = 35.0)]
+        azimuth: f64,
+        #[arg(long, default_value_t = 25.0)]
+        elevation: f64,
+        /// Draw bonds (contact surfaces) instead of fragments: `kind` or `strength`.
+        #[arg(long)]
+        bonds: Option<String>,
+        /// Cutaway: hide geometry whose centroid z is above this value.
+        #[arg(long)]
+        clip_z: Option<f64>,
+    },
     GenBench {
         #[arg(long, default_value = "benchmarks/assets")]
         out: PathBuf,
+        /// Only (re)generate these assets (e.g. building_v0); default: all.
+        #[arg(long, value_delimiter = ',')]
+        only: Vec<String>,
     },
 }
 
@@ -224,6 +309,96 @@ fn bake(
         all_ok &= ok;
     }
     Ok(all_ok || allow)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decompose_cmd(mesh: &Path, out: &Path, threshold: f64, max_ch: usize, iters: u32, depth: u32, nodes: u32, resolution: u32, seed: u64, merge_cost: &str) -> Result<bool, String> {
+    use frac_pipeline::frac_collision::coacd::MergeCost;
+    let merge_cost = match merge_cost {
+        "upstream" => MergeCost::Upstream,
+        "collision" => MergeCost::CollisionAware,
+        o => return Err(format!("unknown merge cost {o}")),
+    };
+    let text = std::fs::read_to_string(mesh).map_err(|e| format!("{}: {e}", mesh.display()))?;
+    let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let verts: Vec<glam::DVec3> = v["vertices"]
+        .as_array()
+        .ok_or("missing vertices")?
+        .iter()
+        .map(|p| glam::DVec3::new(p[0].as_f64().unwrap_or(0.0), p[1].as_f64().unwrap_or(0.0), p[2].as_f64().unwrap_or(0.0)))
+        .collect();
+    let tris: Vec<[u32; 3]> = v["faces"]
+        .as_array()
+        .ok_or("missing faces")?
+        .iter()
+        .map(|t| [t[0].as_u64().unwrap_or(0) as u32, t[1].as_u64().unwrap_or(0) as u32, t[2].as_u64().unwrap_or(0) as u32])
+        .collect();
+    let m = frac_geom::TriMesh { verts, tris };
+    let p = frac_pipeline::frac_collision::coacd::CoacdParams {
+        threshold,
+        mcts_iterations: iters,
+        mcts_depth: depth,
+        mcts_nodes: nodes,
+        resolution,
+        seed,
+        max_convex_hull: if max_ch == 0 { None } else { Some(max_ch) },
+        merge_cost,
+        ..Default::default()
+    };
+    let t = std::time::Instant::now();
+    let res = frac_pipeline::frac_collision::coacd::decompose_detailed(&m, &p);
+    let secs = t.elapsed().as_secs_f64();
+    let hulls: Vec<Vec<[f64; 3]>> = res.iter().map(|(h, _)| h.vertices().iter().map(|q| [q.x, q.y, q.z]).collect()).collect();
+    let conc: Vec<f64> = res.iter().map(|x| x.1).collect();
+    // the same hulls under the 64-vertex physics cap
+    let capped: Vec<Vec<[f64; 3]>> = res
+        .iter()
+        .map(|(h, _)| frac_pipeline::frac_collision::coacd::limit_vertices(h, 64).vertices().iter().map(|q| [q.x, q.y, q.z]).collect())
+        .collect();
+    let doc = serde_json::json!({ "hulls": hulls, "hulls_capped64": capped, "concavity": conc, "seconds": secs });
+    std::fs::write(out, doc.to_string()).map_err(|e| e.to_string())?;
+    println!("{}: {} hulls in {secs:.2} s", out.display(), res.len());
+    Ok(true)
+}
+
+fn hulls_cmd(asset: &Path, config: &Option<PathBuf>, out: &Path, coacd_threshold: Option<f64>, max_hulls: Option<usize>, levels: &Option<String>) -> Result<bool, String> {
+    let settings = match config {
+        Some(c) => Settings::from_toml(&std::fs::read_to_string(c).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?,
+        None => Settings::default(),
+    };
+    let text = std::fs::read_to_string(asset).map_err(|e| format!("{}: {e}", asset.display()))?;
+    let mut a: frac_core::Asset = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", asset.display()))?;
+    let mut cp = frac_pipeline::collision_params(&settings);
+    cp.coacd_threshold = coacd_threshold;
+    if let Some(m) = max_hulls {
+        cp.max_hulls = if m == 0 { usize::MAX } else { m };
+    }
+    if let Some(l) = levels {
+        cp.levels = l.split(',').filter(|s| !s.trim().is_empty()).map(|s| s.trim().parse::<u8>().map_err(|e| e.to_string())).collect::<Result<_, _>>()?;
+    }
+    let t = std::time::Instant::now();
+    let (hulls, ranges) = frac_pipeline::build_hulls(&a, &cp);
+    let secs = t.elapsed().as_secs_f64();
+    a.hulls = hulls;
+    for (i, r) in ranges.into_iter().enumerate() {
+        a.hierarchy.fragments[i].hulls = r;
+    }
+    // non-overlap check (as the hard gate)
+    let polys: Vec<_> = a.hulls.iter().map(frac_pipeline::hull_polytope).collect();
+    let mut worst: f64 = 0.0;
+    let mut pairs = 0usize;
+    for b in &a.bonds {
+        let frac_core::FragmentOrWorld::Fragment(fb) = b.b else { continue };
+        for x in a.hierarchy.fragments[b.a.idx()].hulls.clone() {
+            for y in a.hierarchy.fragments[fb.idx()].hulls.clone() {
+                pairs += 1;
+                worst = worst.max(polys[x as usize].intersection_volume(&polys[y as usize]));
+            }
+        }
+    }
+    frac_io::write_asset_json(&a, out).map_err(|e| e.to_string())?;
+    println!("{}: {} hulls in {secs:.2} s; max neighbour hull overlap {worst:.3e} m3 over {pairs} pairs ({})", out.display(), a.hulls.len(), if worst <= 1e-9 { "PASS" } else { "FAIL" });
+    Ok(worst <= 1e-9)
 }
 
 fn debug_dump(asset: &frac_core::Asset, out: &Path, name: &str, what: &str) -> Result<(), String> {
@@ -394,7 +569,24 @@ fn main() -> ExitCode {
             println!("wrote {} ({} bytes)", out.display(), bytes.len());
             Ok(true)
         }),
-        Cmd::GenBench { out } => bench::generate(out).map(|_| true),
+        Cmd::Preview { input, out, level, all_levels, explode, width, height, azimuth, elevation, bonds, clip_z } => (|| -> Result<bool, String> {
+            let text = std::fs::read_to_string(input).map_err(|e| format!("{}: {e}", input.display()))?;
+            let asset: frac_core::Asset = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", input.display()))?;
+            let bonds = match bonds.as_deref() {
+                None => None,
+                Some("kind") => Some(preview::BondColour::Kind),
+                Some("strength") => Some(preview::BondColour::Strength),
+                Some(x) => return Err(format!("--bonds {x}: expected kind or strength")),
+            };
+            let o = preview::PreviewOptions { bonds, clip_z: *clip_z, level: *level, all_levels: *all_levels, width: *width, height: *height, explode: *explode, azimuth_deg: *azimuth, elevation_deg: *elevation };
+            println!("{}", preview::preview(&asset, &MaterialLibrary::builtin(), out, &o)?);
+            Ok(true)
+        })(),
+        Cmd::Hulls { asset, config, out, coacd_threshold, max_hulls, levels } => hulls_cmd(asset, config, out, *coacd_threshold, *max_hulls, levels),
+        Cmd::Decompose { mesh, out, threshold, max_convex_hull, mcts_iterations, mcts_depth, mcts_nodes, resolution, seed, merge_cost } => {
+            decompose_cmd(mesh, out, *threshold, *max_convex_hull, *mcts_iterations, *mcts_depth, *mcts_nodes, *resolution, *seed, merge_cost)
+        }
+        Cmd::GenBench { out, only } => bench::generate(out, only).map(|_| true),
     };
     match res {
         Ok(true) => ExitCode::SUCCESS,

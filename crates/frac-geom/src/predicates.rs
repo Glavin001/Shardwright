@@ -43,6 +43,13 @@ pub fn orient2d(a: &P2, b: &P2, c: &P2) -> i8 {
     exact_sign!(|F| orient2d_val::<F>(a, b, c))
 }
 
+/// Exact collinearity of three 3D points (all three coordinate projections
+/// have zero orientation).
+pub fn collinear3(a: &P3, b: &P3, c: &P3) -> bool {
+    let pr = |v: &P3, i: usize, j: usize| [v[i], v[j]];
+    [(0, 1), (1, 2), (0, 2)].iter().all(|&(i, j)| orient2d(&pr(a, i, j), &pr(b, i, j), &pr(c, i, j)) == 0)
+}
+
 /// det4 of rows `[p - e, l]` for p in a..d, with the last column given.
 fn lifted_det<F: Field>(rows: &[[F; 3]; 4], last: &[F; 4]) -> F {
     // Cofactor expansion along the last column (column index 3).

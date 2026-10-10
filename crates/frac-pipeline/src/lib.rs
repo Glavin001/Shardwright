@@ -9,6 +9,7 @@
 pub mod assemble;
 pub mod export;
 pub mod level1;
+pub mod manifold;
 pub mod oracle;
 pub mod report;
 
@@ -242,7 +243,12 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
             let anchor_h = asset.interfaces.iter().filter(|it| it.cells.1 == CellOrWorld::World && comp.cells.contains(&it.cells.0 .0)).flat_map(|it| it.polygons.iter().flat_map(|p| p.loops[0].iter().map(|v| v.y))).fold(None, |a: Option<f64>, y| Some(a.map_or(y, |a| a.max(y))));
             let r = if has_structural {
                 let cfg = level1::ModesConfig { settings: &settings.modes, seed: settings.seed, component: ci as u32, anchor_height: anchor_h };
-                level1::level1(&asset, comp, info, &adj, lib, &metas[ci], &cfg, settings.modes.target_level1_fragments as usize, settings.hierarchy.compactness)
+                let mut r = level1::level1(&asset, comp, info, &adj, lib, &metas[ci], &cfg, settings.modes.target_level1_fragments as usize, settings.hierarchy.compactness);
+                let (moves, left) = manifold::repair_labels(comp, info, &adj, &mut r.labels, None);
+                if left > 0 {
+                    r.warnings.push(format!("component '{}': level 1 manifold repair moved {moves} analysis cells, {left} defects left", comp.name));
+                }
+                r
             } else {
                 level1::Level1Result { labels: vec![0; info.n_analysis as usize], method: "none".into(), jumps: Vec::new(), warnings: Vec::new() }
             };
@@ -263,7 +269,12 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
             let c: Vec<DVec3> = ac.iter().map(|a| a.mass.com).collect();
             let v: Vec<f64> = ac.iter().map(|a| a.mass.volume).collect();
             let l = frac_hierarchy::agglomerate(&c, &v, adj, settings.hierarchy.level2_target as usize, settings.hierarchy.compactness, Some(&r.labels));
-            frac_hierarchy::connected_labels(&l, adj)
+            let mut l = frac_hierarchy::connected_labels(&l, adj);
+            let (moves, left) = manifold::repair_labels(comp, &infos[ci], adj, &mut l, Some(&r.labels));
+            if left > 0 {
+                warnings.push(format!("component '{}': level 2 manifold repair moved {moves} analysis cells, {left} defects left", comp.name));
+            }
+            l
         } else {
             (0..na as u32).collect()
         };
@@ -298,14 +309,7 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
     }
     tick("bonds", &mut t, &mut timings);
     // ---- Stage 8: collision
-    let cp = frac_collision::CollisionParams {
-        concavity: settings.collision.concavity,
-        max_hulls: settings.collision.max_hulls_per_fragment as usize,
-        margin: settings.collision.margin,
-        min_rigid_size: settings.collision.min_rigid_size,
-        levels: settings.collision.levels.clone(),
-        max_split_depth: 3,
-    };
+    let cp = collision_params(settings);
     let (hulls, ranges) = frac_collision::build_hulls(&asset, &cp);
     asset.hulls = hulls;
     for (i, r) in ranges.into_iter().enumerate() {
@@ -367,4 +371,27 @@ fn rss_mb() -> f64 {
         .and_then(|x| x.split_whitespace().nth(1).and_then(|v| v.parse::<f64>().ok()))
         .map(|pages| pages * 4096.0 / 1048576.0)
         .unwrap_or(0.0)
+}
+
+pub use frac_collision;
+pub use frac_collision::{build_hulls, hull_polytope};
+
+/// Collision-stage parameters from the bake settings.
+pub fn collision_params(settings: &Settings) -> frac_collision::CollisionParams {
+    frac_collision::CollisionParams {
+        concavity: settings.collision.concavity,
+        max_hulls: settings.collision.max_hulls_per_fragment as usize,
+        margin: settings.collision.margin,
+        min_rigid_size: settings.collision.min_rigid_size,
+        levels: settings.collision.levels.clone(),
+        search: frac_collision::SearchEffort {
+            mcts_iterations: settings.collision.mcts_iterations,
+            mcts_depth: settings.collision.mcts_depth,
+            mcts_nodes: settings.collision.mcts_nodes,
+            resolution: settings.collision.resolution,
+        },
+        max_hull_vertices: settings.collision.max_hull_vertices as usize,
+        seed: settings.seed,
+        ..Default::default()
+    }
 }

@@ -97,6 +97,25 @@ pub fn triangle_integrals(p0: DVec3, p1: DVec3, p2: DVec3) -> AreaIntegrals {
     AreaIntegrals { area: a, area_vec: av, first: s * (a / 3.0), second: m * (a / 12.0) }
 }
 
+/// Exact 2D projection for triangulating a planar polygon with normal `n`:
+/// drop the dominant axis of `n`, keeping orientation (CCW about `n` stays
+/// CCW). Unlike [`plane_basis`] this involves no rounding, so vertices that
+/// are exactly collinear in 3D stay exactly collinear, and every projected
+/// orientation has the sign of the 3D one.
+pub fn drop_axis(n: DVec3) -> impl Fn(DVec3) -> [f64; 2] {
+    let a = n.abs();
+    let k = if a.x >= a.y && a.x >= a.z {
+        0
+    } else if a.y >= a.z {
+        1
+    } else {
+        2
+    };
+    let (i, j) = [(1, 2), (2, 0), (0, 1)][k];
+    let flip = n[k] < 0.0;
+    move |p: DVec3| if flip { [p[j], p[i]] } else { [p[i], p[j]] }
+}
+
 /// An orthonormal in-plane basis (u, v) for a unit normal n, such that
 /// (u, v, n) is right-handed.
 pub fn plane_basis(n: DVec3) -> (DVec3, DVec3) {

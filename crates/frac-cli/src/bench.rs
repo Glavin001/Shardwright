@@ -19,7 +19,14 @@ fn part(name: &str, mesh: TriMesh, material: &str) -> Part {
     Part { name: name.into(), mesh, material: material.into(), meta: PartMeta { material: Some(material.into()), ..Default::default() } }
 }
 
+thread_local! {
+    static ONLY: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 fn write_asset(dir: &Path, name: &str, parts: Vec<Part>, connections: Vec<ConnectionSpec>, ground: Option<f64>) -> Result<(), String> {
+    if ONLY.with(|o| !o.borrow().is_empty() && !o.borrow().iter().any(|n| n == name)) {
+        return Ok(());
+    }
     let mut scene = RenderScene { name: name.into(), ..Default::default() };
     let mut mats: Vec<String> = Vec::new();
     let mut meta = AuthoringMeta { connections, ground_height: ground, ..Default::default() };
@@ -75,7 +82,14 @@ fn wall_z(z0: f64, z1: f64, y0: f64, y1: f64, x0: f64, x1: f64, holes: &[[f64; 4
     reorient(&w, |p| DVec3::new(p.z, p.y, p.x), true)
 }
 
-pub fn generate(dir: &Path) -> Result<(), String> {
+pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
+    ONLY.with(|o| *o.borrow_mut() = only.to_vec());
+    // primitive (cuboid) frame building, structurally sound by construction
+    {
+        let (parts, conns) = crate::buildings::FrameBuilding::default().build();
+        let parts = parts.into_iter().map(|p| Part { name: p.name, mesh: p.mesh, material: p.material, meta: p.meta }).collect();
+        write_asset(dir, "building_v0", parts, conns, Some(0.0))?;
+    }
     // 1. ceramic bowl (thin curved shell)
     {
         let r = 0.12;

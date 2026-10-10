@@ -119,6 +119,14 @@ pub struct ModeSettings {
     pub target_level1_fragments: u32,
     pub max_iccm_iters: usize,
     pub iccm_tolerance: f64,
+    /// Modes problems with more unknowns than this (e.g. masonry walls with
+    /// ~1000+ analysis cells) are solved by ADMM alone, without the
+    /// interior-point confirmation solves whose cost grows superlinearly,
+    /// and ICCM stops at `max(iccm_tolerance, large_iccm_tolerance)` with
+    /// subproblems certified to a tenth of that.
+    pub large_problem_dofs: usize,
+    /// ICCM tolerance for problems above `large_problem_dofs`.
+    pub large_iccm_tolerance: f64,
     pub tet_edge_ratio: f64,
     /// Upper bound on analysis tets per component (resolution is coarsened
     /// to respect it).
@@ -139,6 +147,8 @@ impl Default for ModeSettings {
             target_level1_fragments: 12,
             max_iccm_iters: 50,
             iccm_tolerance: 1e-4,
+            large_problem_dofs: 3000,
+            large_iccm_tolerance: 1e-3,
             tet_edge_ratio: 0.33,
             max_tets: 20_000,
             solver: "auto".into(),
@@ -191,6 +201,18 @@ pub struct CollisionSettings {
     pub min_rigid_size: f64,
     /// Levels that get collision hulls (empty = all).
     pub levels: Vec<u8>,
+    /// CoACD tree-search effort for cutting non-convex cells. Upstream
+    /// defaults are 150 iterations, depth 3, 20 planes per axis and 2000
+    /// samples per unit normalized area; the bake defaults (12 iterations,
+    /// depth 1) are ~20x cheaper with no measurable loss after merging (see
+    /// `crates/frac-collision/README.md`).
+    pub mcts_iterations: u32,
+    pub mcts_depth: u32,
+    pub mcts_nodes: u32,
+    pub resolution: u32,
+    /// Maximum vertices per convex hull (physics-engine limit); larger hulls
+    /// are reduced (inner approximation by a volume-greedy vertex subset).
+    pub max_hull_vertices: u32,
 }
 
 impl Default for CollisionSettings {
@@ -202,6 +224,11 @@ impl Default for CollisionSettings {
             margin: 0.0005,
             min_rigid_size: 0.01,
             levels: Vec::new(),
+            mcts_iterations: 12,
+            mcts_depth: 1,
+            mcts_nodes: 20,
+            resolution: 2000,
+            max_hull_vertices: 64,
         }
     }
 }
@@ -249,6 +276,9 @@ pub struct ValidationSettings {
     pub metrics: Vec<String>,
     /// Rays per axis for independent mass-property integration.
     pub mass_rays: u32,
+    /// Hard limit on vertices per collision hull (physics-engine friendly
+    /// compound convex shapes); enforced by the `collision_shapes` gate.
+    pub max_hull_vertices: u32,
 }
 
 impl Default for ValidationSettings {
@@ -257,6 +287,7 @@ impl Default for ValidationSettings {
             gates: "all".into(),
             metrics: vec!["bond_fidelity".into(), "distributions".into(), "collision".into(), "render".into()],
             mass_rays: 160,
+            max_hull_vertices: 64,
         }
     }
 }

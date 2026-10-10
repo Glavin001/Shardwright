@@ -317,7 +317,21 @@ impl PlaneSystem {
         if !t.is_finite() {
             return *a;
         }
-        [o[0] + (d[0] - o[0]) * t, o[1] + (d[1] - o[1]) * t, o[2] + (d[2] - o[2]) * t]
+        let mut x = [o[0] + (d[0] - o[0]) * t, o[1] + (d[1] - o[1]) * t, o[2] + (d[2] - o[2]) * t];
+        self.snap(p, &mut x);
+        x
+    }
+
+    /// Put a point that lies on plane `p` exactly on it where the plane is
+    /// representable (axis-aligned box planes): every vertex of that plane
+    /// then has the same coordinate bit for bit, so collinearity and
+    /// coplanarity on it survive rounding.
+    #[inline]
+    pub fn snap(&self, p: PlaneId, x: &mut P3) {
+        if let PlaneSystem::Boxes(b) = self {
+            let (ax, off) = b.planes[p as usize];
+            x[ax as usize] = off;
+        }
     }
 
     /// Point of triangle `t` on line `(p, q)` via exact barycentric minors.
@@ -335,11 +349,14 @@ impl PlaneSystem {
             return [(t[0][0] + t[1][0] + t[2][0]) / 3.0, (t[0][1] + t[1][1] + t[2][1]) / 3.0, (t[0][2] + t[1][2] + t[2][2]) / 3.0];
         }
         let (wa, wb, wc) = (la / s, lb / s, lc / s);
-        [
+        let mut x = [
             wa * t[0][0] + wb * t[1][0] + wc * t[2][0],
             wa * t[0][1] + wb * t[1][1] + wc * t[2][1],
             wa * t[0][2] + wb * t[1][2] + wc * t[2][2],
-        ]
+        ];
+        self.snap(p, &mut x);
+        self.snap(q, &mut x);
+        x
     }
 }
 
