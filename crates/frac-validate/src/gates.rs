@@ -10,12 +10,14 @@ use frac_render::RenderOut;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 
-pub const NAMES: [&str; 12] = [
+pub const NAMES: [&str; 14] = [
     "fragment_validity",
     "volume_conservation",
     "no_overlap_solids",
     "no_overlap_hulls",
     "collision_shapes",
+    "structural_support",
+    "self_weight",
     "no_gaps_render",
     "bond_coverage",
     "bond_hierarchy",

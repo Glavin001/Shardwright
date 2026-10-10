@@ -1,6 +1,7 @@
 //! `prefracture` — offline pre-fracture baking tool.
 
 mod bench;
+mod buildings;
 mod meshgen;
 
 use clap::{Parser, Subcommand};
@@ -99,6 +100,9 @@ enum Cmd {
     GenBench {
         #[arg(long, default_value = "benchmarks/assets")]
         out: PathBuf,
+        /// Only (re)generate these assets (e.g. building_v0); default: all.
+        #[arg(long, value_delimiter = ',')]
+        only: Vec<String>,
     },
 }
 
@@ -394,7 +398,7 @@ fn main() -> ExitCode {
             println!("wrote {} ({} bytes)", out.display(), bytes.len());
             Ok(true)
         }),
-        Cmd::GenBench { out } => bench::generate(out).map(|_| true),
+        Cmd::GenBench { out, only } => bench::generate(out, only).map(|_| true),
     };
     match res {
         Ok(true) => ExitCode::SUCCESS,
