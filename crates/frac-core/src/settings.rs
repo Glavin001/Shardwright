@@ -84,6 +84,9 @@ pub struct CellSettings {
     pub target_analysis_cells_per_m3: f64,
     /// Fine cells per analysis cell.
     pub fine_per_analysis: u32,
+    /// Use `fine_per_analysis` for every part, ignoring per-part and
+    /// per-material overrides (the support-graph layout needs exactly 1).
+    pub fixed_fine_per_analysis: bool,
     /// Lower and upper caps on the number of analysis cells per component.
     pub min_analysis_cells: u32,
     pub max_analysis_cells: u32,
@@ -101,6 +104,7 @@ impl Default for CellSettings {
         CellSettings {
             target_analysis_cells_per_m3: 200.0,
             fine_per_analysis: 8,
+            fixed_fine_per_analysis: false,
             min_analysis_cells: 4,
             max_analysis_cells: 2000,
             max_fine_cells: 200_000,

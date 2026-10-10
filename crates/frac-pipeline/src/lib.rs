@@ -159,11 +159,14 @@ pub fn run_with(
                 settings.cells.min_analysis_cells as usize,
                 settings.cells.max_analysis_cells as usize,
             );
-            let fpa = p
-                .meta
-                .fine_per_analysis
-                .or(mat.fine_per_analysis)
-                .unwrap_or(settings.cells.fine_per_analysis) as usize;
+            let fpa = if settings.cells.fixed_fine_per_analysis {
+                settings.cells.fine_per_analysis as usize
+            } else {
+                p.meta
+                    .fine_per_analysis
+                    .or(mat.fine_per_analysis)
+                    .unwrap_or(settings.cells.fine_per_analysis) as usize
+            };
             let grain = p.meta.grain.map(DVec3::from_array).or_else(|| {
                 if mat.anisotropy.is_some() || matches!(recipe, Recipe::Wood { .. }) {
                     let (_, axes, _) = frac_cells::recipes::principal_axes(&p.solid);

@@ -12,6 +12,8 @@ levels = 3
 [cells]
 target_analysis_cells_per_m3 = 200
 fine_per_analysis = 1
+# ignore per-part / per-material overrides: chunks must be single cells
+fixed_fine_per_analysis = true
 min_cell_volume = 1.0e-7
 min_thickness_ratio = 0.05
 
