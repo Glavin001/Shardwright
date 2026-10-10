@@ -14,16 +14,17 @@ pub struct Level1 {
     pub hit_target: bool,
 }
 
+fn find(p: &mut [u32], mut x: u32) -> u32 {
+    while p[x as usize] != x {
+        p[x as usize] = p[p[x as usize] as usize];
+        x = p[x as usize];
+    }
+    x
+}
+
 fn components(n_cells: u32, groups: &[(u32, u32)], cut: &[bool]) -> (u32, Vec<u32>) {
     let n = n_cells as usize;
     let mut parent: Vec<u32> = (0..n_cells).collect();
-    fn find(p: &mut [u32], mut x: u32) -> u32 {
-        while p[x as usize] != x {
-            p[x as usize] = p[p[x as usize] as usize];
-            x = p[x as usize];
-        }
-        x
-    }
     for (g, &(a, b)) in groups.iter().enumerate() {
         if cut[g] || a >= n_cells || b >= n_cells {
             continue;
@@ -115,9 +116,120 @@ pub fn segment_level1(n_cells: u32, groups: &[(u32, u32)], max_jump: &[f64], tar
     Level1 { labels, n_fragments: nf, sigma, cut_groups, hit_target }
 }
 
+/// Merge components below `min_volume` into the adjacent component they
+/// share the most interface area with (smallest first, deterministic
+/// tie-breaks). Returns the relabelled components (dense labels).
+fn merge_small(n_comp: u32, labels: &[u32], groups: &[(u32, u32)], area: &[f64], volume: &[f64], min_volume: f64) -> (u32, Vec<u32>) {
+    let mut parent: Vec<u32> = (0..n_comp).collect();
+    let mut vol = vec![0.0f64; n_comp as usize];
+    for (c, &l) in labels.iter().enumerate() {
+        vol[l as usize] += volume[c];
+    }
+    loop {
+        // current roots and their shared areas
+        let root = |p: &mut Vec<u32>, x: u32| find(p, x);
+        let mut shared: std::collections::BTreeMap<(u32, u32), f64> = std::collections::BTreeMap::new();
+        for (g, &(a, b)) in groups.iter().enumerate() {
+            let (ra, rb) = (root(&mut parent, labels[a as usize]), root(&mut parent, labels[b as usize]));
+            if ra != rb {
+                *shared.entry((ra.min(rb), ra.max(rb))).or_insert(0.0) += area[g];
+            }
+        }
+        // smallest undersized root that has a neighbour
+        let mut small: Option<(f64, u32)> = None;
+        for r in 0..n_comp {
+            if parent[r as usize] != r || vol[r as usize] >= min_volume {
+                continue;
+            }
+            if shared.keys().any(|&(a, b)| a == r || b == r) && small.is_none_or(|(v, _)| vol[r as usize] < v) {
+                small = Some((vol[r as usize], r));
+            }
+        }
+        let Some((_, r)) = small else { break };
+        let mut best: Option<(f64, u32)> = None;
+        for (&(a, b), &ar) in &shared {
+            let o = if a == r { b } else if b == r { a } else { continue };
+            if best.is_none_or(|(ba, bo)| ar > ba || (ar == ba && o < bo)) {
+                best = Some((ar, o));
+            }
+        }
+        let (_, o) = best.unwrap();
+        let (lo, hi) = if r < o { (r, o) } else { (o, r) };
+        parent[hi as usize] = lo;
+        vol[lo as usize] += vol[hi as usize];
+    }
+    let mut dense = vec![u32::MAX; n_comp as usize];
+    let mut count = 0;
+    let out = labels
+        .iter()
+        .map(|&l| {
+            let r = find(&mut parent, l) as usize;
+            if dense[r] == u32::MAX {
+                dense[r] = count;
+                count += 1;
+            }
+            dense[r]
+        })
+        .collect();
+    (count, out)
+}
+
+/// Size-balanced Level-1 segmentation. Thresholding the mode jumps alone
+/// favours tiny surface chips (isolating a corner cell is the cheapest
+/// discontinuity a mode can have). Here, at every candidate threshold σ the
+/// components smaller than `min_volume` are merged into the neighbour they
+/// share the most area with, and σ is chosen (largest first, i.e. fewest
+/// cuts) so that the merged fragment count is closest to `target`.
+#[allow(clippy::too_many_arguments)]
+pub fn segment_level1_balanced(n_cells: u32, groups: &[(u32, u32)], max_jump: &[f64], area: &[f64], volume: &[f64], target: u32, min_volume: f64) -> Level1 {
+    assert_eq!(groups.len(), max_jump.len());
+    assert_eq!(groups.len(), area.len());
+    let mut vals: Vec<f64> = max_jump.iter().copied().filter(|v| *v > 0.0 && v.is_finite()).collect();
+    vals.push(0.0);
+    vals.sort_by(|a, b| a.total_cmp(b));
+    vals.dedup();
+    let sigma_at = |j: usize| -> f64 { if j + 1 < vals.len() { 0.5 * (vals[j] + vals[j + 1]) } else { vals[j] } };
+    let eval = |sigma: f64| -> (u32, Vec<u32>) {
+        let cut: Vec<bool> = max_jump.iter().map(|&v| v > sigma).collect();
+        let (n, l) = components(n_cells, groups, &cut);
+        merge_small(n, &l, groups, area, volume, min_volume)
+    };
+    // scan from the largest σ (no cuts) down; keep the closest count,
+    // preferring larger σ on ties; stop once the count overshoots by 50%
+    let mut best: Option<(i64, f64, u32, Vec<u32>)> = None;
+    for j in (0..vals.len()).rev() {
+        let sg = sigma_at(j);
+        let (nf, l) = eval(sg);
+        let d = (nf as i64 - target as i64).abs();
+        if best.as_ref().is_none_or(|b| d < b.0) {
+            best = Some((d, sg, nf, l));
+        }
+        if d == 0 || nf as f64 > 1.5 * target as f64 {
+            break;
+        }
+    }
+    let (_, sigma, nf, labels) = best.unwrap();
+    let cut_groups = groups.iter().map(|&(a, b)| labels[a as usize] != labels[b as usize]).collect();
+    let hit_target = ((nf as f64) - (target as f64)).abs() <= 0.1 * target as f64;
+    Level1 { labels, n_fragments: nf, sigma, cut_groups, hit_target }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn balanced_segmentation_merges_chips() {
+        // chain of 6 equal cells; the largest jumps isolate the end cell
+        // (a "chip"); balanced segmentation must split in the middle instead
+        let groups = vec![(0, 1), (1, 2), (2, 3), (3, 4), (4, 5)];
+        let jumps = vec![0.9, 0.1, 0.5, 0.1, 0.8];
+        let area = vec![1.0; 5];
+        let vol = vec![1.0; 6];
+        let l = segment_level1_balanced(6, &groups, &jumps, &area, &vol, 2, 2.0);
+        assert_eq!(l.n_fragments, 2);
+        assert_eq!(l.labels, vec![0, 0, 0, 1, 1, 1]);
+    }
 
     #[test]
     fn chain_segmentation() {

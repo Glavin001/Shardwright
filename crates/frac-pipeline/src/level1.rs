@@ -266,7 +266,13 @@ fn run_modes(
             mj.push(0.0);
         }
     }
-    let l1 = frac_modes::segment_level1(info.n_analysis, &groups, &mj, target as u32);
+    // size-balanced segmentation: shared areas from the exact adjacency,
+    // fragments below a quarter of the mean target size are merged
+    let area_of: BTreeMap<(u32, u32), f64> = adj.iter().map(|&(a, b, ar, _)| ((a, b), ar)).collect();
+    let areas: Vec<f64> = groups.iter().map(|&(a, b)| *area_of.get(&(a.min(b), a.max(b))).unwrap_or(&0.0)).collect();
+    let volumes: Vec<f64> = asset.analysis_cells[comp.analysis_cells.start as usize..comp.analysis_cells.end as usize].iter().map(|a| a.mass.volume).collect();
+    let min_volume = 0.25 * volumes.iter().sum::<f64>() / target.max(1) as f64;
+    let l1 = frac_modes::segment_level1_balanced(info.n_analysis, &groups, &mj, &areas, &volumes, target as u32, min_volume);
     let mut warnings = Vec::new();
     if !l1.hit_target {
         warnings.push(format!("component '{}': modes segmentation reached {} fragments (target {target})", comp.name, l1.n_fragments));

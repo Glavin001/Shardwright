@@ -68,7 +68,7 @@ mod level1;
 pub mod problem;
 mod reduce;
 
-pub use level1::{segment_level1, Level1};
+pub use level1::{segment_level1, segment_level1_balanced, Level1};
 
 use problem::{mdot, Problem};
 use std::time::Instant;
