@@ -30,9 +30,9 @@ fn rc_column_auto_k10_timing() {
     let secs = t.elapsed().as_secs_f64();
     let l1 = segment_level1(c.n_cells, &out.groups, &out.max_jump(), 4);
     eprintln!("RC column: {} tets, {} unknowns, {} -> {secs:.2} s, level1 n={}", c.mesh.tets.len(), out.n_dofs, out.solver_used, l1.n_fragments);
-    assert!(out.solver_used.starts_with("cell-p"));
+    assert!(out.solver_used.starts_with("cell-p1+admm"), "{}", out.solver_used);
     assert_eq!(out.jumps.len(), 10);
-    assert!(secs < 60.0, "compute_modes took {secs:.1} s");
+    assert!(secs < 30.0, "compute_modes took {secs:.1} s");
 }
 
 #[test]
@@ -40,17 +40,16 @@ fn rc_column_auto_k10_timing() {
 fn rc_column_variants() {
     let c = column();
     let a = anchors(&c);
-    for (disc, solver) in [
-        (Discretization::CellPolynomial(1), Solver::Admm),
-        (Discretization::CellPolynomial(2), Solver::Admm),
-    ] {
+    let k: usize = std::env::var("RC_K").ok().and_then(|v| v.parse().ok()).unwrap_or(10);
+    let degs: Vec<u8> = std::env::var("RC_DEG").ok().map(|v| v.split(',').map(|x| x.parse().unwrap()).collect()).unwrap_or(vec![1, 2]);
+    for (disc, solver) in degs.iter().map(|&d| (Discretization::CellPolynomial(d), Solver::Admm)) {
         let input = ModesInput {
             mesh: &c.mesh,
             tet_material: &c.mats,
             tet_cell: &c.cells,
             group_weight: &|_, _| 1.0,
             anchored_vertices: &a,
-            params: ModesParams { k: 10, solver, ..Default::default() },
+            params: ModesParams { k, solver, ..Default::default() },
         };
         let t = std::time::Instant::now();
         let out = compute_modes_with(&input, disc).unwrap();

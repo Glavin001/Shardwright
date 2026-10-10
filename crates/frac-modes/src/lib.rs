@@ -44,9 +44,23 @@
 //! constraint rows well conditioned.
 //!
 //! Solvers: [`Solver::Clarabel`] (interior-point conic reference) and
-//! [`Solver::Admm`] (group-lasso ADMM with a single sparse Cholesky factor
-//! shared across modes and ICCM iterations); [`Solver::Auto`] picks Clarabel
-//! below 3000 free DOFs.
+//! [`Solver::Admm`] (Anderson-accelerated group-lasso ADMM with a single
+//! sparse Cholesky factor shared across modes and ICCM iterations, warm
+//! starts, and an inexact-ICCM tolerance schedule; for ≤ 3000 unknowns the
+//! tight confirmation solves are delegated to Clarabel).
+//!
+//! # Performance: cell-polynomial reduction
+//! The full exploded problem has `3 × #(vertex, cell) pairs` unknowns
+//! (~30k for a 20k-tet mesh) and costs minutes. [`Solver::Auto`] therefore
+//! solves the full problem (with Clarabel) only below 3000 unknowns and
+//! otherwise switches to [`Discretization::CellPolynomial`]`(1)`: a Galerkin
+//! subspace in which every analysis cell displaces as the nodal interpolant
+//! of an affine field (12 DOFs per cell, containing the 6 rigid modes). Group
+//! norms, anchors, forbidden interfaces, rigid-mode and orthogonality
+//! constraints are all represented exactly in that subspace (see `reduce`);
+//! the unknown count becomes `12 × #cells` independent of the tet count.
+//! The known-answer tests pass for both discretizations. Use
+//! [`compute_modes_with`] to force a discretization (e.g. `Full` + `Admm`).
 
 mod admm;
 mod clarabel_solver;
@@ -137,6 +151,11 @@ impl ModesOutput {
     }
 }
 
+/// Full problems up to this many unknowns (and all cell-reduced problems) use
+/// Clarabel for the tight ICCM confirmation solves when running ADMM (hybrid
+/// mode).
+pub const HYBRID_CONFIRM_MAX_DOFS: usize = 3000;
+
 /// Relative tolerance range of the inexact (ADMM) inner solves. The tight
 /// (confirmation) tolerance is `0.01 ε` clamped to `[1e-8, 1e-4]`.
 const ADMM_TOL_MAX: f64 = 1e-3;
@@ -167,7 +186,7 @@ pub enum Discretization {
 }
 
 /// Polynomial degree used by [`Solver::Auto`] for large problems.
-pub const AUTO_REDUCED_DEGREE: u8 = 2;
+pub const AUTO_REDUCED_DEGREE: u8 = 1;
 
 /// Computes `k` fracture modes (spec §4.3) and their per-interface jumps.
 ///
@@ -175,15 +194,16 @@ pub const AUTO_REDUCED_DEGREE: u8 = 2;
 /// solve the full exploded problem. [`Solver::Auto`] solves the full problem
 /// with Clarabel when it has fewer than [`AUTO_CLARABEL_MAX_DOFS`] free DOFs;
 /// otherwise it switches to the [`Discretization::CellPolynomial`] subspace
-/// (degree [`AUTO_REDUCED_DEGREE`]) and solves that with Clarabel if it is
-/// small, else ADMM. Use [`compute_modes_with`] to force a discretization.
+/// (degree [`AUTO_REDUCED_DEGREE`]) and solves that with hybrid ADMM (tight
+/// ICCM confirmation solves by Clarabel). Use [`compute_modes_with`] to force
+/// a discretization.
 pub fn compute_modes(input: &ModesInput) -> Result<ModesOutput, String> {
     compute_modes_impl(input, None)
 }
 
 /// [`compute_modes`] with an explicit discretization. The solver is taken
-/// from `params.solver` (`Auto` = Clarabel below [`AUTO_CLARABEL_MAX_DOFS`]
-/// unknowns of the chosen discretization, ADMM otherwise).
+/// from `params.solver` (`Auto` = Clarabel for a full problem below
+/// [`AUTO_CLARABEL_MAX_DOFS`] unknowns, hybrid ADMM otherwise).
 pub fn compute_modes_with(input: &ModesInput, disc: Discretization) -> Result<ModesOutput, String> {
     compute_modes_impl(input, Some(disc))
 }
@@ -209,7 +229,9 @@ fn compute_modes_impl(input: &ModesInput, disc: Option<Discretization>) -> Resul
     let use_clarabel = match p.solver {
         Solver::Clarabel => true,
         Solver::Admm => false,
-        Solver::Auto => pb.n < AUTO_CLARABEL_MAX_DOFS,
+        // full: Clarabel for small problems; reduced: hybrid ADMM (loose ADMM
+        // ICCM iterations + Clarabel confirmation solves) is much faster
+        Solver::Auto => disc == Discretization::Full && pb.n < AUTO_CLARABEL_MAX_DOFS,
     };
     let t_f = Instant::now();
     let mut backend = if use_clarabel || pb.active.is_empty() {
@@ -221,7 +243,8 @@ fn compute_modes_impl(input: &ModesInput, disc: Option<Discretization>) -> Resul
         timings.push(("admm_factor".into(), t_f.elapsed().as_secs_f64() * 1e3));
     }
     let t_iccm = Instant::now();
-    let res = iccm(&pb, &p, &mut backend)?;
+    let hybrid = disc != Discretization::Full || pb.n <= HYBRID_CONFIRM_MAX_DOFS;
+    let res = iccm(&pb, &p, &mut backend, hybrid)?;
     timings.push(("iccm".into(), t_iccm.elapsed().as_secs_f64() * 1e3));
     let mut solver_used = match &backend {
         Backend::Clarabel => "clarabel".to_string(),
@@ -275,7 +298,7 @@ fn orthogonalize(v: &mut [f64], basis: &[Vec<f64>], m: &[f64]) {
     }
 }
 
-fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend) -> Result<IccmResult, String> {
+fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend, hybrid: bool) -> Result<IccmResult, String> {
     let n = pb.n;
     let m = &pb.m;
     // M̂-orthonormal basis of the rigid space (rows are M̂R; recover R)
@@ -335,7 +358,18 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend) -> Result<IccmResu
                     // inexact ICCM: the inner tolerance follows the outer progress;
                     // convergence is only accepted after a tight solve
                     tol = if confirm { tol_min } else { (0.1 * last_diff).clamp(tol_min, tol) };
-                    a.solve(pb, &persistent, &cur, &rhs, tol)?
+                    if confirm && hybrid {
+                        // ADMM's tail is slow; for small (e.g. reduced) problems the
+                        // tight confirmation solve is done by the interior-point
+                        // reference solver, then ADMM is re-warmed from it
+                        let mut rows = persistent.clone();
+                        rows.push(&cur);
+                        let r = clarabel_solver::solve(pb, &rows, &rhs)?;
+                        a.warm_from(pb, &r.u);
+                        r
+                    } else {
+                        a.solve(pb, &persistent, &cur, &rhs, tol)?
+                    }
                 }
             };
             inner_total += sub.iterations;

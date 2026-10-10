@@ -101,17 +101,26 @@ def solve_static(coords, tets, E, nu, rho, fixed_mask, nodal_forces):
     strategy.Initialize()
     strategy.Solve()
     disp = np.array([[n.GetSolutionStepValue(KM.DISPLACEMENT)[k] for k in range(3)] for n in mp.Nodes])
-    stresses = []
+    # Per element: linear stress field a + B (x - c) fitted (least squares)
+    # to the integration-point stresses; returns coefficients [n_el, 4, 6]
+    # (row 0 = value at the element centroid, rows 1..3 = gradient).
+    coeffs = []
     cents = []
     for el in mp.Elements:
         sv = el.CalculateOnIntegrationPoints(KM.CAUCHY_STRESS_VECTOR, mp.ProcessInfo)
-        s = np.mean(np.array([[v[k] for k in range(6)] for v in sv]), axis=0)
-        # Kratos Voigt: xx, yy, zz, xy, yz, xz
-        S = np.array([[s[0], s[3], s[5]], [s[3], s[1], s[4]], [s[5], s[4], s[2]]])
-        stresses.append(S)
+        xv = el.CalculateOnIntegrationPoints(KM.INTEGRATION_COORDINATES, mp.ProcessInfo)
+        Sg = np.array([[v[k] for k in range(6)] for v in sv])
+        Xg = np.array([[x[0], x[1], x[2]] for x in xv])
         g = el.GetGeometry()
-        cents.append(np.mean([[g[k].X, g[k].Y, g[k].Z] for k in range(4)], axis=0))
-    return disp, np.array(stresses), np.array(cents)
+        c = np.mean([[g[k].X, g[k].Y, g[k].Z] for k in range(4)], axis=0)
+        if len(Xg) >= 4:
+            A = np.hstack([np.ones((len(Xg), 1)), Xg - c])
+            co, *_ = np.linalg.lstsq(A, Sg, rcond=None)
+        else:
+            co = np.vstack([Sg.mean(axis=0), np.zeros((3, 6))])
+        coeffs.append(co)
+        cents.append(c)
+    return disp, np.array(coeffs), np.array(cents)
 
 
 def eigenfrequencies(coords, tets, E, nu, rho, fixed_mask, n):

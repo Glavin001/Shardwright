@@ -32,7 +32,11 @@ fn dump(out: &ModesOutput, cen: &[[f64; 3]], n: usize) {
 }
 
 fn admm(k: usize) -> ModesParams {
-    ModesParams { k, solver: Solver::Admm, ..Default::default() }
+    ModesParams {
+        k,
+        solver: Solver::Admm,
+        ..Default::default()
+    }
 }
 
 /// Grid x-index of a cell label of an 8 x 2 x 2 grid with no empty cells.
@@ -46,20 +50,25 @@ fn ix_pair(a: u32, b: u32) -> (u32, u32) {
     (ix_of(a).min(ix_of(b)), ix_of(a).max(ix_of(b)))
 }
 
-#[test]
-fn notched_bar_cuts_at_notch() {
+fn notched_bar_cuts_at_notch_impl(disc: Discretization) {
     let solid = notched_bar();
     assert!(solid.topology().is_closed_manifold());
     let c = case(&solid, 0.25, [0.0, 0.0, 0.0], [4.0, 1.0, 1.0], [8, 2, 2]);
     assert_eq!(c.n_cells, 32);
-    let out = run(&c, &|_, _| 1.0, &[], admm(4));
+    let out = run_disc(&c, &|_, _| 1.0, &[], admm(4), disc);
     let cen = group_centroids(&c.mesh, &c.cells, &out.groups);
     dump(&out, &cen, 8);
     assert!(out.converged.iter().all(|&b| b));
     // the highest-jump interfaces all lie in the notch cross-section x = 2
     for g in top_groups(&out, 4) {
         let (a, b) = out.groups[g];
-        assert_eq!(ix_pair(a, b), (3, 4), "group {:?} at {:?} is not at the notch", out.groups[g], cen[g]);
+        assert_eq!(
+            ix_pair(a, b),
+            (3, 4),
+            "group {:?} at {:?} is not at the notch",
+            out.groups[g],
+            cen[g]
+        );
     }
     // Level-1 with target 2 splits the bar at the notch
     let l1 = segment_level1(c.n_cells, &out.groups, &out.max_jump(), 2);
@@ -76,14 +85,14 @@ fn notched_bar_cuts_at_notch() {
     }
 }
 
-#[test]
-fn notched_bar_anchored_end_cuts_at_notch() {
+fn notched_bar_anchored_end_cuts_at_notch_impl(disc: Discretization) {
     let solid = notched_bar();
     let c = case(&solid, 0.25, [0.0, 0.0, 0.0], [4.0, 1.0, 1.0], [8, 2, 2]);
-    let anchors: Vec<u32> =
-        (0..c.mesh.verts.len() as u32).filter(|&v| c.mesh.verts[v as usize][0] < 1e-9).collect();
+    let anchors: Vec<u32> = (0..c.mesh.verts.len() as u32)
+        .filter(|&v| c.mesh.verts[v as usize][0] < 1e-9)
+        .collect();
     assert!(!anchors.is_empty());
-    let out = run(&c, &|_, _| 1.0, &anchors, admm(2));
+    let out = run_disc(&c, &|_, _| 1.0, &anchors, admm(2), disc);
     let cen = group_centroids(&c.mesh, &c.cells, &out.groups);
     dump(&out, &cen, 6);
     let g = top_groups(&out, 1)[0];
@@ -96,8 +105,7 @@ fn notched_bar_anchored_end_cuts_at_notch() {
     }
 }
 
-#[test]
-fn l_shape_weak_at_reentrant_corner() {
+fn l_shape_weak_at_reentrant_corner_impl(disc: Discretization) {
     let poly = [
         DVec2::new(0.0, 0.0),
         DVec2::new(2.0, 0.0),
@@ -109,7 +117,7 @@ fn l_shape_weak_at_reentrant_corner() {
     let solid = extrude(&poly, 0.0, 0.5);
     assert!(solid.topology().is_closed_manifold());
     let c = case(&solid, 0.2, [0.0, 0.0, 0.0], [2.0, 2.0, 0.5], [4, 4, 1]);
-    let out = run(&c, &|_, _| 1.0, &[], admm(3));
+    let out = run_disc(&c, &|_, _| 1.0, &[], admm(3), disc);
     let cen = group_centroids(&c.mesh, &c.cells, &out.groups);
     dump(&out, &cen, 8);
     // the weakest interfaces are the arm roots: the sections through the
@@ -117,7 +125,12 @@ fn l_shape_weak_at_reentrant_corner() {
     let on_root = |p: [f64; 3]| ((p[0] - 1.0).abs() < 0.1 && p[1] < 1.05) || ((p[1] - 1.0).abs() < 0.1 && p[0] < 1.05);
     let mj = out.max_jump();
     let g = top_groups(&out, 1)[0];
-    assert!(on_root(cen[g]), "top group {:?} at {:?} is not at the re-entrant corner", out.groups[g], cen[g]);
+    assert!(
+        on_root(cen[g]),
+        "top group {:?} at {:?} is not at the re-entrant corner",
+        out.groups[g],
+        cen[g]
+    );
     // and they dominate the interfaces far from the corner
     let far: Vec<f64> = (0..out.groups.len())
         .filter(|&g| {
@@ -132,13 +145,17 @@ fn l_shape_weak_at_reentrant_corner() {
     assert_eq!(l1.n_fragments, 2);
     for (k, cut) in l1.cut_groups.iter().enumerate() {
         if *cut {
-            assert!(on_root(cen[k]) || out.group_area[k] < 0.05, "cut group {:?} at {:?}", out.groups[k], cen[k]);
+            assert!(
+                on_root(cen[k]) || out.group_area[k] < 0.05,
+                "cut group {:?} at {:?}",
+                out.groups[k],
+                cen[k]
+            );
         }
     }
 }
 
-#[test]
-fn plate_with_hole_ring_is_weak() {
+fn plate_with_hole_ring_is_weak_impl(disc: Discretization) {
     let n = 48;
     let mut outer = Vec::new();
     let mut inner = Vec::new();
@@ -154,7 +171,7 @@ fn plate_with_hole_ring_is_weak() {
     assert!(solid.signed_volume() > 0.0);
     let c = case(&solid, 0.15, [-1.0, -1.0, 0.0], [1.0, 1.0, 0.3], [4, 4, 1]);
     assert_eq!(c.n_cells, 16);
-    let out = run(&c, &|_, _| 1.0, &[], admm(3));
+    let out = run_disc(&c, &|_, _| 1.0, &[], admm(3), disc);
     let cen = group_centroids(&c.mesh, &c.cells, &out.groups);
     dump(&out, &cen, 8);
     // cells (ix, iy) in 1..=2 form the ring around the hole: labels 5, 6, 9, 10
@@ -176,11 +193,14 @@ fn plate_with_hole_ring_is_weak() {
     assert!(ring_mean > 1.5 * far_mean, "ring {ring_mean} vs far {far_mean}");
     // the single weakest interface crosses a hole ligament
     let g = top_groups(&out, 1)[0];
-    assert!(ring(out.groups[g].0) && ring(out.groups[g].1), "top group {:?}", out.groups[g]);
+    assert!(
+        ring(out.groups[g].0) && ring(out.groups[g].1),
+        "top group {:?}",
+        out.groups[g]
+    );
 }
 
-#[test]
-fn material_weight_moves_cut_and_forbidden_never_cut() {
+fn material_weight_moves_cut_and_forbidden_never_cut_impl(disc: Discretization) {
     let solid = frac_geom::mesh::box_mesh(DVec3::ZERO, DVec3::new(4.0, 1.0, 1.0));
     let c = case(&solid, 0.25, [0.0, 0.0, 0.0], [4.0, 1.0, 1.0], [8, 2, 2]);
     assert_eq!(c.n_cells, 32);
@@ -188,21 +208,24 @@ fn material_weight_moves_cut_and_forbidden_never_cut() {
     let at_center = section(3, 4);
     let at_one = section(1, 2);
 
-    // geometric baseline: uniform bar breaks in the middle
-    let base = run(&c, &|_, _| 1.0, &[], admm(2));
-    let cen = group_centroids(&c.mesh, &c.cells, &base.groups);
-    dump(&base, &cen, 4);
-    let l1 = segment_level1(c.n_cells, &base.groups, &base.max_jump(), 2);
-    assert_eq!(l1.n_fragments, 2);
-    for (g, &(a, b)) in base.groups.iter().enumerate() {
-        if l1.cut_groups[g] {
-            assert!(at_center(a, b), "baseline cut {:?}", (a, b));
+    // geometric baseline: uniform bar breaks in the middle (checked on the
+    // fast reduced discretization only, to keep the full test under budget)
+    if disc != Discretization::Full {
+        let base = run_disc(&c, &|_, _| 1.0, &[], admm(2), disc);
+        dump(&base, &group_centroids(&c.mesh, &c.cells, &base.groups), 4);
+        let l1 = segment_level1(c.n_cells, &base.groups, &base.max_jump(), 2);
+        assert_eq!(l1.n_fragments, 2);
+        for (g, &(a, b)) in base.groups.iter().enumerate() {
+            if l1.cut_groups[g] {
+                assert!(at_center(a, b), "baseline cut {:?}", (a, b));
+            }
         }
     }
 
     // material-aware: a weak interface (G_f ratio 0.01 -> w = 0.1) at x = 1
     let weak = move |a: u32, b: u32| if at_one(a, b) { 0.1 } else { 1.0 };
-    let out = run(&c, &weak, &[], admm(2));
+    let out = run_disc(&c, &weak, &[], admm(2), disc);
+    let cen = group_centroids(&c.mesh, &c.cells, &out.groups);
     dump(&out, &cen, 4);
     for g in top_groups(&out, 4) {
         let (a, b) = out.groups[g];
@@ -216,7 +239,7 @@ fn material_weight_moves_cut_and_forbidden_never_cut() {
 
     // forbidden interfaces at the natural break (x = 2) never open
     let forb = move |a: u32, b: u32| if at_center(a, b) { f64::INFINITY } else { 1.0 };
-    let out = run(&c, &forb, &[], admm(2));
+    let out = run_disc(&c, &forb, &[], admm(2), disc);
     dump(&out, &cen, 4);
     let mut n_forb = 0;
     for (g, &(a, b)) in out.groups.iter().enumerate() {
@@ -237,4 +260,54 @@ fn material_weight_moves_cut_and_forbidden_never_cut() {
     }
     // the two fragments are still separated cleanly somewhere else
     assert_ne!(l1.labels[0], l1.labels[7]);
+}
+
+#[test]
+fn notched_bar_cuts_at_notch() {
+    notched_bar_cuts_at_notch_impl(Discretization::Full);
+}
+
+#[test]
+fn notched_bar_cuts_at_notch_reduced() {
+    notched_bar_cuts_at_notch_impl(Discretization::CellPolynomial(1));
+}
+
+#[test]
+fn notched_bar_anchored_end_cuts_at_notch() {
+    notched_bar_anchored_end_cuts_at_notch_impl(Discretization::Full);
+}
+
+#[test]
+fn notched_bar_anchored_end_cuts_at_notch_reduced() {
+    notched_bar_anchored_end_cuts_at_notch_impl(Discretization::CellPolynomial(1));
+}
+
+#[test]
+fn l_shape_weak_at_reentrant_corner() {
+    l_shape_weak_at_reentrant_corner_impl(Discretization::Full);
+}
+
+#[test]
+fn l_shape_weak_at_reentrant_corner_reduced() {
+    l_shape_weak_at_reentrant_corner_impl(Discretization::CellPolynomial(1));
+}
+
+#[test]
+fn plate_with_hole_ring_is_weak() {
+    plate_with_hole_ring_is_weak_impl(Discretization::Full);
+}
+
+#[test]
+fn plate_with_hole_ring_is_weak_reduced() {
+    plate_with_hole_ring_is_weak_impl(Discretization::CellPolynomial(1));
+}
+
+#[test]
+fn material_weight_moves_cut_and_forbidden_never_cut() {
+    material_weight_moves_cut_and_forbidden_never_cut_impl(Discretization::Full);
+}
+
+#[test]
+fn material_weight_moves_cut_and_forbidden_never_cut_reduced() {
+    material_weight_moves_cut_and_forbidden_never_cut_impl(Discretization::CellPolynomial(1));
 }

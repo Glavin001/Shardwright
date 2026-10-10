@@ -399,7 +399,8 @@ pub(crate) fn active_groups(
     let mut nr = 0;
     for g in 0..rows_all.len() {
         let w = group_weight[g];
-        if w > 0.0 && w.is_finite() {
+        // groups whose jumps vanish identically (no rows) carry no penalty
+        if w > 0.0 && w.is_finite() && !rows_all[g].is_empty() {
             active.push(g);
             lam_act.push(omega * w);
             let s = nr;

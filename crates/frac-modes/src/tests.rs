@@ -180,10 +180,11 @@ fn rho_sweep() {
 #[test]
 fn jump_operator_integrates_exactly() {
     // two tets sharing the face (1,2,3), in different cells
-    let mesh = frac_fem::TetMesh {
+    let mut mesh = frac_fem::TetMesh {
         verts: vec![[0.0, 0.0, -1.0], [0.0, 0.0, 0.0], [1.3, 0.1, 0.0], [0.2, 0.9, 0.05], [0.4, 0.3, 1.0]],
         tets: vec![[0, 1, 3, 2], [4, 1, 2, 3]],
     };
+    mesh.fix_orientation();
     assert!(mesh.min_volume() > 0.0);
     let mats = vec![ElasticMaterial::isotropic(1e3, 0.3, 1.0); 2];
     let input = ModesInput {
@@ -225,4 +226,55 @@ fn jump_operator_integrates_exactly() {
     // normalization: total mass 1
     let mt: f64 = pb.m.iter().sum::<f64>() / 3.0;
     assert!((mt - 1.0).abs() < 1e-12);
+}
+
+#[test]
+fn clarabel_vs_admm_reduced_subproblem() {
+    let f = fixture(0.25, [4, 2, 2]);
+    let input = ModesInput {
+        mesh: &f.mesh,
+        tet_material: &f.mats,
+        tet_cell: &f.cells,
+        group_weight: &|_, _| 1.0,
+        anchored_vertices: &[],
+        params: ModesParams { k: 2, ..Default::default() },
+    };
+    let mut t = Vec::new();
+    let (full, info) = problem::build_full(&input, &mut t).unwrap();
+    for degree in [1u8, 2] {
+        let pb = reduce::reduce(&full, &info, degree, input.params.omega).unwrap();
+        assert_eq!(pb.n, 16 * 3 * if degree == 1 { 4 } else { 10 });
+        let n = pb.n;
+        let c = pb.init[0].clone();
+        let cur: Vec<f64> = c.clone(); // M_r = I
+        let persistent: Vec<&[f64]> = pb.rigid_rows.iter().map(|r| r.as_slice()).collect();
+        assert_eq!(persistent.len(), 6);
+        let mut rows = persistent.clone();
+        rows.push(&cur);
+        let mut rhs = vec![0.0; rows.len()];
+        *rhs.last_mut().unwrap() = 1.0;
+        let r = clarabel_solver::solve(&pb, &rows, &rhs).unwrap();
+        let mut a = admm::Admm::new(&pb).unwrap();
+        a.warm_from(&pb, &c);
+        let fast = a.solve(&pb, &persistent, &cur, &rhs, 1e-7).unwrap();
+        let (e1, e2) = (pb.objective(&r.u), pb.objective(&fast.u));
+        eprintln!("p{degree}: n {n} clarabel {e1:.8e} admm {e2:.8e}");
+        assert!((e1 - e2).abs() < 1e-3 * e1);
+        // same order of magnitude as the full problem (the reduced constraint
+        // uses the normalized projection of c, so energies are not ordered)
+        let rf = {
+            let mut cf = full.init[0].clone();
+            let rig: Vec<Vec<f64>> = full.rigid_rows.iter().map(|r| (0..full.n).map(|i| r[i] / full.m[i]).collect()).collect();
+            orthogonalize(&mut cf, &rig, &full.m);
+            let nc = mdot(&cf, &cf, &full.m).sqrt();
+            cf.iter_mut().for_each(|x| *x /= nc);
+            let curf: Vec<f64> = (0..full.n).map(|i| full.m[i] * cf[i]).collect();
+            let mut rowsf: Vec<&[f64]> = full.rigid_rows.iter().map(|r| r.as_slice()).collect();
+            rowsf.push(&curf);
+            clarabel_solver::solve(&full, &rowsf, &rhs).unwrap()
+        };
+        let ef = full.objective(&rf.u);
+        eprintln!("   full {ef:.8e}");
+        assert!(e1 < 3.0 * ef && e1 > 0.3 * ef, "reduced energy far from full: {e1} vs {ef}");
+    }
 }

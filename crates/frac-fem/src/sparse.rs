@@ -5,7 +5,7 @@ use faer::dyn_stack::{MemBuffer, MemStack};
 use faer::linalg::cholesky::llt::factor::LltRegularization;
 use faer::sparse::linalg::cholesky::{
     factorize_symbolic_cholesky, CholeskySymbolicParams, LltRef, SymbolicCholesky,
-    SymmetricOrdering,
+    SymbolicCholeskyRaw, SymmetricOrdering,
 };
 use faer::sparse::{SparseColMatRef, SymbolicSparseColMatRef};
 use faer::{Conj, Mat, MatMut, Par, Side};
@@ -317,27 +317,51 @@ pub struct SparseCholesky {
     n: usize,
     row_ptr: Vec<usize>,
     col_idx: Vec<usize>,
+    /// Simplicial fast path: (L col_ptr, L row_idx, perm fwd, perm inv).
+    simplicial: Option<(Vec<usize>, Vec<usize>, Vec<usize>, Vec<usize>)>,
 }
 
 impl SparseCholesky {
     pub fn new(a: &CsrMatrix) -> Result<Self, String> {
+        Self::with_threshold(a, faer::sparse::linalg::SupernodalThreshold::AUTO)
+    }
+
+    /// Forces the simplicial (column-by-column) factorization, whose solves
+    /// run through a lean allocation-free loop; best for small/medium
+    /// matrices solved many times.
+    pub fn new_simplicial(a: &CsrMatrix) -> Result<Self, String> {
+        Self::with_threshold(a, faer::sparse::linalg::SupernodalThreshold::FORCE_SIMPLICIAL)
+    }
+
+    fn with_threshold(a: &CsrMatrix, th: faer::sparse::linalg::SupernodalThreshold) -> Result<Self, String> {
         assert_eq!(a.n_rows, a.n_cols);
         let n = a.n_rows;
         // a symmetric CSR matrix is its own CSC
         let sym = SymbolicSparseColMatRef::new_checked(n, n, &a.row_ptr, None, &a.col_idx);
-        let symbolic = factorize_symbolic_cholesky(
-            sym,
-            Side::Lower,
-            SymmetricOrdering::Amd,
-            CholeskySymbolicParams::default(),
-        )
-        .map_err(|e| format!("symbolic cholesky failed: {e:?}"))?;
+        let params = CholeskySymbolicParams { supernodal_flop_ratio_threshold: th, ..Default::default() };
+        let symbolic = factorize_symbolic_cholesky(sym, Side::Lower, SymmetricOrdering::Amd, params)
+            .map_err(|e| format!("symbolic cholesky failed: {e:?}"))?;
+        let simplicial = match symbolic.raw() {
+            SymbolicCholeskyRaw::Simplicial(sm) => {
+                let cp = sm.col_ptr().to_vec();
+                let ri = sm.row_idx().to_vec();
+                // faer stores the diagonal first in each column
+                let ok = (0..n).all(|j| cp[j] < cp[j + 1] && ri[cp[j]] == j);
+                let (fwd, inv) = match symbolic.perm() {
+                    Some(p) => (p.arrays().0.to_vec(), p.arrays().1.to_vec()),
+                    None => ((0..n).collect(), (0..n).collect()),
+                };
+                if ok { Some((cp, ri, fwd, inv)) } else { None }
+            }
+            _ => None,
+        };
         let mut s = SparseCholesky {
             values: vec![0.0; symbolic.len_val()],
             symbolic,
             n,
             row_ptr: a.row_ptr.clone(),
             col_idx: a.col_idx.clone(),
+            simplicial,
         };
         s.refactor(a)?;
         Ok(s)
@@ -388,6 +412,35 @@ impl SparseCholesky {
     /// Solves `A x = b` in place.
     pub fn solve_in_place(&self, b: &mut [f64]) {
         assert_eq!(b.len(), self.n);
+        if let Some((cp, ri, fwd, inv)) = &self.simplicial {
+            let n = self.n;
+            let l = &self.values;
+            let mut x: Vec<f64> = fwd.iter().map(|&f| b[f]).collect();
+            // L x = b (column oriented)
+            for j in 0..n {
+                let (s, e) = (cp[j], cp[j + 1]);
+                let xj = x[j] / l[s];
+                x[j] = xj;
+                if xj != 0.0 {
+                    for k in s + 1..e {
+                        x[ri[k]] -= l[k] * xj;
+                    }
+                }
+            }
+            // L^T x = y
+            for j in (0..n).rev() {
+                let (s, e) = (cp[j], cp[j + 1]);
+                let mut acc = x[j];
+                for k in s + 1..e {
+                    acc -= l[k] * x[ri[k]];
+                }
+                x[j] = acc / l[s];
+            }
+            for i in 0..n {
+                b[i] = x[inv[i]];
+            }
+            return;
+        }
         let mut m = Mat::<f64>::zeros(self.n, 1);
         for i in 0..self.n {
             m[(i, 0)] = b[i];
@@ -436,11 +489,38 @@ mod tests {
         }
         let a = CsrMatrix::from_triplets(n, n, t);
         let ch = SparseCholesky::new(&a).unwrap();
+        assert!(ch.simplicial.is_some());
         let x: Vec<f64> = (0..n).map(|i| (i as f64 * 0.37).sin()).collect();
         let mut b = a.mul(&x);
         ch.solve_in_place(&mut b);
         for i in 0..n {
             assert!((b[i] - x[i]).abs() < 1e-12);
+        }
+        // 2D grid Laplacian + shift, forced simplicial vs supernodal-capable path
+        let g = 30;
+        let mut t = Vec::new();
+        for i in 0..g {
+            for j in 0..g {
+                let p = i * g + j;
+                t.push((p, p, 4.1));
+                if i + 1 < g {
+                    t.push((p, p + g, -1.0));
+                    t.push((p + g, p, -1.0));
+                }
+                if j + 1 < g {
+                    t.push((p, p + 1, -1.0));
+                    t.push((p + 1, p, -1.0));
+                }
+            }
+        }
+        let a2 = CsrMatrix::from_triplets(g * g, g * g, t);
+        let x2: Vec<f64> = (0..g * g).map(|i| (i as f64 * 0.11).cos()).collect();
+        for ch in [SparseCholesky::new_simplicial(&a2).unwrap(), SparseCholesky::new(&a2).unwrap()] {
+            let mut b = a2.mul(&x2);
+            ch.solve_in_place(&mut b);
+            for i in 0..g * g {
+                assert!((b[i] - x2[i]).abs() < 1e-11);
+            }
         }
         let ata = a.ata(None);
         let d = a.to_dense();

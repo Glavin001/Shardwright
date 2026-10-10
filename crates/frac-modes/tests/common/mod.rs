@@ -1,7 +1,7 @@
 //! Synthetic solids and helpers for the known-answer tests.
 #![allow(dead_code)]
 
-use frac_fem::{tetrahedralize, ElasticMaterial, TetMesh};
+use frac_fem::{ElasticMaterial, TetMesh, tetrahedralize};
 use frac_geom::{DVec2, DVec3, TriMesh};
 use frac_modes::*;
 
@@ -24,7 +24,9 @@ pub fn triangulate(poly: &[DVec2]) -> Vec<[u32; 3]> {
             let inside = idx.iter().any(|&j| {
                 j != a && j != b && j != c && {
                     let p = poly[j];
-                    cross2(poly[a], poly[b], p) >= 0.0 && cross2(poly[b], poly[c], p) >= 0.0 && cross2(poly[c], poly[a], p) >= 0.0
+                    cross2(poly[a], poly[b], p) >= 0.0
+                        && cross2(poly[b], poly[c], p) >= 0.0
+                        && cross2(poly[c], poly[a], p) >= 0.0
                 }
             });
             if inside {
@@ -127,7 +129,11 @@ pub fn group_centroids(m: &TetMesh, cells: &[u32], groups: &[(u32, u32)]) -> Vec
         let p = w[0].0.map(|v| m.verts[v as usize]);
         let e1 = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
         let e2 = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
-        let c = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+        let c = [
+            e1[1] * e2[2] - e1[2] * e2[1],
+            e1[2] * e2[0] - e1[0] * e2[2],
+            e1[0] * e2[1] - e1[1] * e2[0],
+        ];
         let ar = 0.5 * (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt();
         for k in 0..3 {
             acc[g][k] += ar * (p[0][k] + p[1][k] + p[2][k]) / 3.0;
@@ -152,7 +158,12 @@ pub fn case(solid: &TriMesh, h: f64, lo: [f64; 3], hi: [f64; 3], dims: [usize; 3
     let mesh = tetrahedralize(solid, h, 0);
     let (cells, n_cells) = grid_cells(&mesh, lo, hi, dims);
     let mats = vec![steel(); mesh.tets.len()];
-    Case { mesh, cells, n_cells, mats }
+    Case {
+        mesh,
+        cells,
+        n_cells,
+        mats,
+    }
 }
 
 pub fn run(c: &Case, w: &(dyn Fn(u32, u32) -> f64 + Sync), anchors: &[u32], params: ModesParams) -> ModesOutput {
@@ -192,4 +203,34 @@ pub fn notched_bar() -> TriMesh {
         DVec2::new(0.0, 1.0),
     ];
     extrude(&poly, 0.0, 1.0)
+}
+
+pub fn run_disc(
+    c: &Case,
+    w: &(dyn Fn(u32, u32) -> f64 + Sync),
+    anchors: &[u32],
+    params: ModesParams,
+    disc: Discretization,
+) -> ModesOutput {
+    let input = ModesInput {
+        mesh: &c.mesh,
+        tet_material: &c.mats,
+        tet_cell: &c.cells,
+        group_weight: w,
+        anchored_vertices: anchors,
+        params,
+    };
+    let out = compute_modes_with(&input, disc).unwrap();
+    eprintln!(
+        "[{disc:?}] tets {} cells {} groups {} dofs {} solver {} iters {:?} conv {:?} timings {:?}",
+        c.mesh.tets.len(),
+        c.n_cells,
+        out.groups.len(),
+        out.n_dofs,
+        out.solver_used,
+        out.iterations,
+        out.converged,
+        out.timings_ms
+    );
+    out
 }

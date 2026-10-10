@@ -8,7 +8,7 @@ use frac_core::*;
 use frac_geom::polygon::plane_basis;
 use frac_geom::{Aabb, DVec3};
 use frac_material::MaterialLibrary;
-use frac_validate::network::{BondNetworkSolver, LoadCase, ReferenceSolver};
+use frac_validate::network::{BondNetworkSolver, LoadCase, ReferenceSolver, StiffnessModel};
 use serde_json::{json, Value};
 use smallvec::SmallVec;
 
@@ -88,6 +88,10 @@ fn support_bonds(asset: &Asset, level: u8, polys: &[(FragmentId, Polygon3)]) -> 
 
 /// Export network results for all levels >= 1.
 pub fn network_export(asset: &Asset, lib: &MaterialLibrary) -> Value {
+    network_export_with(asset, lib, StiffnessModel::Tensorial)
+}
+
+pub fn network_export_with(asset: &Asset, lib: &MaterialLibrary, model: StiffnessModel) -> Value {
     let (ax, lo, hi, bb) = axis_of(asset);
     let len = hi - lo;
     let tol = 1e-6 * bb.diagonal();
@@ -104,7 +108,7 @@ pub fn network_export(asset: &Asset, lib: &MaterialLibrary) -> Value {
         {"name": "shear", "kind": "force", "direction": t2.to_array(), "magnitude": force * 0.1},
         {"name": "torsion", "kind": "torque", "direction": axis.to_array(), "magnitude": force * 0.05 * len.max(1e-3)},
     ]);
-    let solver = ReferenceSolver { lib };
+    let solver = ReferenceSolver { lib, model };
     let mut levels = Vec::new();
     for level in 1..asset.hierarchy.levels {
         let fixed_polys = end_face_polys(asset, level, ax, lo, tol);
@@ -148,7 +152,8 @@ pub fn network_export(asset: &Asset, lib: &MaterialLibrary) -> Value {
             } else {
                 area.iter().map(|(f, v)| (*f, dir * (mag * v.0 / total_area))).collect()
             };
-            let lc = LoadCase { name: case["name"].as_str().unwrap().into(), gravity: DVec3::ZERO, forces: forces.clone(), fixed: Vec::new() };
+            let points: Vec<DVec3> = forces.iter().map(|(f, _)| area[f].1 / area[f].0.max(1e-300)).collect();
+            let lc = LoadCase { name: case["name"].as_str().unwrap().into(), gravity: DVec3::ZERO, forces: forces.clone(), force_points: points, fixed: Vec::new() };
             let r = solver.static_solve(&a2, level, &lc);
             let r0 = a2.hierarchy.level_ranges[level as usize].start;
             // response at the loaded end: area-weighted displacement (rotation for torque)
@@ -166,13 +171,13 @@ pub fn network_export(asset: &Asset, lib: &MaterialLibrary) -> Value {
                 .filter(|bf| (bf.bond.0 as usize) < a2.bonds.len() && !a2.bonds[bf.bond.idx()].interfaces.is_empty())
                 .map(|bf| {
                     let b = &a2.bonds[bf.bond.idx()];
-                    json!({"interfaces": b.interfaces, "a": b.a.0, "b": b.b.as_i64(), "area": b.area, "normal": b.normal.to_array(), "centroid": b.centroid.to_array(), "traction": bf.traction, "shear": (bf.shear_force / b.area.max(1e-300)).to_array()})
+                    json!({"interfaces": b.interfaces, "a": b.a.0, "b": b.b.as_i64(), "area": b.area, "normal": b.normal.to_array(), "centroid": b.centroid.to_array(), "traction": bf.traction, "traction_vec": bf.traction_vec.to_array(), "recovered": bf.recovered_traction.to_array()})
                 })
                 .collect();
             results.push(json!({"case": case["name"], "response": resp, "stiffness": if resp != 0.0 { mag / resp } else { 0.0 }, "bonds": tractions}));
         }
         // self weight with the same clamp
-        let lc = LoadCase { name: "self_weight".into(), gravity: DVec3::new(0.0, -9.81, 0.0), forces: Vec::new(), fixed: Vec::new() };
+        let lc = LoadCase { name: "self_weight".into(), gravity: DVec3::new(0.0, -9.81, 0.0), forces: Vec::new(), force_points: Vec::new(), fixed: Vec::new() };
         let r = solver.static_solve(&a2, level, &lc);
         let sw: Vec<Value> = r
             .bond_forces
@@ -197,6 +202,7 @@ pub fn network_export(asset: &Asset, lib: &MaterialLibrary) -> Value {
         .collect();
     json!({
         "asset": asset.meta.name,
+        "stiffness_model": format!("{model:?}"),
         "materials": materials,
         "axis": ax,
         "fixed_plane": lo,

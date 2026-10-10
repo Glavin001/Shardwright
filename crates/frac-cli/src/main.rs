@@ -58,6 +58,9 @@ enum Cmd {
         oracle_cache: Option<PathBuf>,
         #[arg(long)]
         report: Option<PathBuf>,
+        /// Network stiffness model: tensorial (default), calibrated or spec.
+        #[arg(long, default_value = "tensorial")]
+        stiffness_model: String,
     },
     /// Inspect a physics payload.
     Inspect {
@@ -268,7 +271,12 @@ fn debug_dump(asset: &frac_core::Asset, out: &Path, name: &str, what: &str) -> R
     Ok(())
 }
 
-fn validate_cmd(input: &Path, materials: &Option<PathBuf>, cache: &Option<PathBuf>, report: &Option<PathBuf>) -> Result<bool, String> {
+fn validate_cmd(input: &Path, materials: &Option<PathBuf>, cache: &Option<PathBuf>, report: &Option<PathBuf>, model: &str) -> Result<bool, String> {
+    let model = match model {
+        "spec" => frac_validate::network::StiffnessModel::Spec,
+        "calibrated" => frac_validate::network::StiffnessModel::Calibrated,
+        _ => frac_validate::network::StiffnessModel::Tensorial,
+    };
     let lib = load_lib(materials)?;
     let files: Vec<PathBuf> = if input.is_dir() {
         let mut v: Vec<PathBuf> = std::fs::read_dir(input).map_err(|e| e.to_string())?.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.to_string_lossy().ends_with(".asset.json")).collect();
@@ -281,7 +289,7 @@ fn validate_cmd(input: &Path, materials: &Option<PathBuf>, cache: &Option<PathBu
     for f in files {
         let text = std::fs::read_to_string(&f).map_err(|e| e.to_string())?;
         let asset: frac_core::Asset = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", f.display()))?;
-        let net = frac_pipeline::oracle::network_export(&asset, &lib);
+        let net = frac_pipeline::oracle::network_export_with(&asset, &lib, model);
         let base = f.to_string_lossy().trim_end_matches(".asset.json").to_string();
         let net_path = PathBuf::from(format!("{base}.network.json"));
         std::fs::write(&net_path, serde_json::to_string_pretty(&net).unwrap()).map_err(|e| e.to_string())?;
@@ -359,7 +367,7 @@ fn main() -> ExitCode {
         Cmd::Bake { input, materials, config, meta, out, allow_gate_failures, check_determinism, debug_dump, seed } => {
             bake(input, materials, config, meta, out, *allow_gate_failures, *check_determinism, debug_dump, *seed)
         }
-        Cmd::Validate { input, materials, oracle_cache, report } => validate_cmd(input, materials, oracle_cache, report),
+        Cmd::Validate { input, materials, oracle_cache, report, stiffness_model } => validate_cmd(input, materials, oracle_cache, report, stiffness_model),
         Cmd::Inspect { input, level, bond, fragment } => inspect(input, *level, *bond, *fragment),
         Cmd::Diff { a, b } => diff(a, b),
         Cmd::Patterns { materials, out, seed } => load_lib(materials).and_then(|lib| {

@@ -52,6 +52,11 @@ impl Default for AdmmSettings {
     }
 }
 
+thread_local! {
+    static SOLVE_NS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    static STEP_NS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 pub(crate) fn debug_enabled() -> bool {
     std::env::var_os("FRAC_MODES_DEBUG").is_some()
 }
@@ -87,11 +92,8 @@ struct Step {
     fx: Vec<f64>,
     u: Vec<f64>,
     r_prim: f64,
-    r_dual: f64,
     eps_pri: f64,
-    eps_dual: f64,
     scale_p: f64,
-    scale_d: f64,
 }
 
 impl Admm {
@@ -118,7 +120,9 @@ impl Admm {
         }
         let rho = rho0.unwrap_or(if sb > 0.0 { (0.03 * sq / sb).clamp(1e-6, 1e6) } else { 1.0 });
         let a = base.add(1.0, &btb, rho);
-        let chol = SparseCholesky::new(&a)?;
+        // simplicial factors have lean, allocation-free solves (the u-step is
+        // solved thousands of times); supernodal pays off for big systems
+        let chol = if pb.n < 20_000 { SparseCholesky::new_simplicial(&a)? } else { SparseCholesky::new(&a)? };
         let nr = pb.b_act.n_rows;
         if debug_enabled() {
             let t = std::time::Instant::now();
@@ -206,6 +210,13 @@ impl Admm {
 
     /// One ADMM map evaluation `F(x)` with `x = [z; y]`.
     fn step(&self, pb: &Problem, cs: &Constraints, x: &[f64], st: &AdmmSettings) -> Step {
+        let t0 = std::time::Instant::now();
+        let r = self.step_inner(pb, cs, x, st);
+        STEP_NS.with(|c| c.set(c.get() + t0.elapsed().as_nanos() as u64));
+        r
+    }
+
+    fn step_inner(&self, pb: &Problem, cs: &Constraints, x: &[f64], st: &AdmmSettings) -> Step {
         let n = pb.n;
         let nr = pb.b_act.n_rows;
         let (z, y) = x.split_at(nr);
@@ -215,7 +226,9 @@ impl Admm {
         let mut r = vec![0.0; n];
         self.bt.matvec(&tmp, &mut r);
         r.iter_mut().for_each(|v| *v *= rho);
+        let ts = std::time::Instant::now();
         self.chol.solve_in_place(&mut r);
+        SOLVE_NS.with(|c| c.set(c.get() + ts.elapsed().as_nanos() as u64));
         let mc = cs.rows.len();
         let mut cv = vec![0.0; mc];
         for i in 0..mc {
@@ -264,23 +277,30 @@ impl Admm {
             let d = bu[i] - zn[i];
             rp += d * d;
         }
-        let dz: Vec<f64> = (0..nr).map(|i| zn[i] - z[i]).collect();
-        let mut w = vec![0.0; n];
-        self.bt.matvec(&dz, &mut w);
-        let rd = rho * norm(&w);
-        self.bt.matvec(yn, &mut w);
-        let scale_d = rho * norm(&w);
+        let _ = yn;
         let scale_p = norm(&bu).max(norm(zn));
         Step {
             fx,
             u,
             r_prim: rp.sqrt(),
-            r_dual: rd,
             eps_pri: (nr as f64).sqrt() * st.eps_abs + st.eps_rel * scale_p,
-            eps_dual: (n as f64).sqrt() * st.eps_abs + st.eps_rel * scale_d,
             scale_p,
-            scale_d,
         }
+    }
+
+    /// Dual residual `ρ‖B̂ᵀ(z⁺ − z)‖`, its scale `ρ‖B̂ᵀy⁺‖` and tolerance for
+    /// the step `x → s.fx` (evaluated lazily: only when the primal residual
+    /// is small or ρ adaptation is due).
+    fn dual(&self, x: &[f64], s: &Step, st: &AdmmSettings) -> (f64, f64, f64) {
+        let nr = x.len() / 2;
+        let n = self.bt.n_rows;
+        let dz: Vec<f64> = (0..nr).map(|i| s.fx[i] - x[i]).collect();
+        let mut w = vec![0.0; n];
+        self.bt.matvec(&dz, &mut w);
+        let rd = self.rho * norm(&w);
+        self.bt.matvec(&s.fx[nr..], &mut w);
+        let scale_d = self.rho * norm(&w);
+        (rd, scale_d, (n as f64).sqrt() * st.eps_abs + st.eps_rel * scale_d)
     }
 
     /// Solves the subproblem with equality rows `persistent ++ [current]`
@@ -312,37 +332,50 @@ impl Admm {
             a.sqrt()
         };
         let mut res_good = fres(&s, &x);
-        // Anderson history: differences of x and of g = F(x) - x
-        let mut dx_hist: Vec<Vec<f64>> = Vec::new();
-        let mut dg_hist: Vec<Vec<f64>> = Vec::new();
-        let mut prev: Option<(Vec<f64>, Vec<f64>)> = None; // (x, g)
+        // Anderson history in a ring buffer: dx_p = x_k − x_{k−1},
+        // dg_p = g_k − g_{k−1} (g = F(x) − x), with an incrementally updated
+        // Gram matrix of the dg's.
+        let len = x.len();
+        let mut dx: Vec<Vec<f64>> = vec![vec![0.0; len]; mem];
+        let mut dg: Vec<Vec<f64>> = vec![vec![0.0; len]; mem];
+        let mut gram = vec![0.0; mem * mem];
+        let mut hist = 0usize; // number of valid slots
+        let mut head = 0usize; // next slot to write
+        let mut prev_x = vec![0.0; len];
+        let mut prev_g = vec![0.0; len];
+        let mut have_prev = false;
+        let mut g = vec![0.0; len];
         let mut iters = 1;
         let mut ok = false;
         let mut last_adapt = 0usize;
         let mut n_accel = 0usize;
         let mut n_reject = 0usize;
         loop {
-            if s.r_prim <= s.eps_pri && s.r_dual <= s.eps_dual {
-                ok = true;
-                break;
+            if s.r_prim <= s.eps_pri {
+                let (rd, _, eps_dual) = self.dual(&x, &s, &st);
+                if rd <= eps_dual {
+                    ok = true;
+                    break;
+                }
             }
             if iters >= st.max_iter {
                 break;
             }
             // ρ adaptation (resets the acceleration history)
             if st.adaptive && iters >= last_adapt + 50 && self.refactorizations < 60 {
+                let (rd, scale_d, _) = self.dual(&x, &s, &st);
                 let num = s.r_prim / s.scale_p.max(1e-300);
-                let den = s.r_dual / s.scale_d.max(1e-300);
+                let den = rd / scale_d.max(1e-300);
+                last_adapt = iters;
                 if num > 0.0 && den > 0.0 {
                     let ratio = (num / den).sqrt();
                     if !(0.2..=5.0).contains(&ratio) {
                         let new_rho = (self.rho * ratio).clamp(1e-8, 1e8);
                         self.set_rho(new_rho, &mut x, nr)?;
                         cs = self.constraints(persistent, current, rhs)?;
-                        last_adapt = iters;
-                        dx_hist.clear();
-                        dg_hist.clear();
-                        prev = None;
+                        hist = 0;
+                        head = 0;
+                        have_prev = false;
                         s = self.step(pb, &cs, &x, &st);
                         res_good = fres(&s, &x);
                         iters += 1;
@@ -350,35 +383,44 @@ impl Admm {
                     }
                 }
             }
-            let g: Vec<f64> = (0..x.len()).map(|i| s.fx[i] - x[i]).collect();
-            if let Some((px, pg)) = prev.take() {
-                dx_hist.push((0..x.len()).map(|i| x[i] - px[i]).collect());
-                dg_hist.push((0..x.len()).map(|i| g[i] - pg[i]).collect());
-                if dx_hist.len() > mem {
-                    dx_hist.remove(0);
-                    dg_hist.remove(0);
+            for i in 0..len {
+                g[i] = s.fx[i] - x[i];
+            }
+            if mem > 0 && have_prev {
+                let slot = head;
+                for i in 0..len {
+                    dx[slot][i] = x[i] - prev_x[i];
+                    dg[slot][i] = g[i] - prev_g[i];
+                }
+                head = (head + 1) % mem;
+                hist = (hist + 1).min(mem);
+                for q in 0..hist {
+                    let qs = (head + mem - hist + q) % mem;
+                    let mut acc = 0.0;
+                    for i in 0..len {
+                        acc += dg[slot][i] * dg[qs][i];
+                    }
+                    gram[slot * mem + qs] = acc;
+                    gram[qs * mem + slot] = acc;
                 }
             }
-            let plain = s.fx.clone();
+            prev_x.copy_from_slice(&x);
+            prev_g.copy_from_slice(&g);
+            have_prev = true;
+            let mut x_new = s.fx.clone();
             let mut accelerated = false;
-            let mut x_new = plain.clone();
-            let m = dg_hist.len();
-            if mem > 0 && m > 0 {
-                // gamma = argmin ‖g − ΔG γ‖ (regularized normal equations)
+            if hist > 0 {
+                let m = hist;
+                let slots: Vec<usize> = (0..m).map(|q| (head + mem - m + q) % mem).collect();
                 let mut a = vec![0.0; m * m];
                 let mut b = vec![0.0; m];
                 for p in 0..m {
-                    for q in p..m {
-                        let mut acc = 0.0;
-                        for i in 0..g.len() {
-                            acc += dg_hist[p][i] * dg_hist[q][i];
-                        }
-                        a[p * m + q] = acc;
-                        a[q * m + p] = acc;
+                    for q in 0..m {
+                        a[p * m + q] = gram[slots[p] * mem + slots[q]];
                     }
                     let mut acc = 0.0;
-                    for i in 0..g.len() {
-                        acc += dg_hist[p][i] * g[i];
+                    for i in 0..len {
+                        acc += dg[slots[p]][i] * g[i];
                     }
                     b[p] = acc;
                 }
@@ -390,17 +432,17 @@ impl Admm {
                     dense::cholesky_solve(&a, m, &mut b);
                     for p in 0..m {
                         let gp = b[p];
-                        for i in 0..x_new.len() {
-                            x_new[i] -= gp * (dx_hist[p][i] + dg_hist[p][i]);
+                        let (dxp, dgp) = (&dx[slots[p]], &dg[slots[p]]);
+                        for i in 0..len {
+                            x_new[i] -= gp * (dxp[i] + dgp[i]);
                         }
                     }
                     accelerated = x_new.iter().all(|v| v.is_finite());
                     if !accelerated {
-                        x_new = plain.clone();
+                        x_new.copy_from_slice(&s.fx);
                     }
                 }
             }
-            prev = Some((std::mem::take(&mut x), g));
             let mut s_new = self.step(pb, &cs, &x_new, &st);
             iters += 1;
             let mut r_new = fres(&s_new, &x_new);
@@ -410,13 +452,13 @@ impl Admm {
                 } else {
                     // safeguard: fall back to the plain ADMM step
                     n_reject += 1;
-                    x_new = plain;
+                    x_new.copy_from_slice(&s.fx);
                     s_new = self.step(pb, &cs, &x_new, &st);
                     iters += 1;
                     r_new = fres(&s_new, &x_new);
-                    dx_hist.clear();
-                    dg_hist.clear();
-                    prev = None;
+                    hist = 0;
+                    head = 0;
+                    have_prev = false;
                 }
             }
             res_good = r_new;
@@ -424,14 +466,18 @@ impl Admm {
             s = s_new;
         }
         // keep the last evaluated map output as the warm start
+        let dbg = if debug_enabled() { Some(self.dual(&x, &s, &st)) } else { None };
         self.x = s.fx;
-        if debug_enabled() {
+        if let Some((rd, _, ed)) = dbg {
+            eprintln!("[admm] final rp/eps {:.2} rd/eps {:.2} tol {:.1e}", s.r_prim / s.eps_pri, rd / ed, st.eps_rel);
             eprintln!(
-                "[admm] iters {iters} ok {ok} rho {:.3e} refactors {} accel {n_accel} reject {n_reject} time {:.3}s n {} rows {nr}",
+                "[admm] iters {iters} ok {ok} rho {:.3e} refactors {} accel {n_accel} reject {n_reject} time {:.3}s n {} rows {nr} step {:.3}s solve {:.3}s",
                 self.rho,
                 self.refactorizations,
                 t_start.elapsed().as_secs_f64(),
-                pb.n
+                pb.n,
+                STEP_NS.with(|c| c.replace(0)) as f64 * 1e-9,
+                SOLVE_NS.with(|c| c.replace(0)) as f64 * 1e-9,
             );
         }
         Ok(SubResult { u: s.u, iterations: iters, ok })

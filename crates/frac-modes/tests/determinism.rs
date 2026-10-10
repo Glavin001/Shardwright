@@ -34,6 +34,14 @@ fn compute_modes_is_bitwise_deterministic() {
         assert_eq!(bits(&a), bits(&b), "{solver:?}");
         assert_eq!(a, b, "{solver:?}");
     }
+    // reduced discretization (the Auto path for large problems)
+    for d in [1u8, 2] {
+        let p = ModesParams { k: 3, ..Default::default() };
+        let a = strip(run_disc(&c, &w, &[], p, Discretization::CellPolynomial(d)));
+        let b = strip(run_disc(&c, &w, &[], p, Discretization::CellPolynomial(d)));
+        assert_eq!(bits(&a), bits(&b), "p{d}");
+        assert_eq!(a, b);
+    }
     // the mesher is deterministic too
     let c2 = small_case();
     assert_eq!(c.mesh, c2.mesh);
