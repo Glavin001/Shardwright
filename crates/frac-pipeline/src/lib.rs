@@ -362,6 +362,7 @@ fn rss_mb() -> f64 {
         .unwrap_or(0.0)
 }
 
+pub use frac_collision;
 pub use frac_collision::{build_hulls, hull_polytope};
 
 /// Collision-stage parameters from the bake settings.

@@ -117,6 +117,31 @@ enum Cmd {
         #[arg(long)]
         levels: Option<String>,
     },
+    /// Stand-alone convex decomposition of a closed mesh with the CoACD port
+    /// (upstream default parameters unless overridden). Input/output JSON:
+    /// `{"vertices": [[x,y,z],...], "faces": [[i,j,k],...]}` ->
+    /// `{"hulls": [[[x,y,z],...],...], "concavity": [...], "seconds": t}`.
+    Decompose {
+        #[arg(long)]
+        mesh: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long, default_value_t = 0.05)]
+        threshold: f64,
+        /// Hull limit (0 = none, merge only below the threshold).
+        #[arg(long, default_value_t = 0)]
+        max_convex_hull: usize,
+        #[arg(long, default_value_t = 150)]
+        mcts_iterations: u32,
+        #[arg(long, default_value_t = 3)]
+        mcts_depth: u32,
+        #[arg(long, default_value_t = 20)]
+        mcts_nodes: u32,
+        #[arg(long, default_value_t = 2000)]
+        resolution: u32,
+        #[arg(long, default_value_t = 0)]
+        seed: u64,
+    },
     /// Generate the procedural benchmark suite (spec §13.8).
     GenBench {
         #[arg(long, default_value = "benchmarks/assets")]
@@ -249,6 +274,44 @@ fn bake(
         all_ok &= ok;
     }
     Ok(all_ok || allow)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decompose_cmd(mesh: &Path, out: &Path, threshold: f64, max_ch: usize, iters: u32, depth: u32, nodes: u32, resolution: u32, seed: u64) -> Result<bool, String> {
+    let text = std::fs::read_to_string(mesh).map_err(|e| format!("{}: {e}", mesh.display()))?;
+    let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let verts: Vec<glam::DVec3> = v["vertices"]
+        .as_array()
+        .ok_or("missing vertices")?
+        .iter()
+        .map(|p| glam::DVec3::new(p[0].as_f64().unwrap_or(0.0), p[1].as_f64().unwrap_or(0.0), p[2].as_f64().unwrap_or(0.0)))
+        .collect();
+    let tris: Vec<[u32; 3]> = v["faces"]
+        .as_array()
+        .ok_or("missing faces")?
+        .iter()
+        .map(|t| [t[0].as_u64().unwrap_or(0) as u32, t[1].as_u64().unwrap_or(0) as u32, t[2].as_u64().unwrap_or(0) as u32])
+        .collect();
+    let m = frac_geom::TriMesh { verts, tris };
+    let p = frac_pipeline::frac_collision::coacd::CoacdParams {
+        threshold,
+        mcts_iterations: iters,
+        mcts_depth: depth,
+        mcts_nodes: nodes,
+        resolution,
+        seed,
+        max_convex_hull: if max_ch == 0 { None } else { Some(max_ch) },
+        ..Default::default()
+    };
+    let t = std::time::Instant::now();
+    let res = frac_pipeline::frac_collision::coacd::decompose_detailed(&m, &p);
+    let secs = t.elapsed().as_secs_f64();
+    let hulls: Vec<Vec<[f64; 3]>> = res.iter().map(|(h, _)| h.vertices().iter().map(|q| [q.x, q.y, q.z]).collect()).collect();
+    let conc: Vec<f64> = res.iter().map(|x| x.1).collect();
+    let doc = serde_json::json!({ "hulls": hulls, "concavity": conc, "seconds": secs });
+    std::fs::write(out, doc.to_string()).map_err(|e| e.to_string())?;
+    println!("{}: {} hulls in {secs:.2} s", out.display(), res.len());
+    Ok(true)
 }
 
 fn hulls_cmd(asset: &Path, config: &Option<PathBuf>, out: &Path, coacd_threshold: Option<f64>, max_hulls: Option<usize>, levels: &Option<String>) -> Result<bool, String> {
@@ -460,6 +523,9 @@ fn main() -> ExitCode {
             Ok(true)
         }),
         Cmd::Hulls { asset, config, out, coacd_threshold, max_hulls, levels } => hulls_cmd(asset, config, out, *coacd_threshold, *max_hulls, levels),
+        Cmd::Decompose { mesh, out, threshold, max_convex_hull, mcts_iterations, mcts_depth, mcts_nodes, resolution, seed } => {
+            decompose_cmd(mesh, out, *threshold, *max_convex_hull, *mcts_iterations, *mcts_depth, *mcts_nodes, *resolution, *seed)
+        }
         Cmd::GenBench { out, only } => bench::generate(out, only).map(|_| true),
     };
     match res {

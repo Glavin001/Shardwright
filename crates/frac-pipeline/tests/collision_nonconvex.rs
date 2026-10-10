@@ -87,10 +87,29 @@ fn nonconvex_u_block_hulls() {
     let root = &a.hierarchy.fragments[a.hierarchy.level_ranges[0].start as usize];
     let nh = root.hulls.len();
     assert!(nh >= 2 && nh <= settings.collision.max_hulls_per_fragment as usize, "root fragment hulls: {nh}");
-    // hulls of the root cover most of the U and do not fill its notch
-    let hv: f64 = a.hulls[root.hulls.start as usize..root.hulls.end as usize].iter().map(|h| frac_pipeline::hull_polytope(h).volume()).sum();
-    let v = root.mass.volume;
-    assert!(hv > 0.85 * v && hv < 1.25 * v, "hull volume {hv} vs fragment {v}");
+    // hulls of the root cover most of the U and leave its notch mostly
+    // empty (grid samples; overlapping hulls counted once)
+    let polys: Vec<_> = a.hulls[root.hulls.start as usize..root.hulls.end as usize].iter().map(frac_pipeline::hull_polytope).collect();
+    let inside = |p: DVec3| polys.iter().any(|h| h.faces.iter().all(|(f, _)| f.dist(p) <= 1e-9));
+    let in_u = |p: DVec3| p.z > 0.0 && p.z < 0.4 && p.x > 0.0 && p.x < 1.2 && p.y > 0.0 && p.y < 1.2 && !(p.x > 0.4 && p.x < 0.8 && p.y > 0.4);
+    let (mut u_n, mut u_in, mut notch_n, mut notch_in) = (0, 0, 0, 0);
+    for i in 0..48 {
+        for j in 0..48 {
+            for k in 0..16 {
+                let p = DVec3::new((i as f64 + 0.5) / 40.0, (j as f64 + 0.5) / 40.0, (k as f64 + 0.5) / 40.0);
+                if in_u(p) {
+                    u_n += 1;
+                    u_in += inside(p) as usize;
+                } else if p.x > 0.45 && p.x < 0.75 && p.y > 0.45 && p.z < 0.4 && p.y < 1.2 {
+                    notch_n += 1;
+                    notch_in += inside(p) as usize;
+                }
+            }
+        }
+    }
+    let (cov, fill) = (u_in as f64 / u_n as f64, notch_in as f64 / notch_n as f64);
+    assert!(cov > 0.9, "U coverage {cov}");
+    assert!(fill < 0.15, "notch filled {fill}");
     for f in &a.hierarchy.fragments {
         assert!(f.hulls.len() <= settings.collision.max_hulls_per_fragment as usize);
     }
