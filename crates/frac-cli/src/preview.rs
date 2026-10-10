@@ -34,6 +34,8 @@ pub struct PreviewOptions {
     pub clip_z: Option<f64>,
     pub level: Option<u8>,
     pub all_levels: bool,
+    /// With `all_levels`: draw levels 0..=max_level only.
+    pub max_level: Option<u8>,
     pub width: u32,
     pub height: u32,
     pub explode: f64,
@@ -842,7 +844,8 @@ pub fn preview(
     let (view, light) = view_light(o);
     let leaf = asset.hierarchy.levels.saturating_sub(1);
     let levels: Vec<u8> = if o.all_levels {
-        (0..asset.hierarchy.levels).collect()
+        let top = o.max_level.map_or(leaf, |m| m.min(leaf));
+        (0..=top).collect()
     } else {
         vec![o.level.unwrap_or(leaf).min(leaf)]
     };

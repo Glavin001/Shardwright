@@ -198,6 +198,9 @@ enum Cmd {
         /// Draw the cosmetic debris pieces (`[debris] pieces > 0`).
         #[arg(long)]
         debris: bool,
+        /// With `--all-levels`: draw levels 0..=N only (e.g. 2 to omit L3).
+        #[arg(long)]
+        max_level: Option<u8>,
     },
     GenBench {
         #[arg(long, default_value = "benchmarks/assets")]
@@ -1111,6 +1114,7 @@ fn main() -> ExitCode {
             bonds,
             clip_z,
             debris,
+            max_level,
         } => (|| -> Result<bool, String> {
             // never overwrite an earlier preview: number the new file instead
             let out = &free_path(out);
@@ -1129,6 +1133,7 @@ fn main() -> ExitCode {
                 clip_z: *clip_z,
                 level: *level,
                 all_levels: *all_levels,
+                max_level: *max_level,
                 width: *width,
                 height: *height,
                 explode: *explode,
