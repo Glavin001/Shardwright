@@ -1,0 +1,31 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build (warnings are errors)
+        run: RUSTFLAGS="-D warnings" cargo build --release --workspace
+      - name: Tests
+        run: cargo test --release --workspace
+      - name: Determinism (two processes, 1 vs 4 threads)
+        run: HASHES=determinism-${{ matrix.os }}.sha256 tools/ci/determinism.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: determinism-${{ matrix.os }}
+          path: determinism-${{ matrix.os }}.sha256
+  cross-os:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Byte-identical outputs across operating systems
+        run: diff determinism-ubuntu-latest/determinism-ubuntu-latest.sha256 determinism-macos-latest/determinism-macos-latest.sha256
