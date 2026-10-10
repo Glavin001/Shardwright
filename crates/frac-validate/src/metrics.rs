@@ -58,16 +58,34 @@ pub fn compute(asset: &Asset, render: &RenderOut, _lib: &MaterialLibrary) -> Val
         let fr = asset.level_fragments(l);
         let vols: Vec<f64> = fr.iter().map(|f| f.mass.volume).collect();
         let logv: Vec<f64> = vols.iter().filter(|v| **v > 0.0).map(|v| v.ln()).collect();
-        // shape: inertia-eigenvalue aspect ratio and convexity (V / V_hull)
-        let shape: Vec<(f64, f64)> = fr
-            .par_iter()
+        // shape: inertia-eigenvalue aspect ratio (every fragment) and
+        // convexity V / V_hull (deterministic sample of at most
+        // CONVEXITY_SAMPLES fragments per level: a convex hull per fragment
+        // dominates the metrics time on building-scale assets, and the
+        // quantiles of a few thousand samples are within ~1%)
+        const CONVEXITY_SAMPLES: usize = 4096;
+        let aspect: Vec<f64> = fr
+            .iter()
             .map(|f| {
                 let (ev, _) = f.mass.principal();
-                let aspect = if ev.z > 0.0 { (ev.x / ev.z).sqrt() } else { 0.0 };
+                if ev.z > 0.0 {
+                    (ev.x / ev.z).sqrt()
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        let convexity: Vec<f64> = fr
+            .par_iter()
+            .step_by(fr.len().div_ceil(CONVEXITY_SAMPLES).max(1))
+            .map(|f| {
                 let m = cells_boundary_mesh_with(asset, &cp, asset.fragment_cells(f));
                 let hv = ConvexPolytope::from_points(&m.verts).map(|p| p.volume()).unwrap_or(0.0);
-                let convexity = if hv > 0.0 { f.mass.volume / hv } else { 1.0 };
-                (aspect, convexity)
+                if hv > 0.0 {
+                    f.mass.volume / hv
+                } else {
+                    1.0
+                }
             })
             .collect();
         // hulls
@@ -87,8 +105,9 @@ pub fn compute(asset: &Asset, render: &RenderOut, _lib: &MaterialLibrary) -> Val
             "volume": quantiles(vols.clone()),
             "log_volume": quantiles(logv),
             "weibull_volume": weibull_fit(&vols).map(|(k, lam)| json!({"shape": k, "scale": lam})),
-            "aspect_ratio": quantiles(shape.iter().map(|s| s.0).collect()),
-            "convexity": quantiles(shape.iter().map(|s| s.1).collect()),
+            "aspect_ratio": quantiles(aspect),
+            "convexity_samples": convexity.len(),
+            "convexity": quantiles(convexity),
             "hull_overshoot": quantiles(hull_stats.iter().map(|s| s.0).collect()),
             "hull_count": quantiles(hull_stats.iter().map(|s| s.1 as f64).collect()),
             "triangles_lod0": quantiles(tris),

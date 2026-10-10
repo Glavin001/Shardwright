@@ -63,14 +63,19 @@ fn gate(name: &str, ok: bool, value: f64, threshold: f64, detail: String) -> Gat
 /// Zero-area triangles (from symbolic perturbation of exact degeneracies)
 /// are tolerated topologically and reported.
 pub fn mesh_validity(m: &TriMesh) -> (bool, String) {
+    mesh_validity_where(m, |_, _| true)
+}
+
+/// [`mesh_validity`] with the self-intersection test restricted to the
+/// triangle pairs `keep` accepts (topology is always checked in full).
+pub fn mesh_validity_where(m: &TriMesh, keep: impl Fn(u32, u32) -> bool) -> (bool, String) {
     let t = m.topology();
     let topo_ok = t.boundary_edges == 0 && t.nonmanifold_edges == 0 && t.inconsistent_edges == 0 && t.nonmanifold_vertices == 0;
     if !topo_ok {
         return (false, format!("{t:?}"));
     }
     // self-intersections ignoring zero-area triangles
-    let si = m.self_intersections(4);
-    let si: Vec<_> = si.into_iter().filter(|&(a, b)| !m.is_degenerate(a as usize) && !m.is_degenerate(b as usize)).collect();
+    let si = m.self_intersections_where(4, |a, b| keep(a, b) && !m.is_degenerate(a as usize) && !m.is_degenerate(b as usize));
     if !si.is_empty() {
         return (false, format!("{} self-intersecting pairs (e.g. {:?})", si.len(), si[0]));
     }
@@ -94,12 +99,22 @@ pub fn run_gates(asset: &Asset, render: &RenderOut, vs: &ValidationSettings, phy
         })
         .collect();
     log_step("fragment_validity (clean meshes)");
+    // A coarse fragment's LOD0 render mesh (when built directly from the
+    // shared cell surfaces, i.e. it carries per-triangle owner cells) holds
+    // exactly the triangles of its cells' own meshes. Those are validated
+    // in full at the leaf level (one cell per leaf fragment), so only pairs
+    // of triangles of different cells can still intersect.
+    let leaf_lvl = (nl - 1) as u8;
+    let leaf_single = asset.level_fragments(leaf_lvl).iter().all(|f| f.cells.len() == 1);
     let rend: Vec<(u32, bool, String)> = h
         .fragments
         .par_iter()
         .map(|f| {
-            let m = render.fragments[f.id.idx()][0].as_trimesh();
-            let (ok, d) = mesh_validity(&m);
+            let fm = &render.fragments[f.id.idx()][0];
+            let (ok, d) = match fm.as_trimesh_with_owners() {
+                (m, Some(owner)) if leaf_single && f.level != leaf_lvl => mesh_validity_where(&m, |a, b| owner[a as usize] != owner[b as usize]),
+                (m, _) => mesh_validity(&m),
+            };
             (f.id.0, ok, d)
         })
         .collect();

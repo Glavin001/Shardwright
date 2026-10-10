@@ -244,9 +244,28 @@ impl TriMesh {
         out
     }
 
+    /// [`self_intersections`](Self::self_intersections) restricted to the
+    /// candidate pairs `keep` accepts (tested before the exact predicate).
+    pub fn self_intersections_where(&self, limit: usize, keep: impl Fn(u32, u32) -> bool) -> Vec<(u32, u32)> {
+        let boxes = self.tri_aabbs();
+        let bvh = Bvh::build(&boxes);
+        let mut out = Vec::new();
+        bvh.self_pairs(&boxes, |i, j| {
+            if out.len() >= limit || !keep(i, j) {
+                return;
+            }
+            if tris_intersect(self, i as usize, j as usize) {
+                out.push((i, j));
+            }
+        });
+        out.sort_unstable();
+        out
+    }
+
     /// Merge vertices with bit-identical coordinates; returns new mesh.
     pub fn weld_exact(&self) -> TriMesh {
-        let mut map: BTreeMap<[u64; 3], u32> = BTreeMap::new();
+        // ids by first appearance, so a hash map gives the same mesh
+        let mut map: std::collections::HashMap<[u64; 3], u32> = std::collections::HashMap::with_capacity(self.verts.len());
         let mut remap = vec![0u32; self.verts.len()];
         let mut verts = Vec::new();
         for (i, v) in self.verts.iter().enumerate() {

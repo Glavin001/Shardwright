@@ -46,6 +46,12 @@ pub struct FragMesh {
     pub uvs: Vec<[f32; 2]>,
     pub ext_indices: Vec<u32>,
     pub int_indices: Vec<u32>,
+    /// Leaf cell of every triangle (exterior then interior order), kept only
+    /// while the mesh is built directly from the shared cell surfaces
+    /// (unsimplified LOD0). A coarse fragment's triangles are then the same
+    /// triangles as in its cells' own meshes, so validation needs to test
+    /// only pairs of triangles of different cells.
+    pub owner: Vec<u32>,
 }
 
 impl FragMesh {
@@ -62,6 +68,37 @@ impl FragMesh {
             }
         }
         TriMesh { verts: self.positions.clone(), tris }.weld_exact()
+    }
+
+    /// [`as_trimesh`](Self::as_trimesh) and the owner cell of every kept
+    /// triangle (`None` when the mesh carries no owners).
+    pub fn as_trimesh_with_owners(&self) -> (TriMesh, Option<Vec<u32>>) {
+        let n = self.triangle_count();
+        if self.owner.len() != n {
+            return (self.as_trimesh(), None);
+        }
+        let mut map: std::collections::HashMap<[u64; 3], u32> = std::collections::HashMap::with_capacity(self.positions.len());
+        let mut verts = Vec::new();
+        let remap: Vec<u32> = self
+            .positions
+            .iter()
+            .map(|v| {
+                *map.entry([v.x.to_bits(), v.y.to_bits(), v.z.to_bits()]).or_insert_with(|| {
+                    verts.push(*v);
+                    (verts.len() - 1) as u32
+                })
+            })
+            .collect();
+        let mut tris = Vec::with_capacity(n);
+        let mut owner = Vec::with_capacity(n);
+        for (k, t) in self.ext_indices.chunks(3).chain(self.int_indices.chunks(3)).enumerate() {
+            let t = [remap[t[0] as usize], remap[t[1] as usize], remap[t[2] as usize]];
+            if t[0] != t[1] && t[1] != t[2] && t[0] != t[2] {
+                tris.push(t);
+                owner.push(self.owner[k]);
+            }
+        }
+        (TriMesh { verts, tris }, Some(owner))
     }
 }
 
@@ -328,26 +365,26 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
         per_cell.entry(pt.cells.1).or_default().1.push((pi, true));
     }
     let parts: Vec<(Vec<usize>, Vec<(usize, bool)>)> = per_cell.into_iter().filter(|(c, _)| only.map(|o| o.contains(c)).unwrap_or(true)).map(|(_, p)| p).collect();
-    offending_in(g, verts, surfaces, &parts)
+    offending_in(g, verts, surfaces, &parts, false)
 }
 
 /// Offending patches / exterior vertices of multi-cell fragments: the
 /// fragment's render mesh holds displaced patches of different cells that
 /// no single-cell check sees together.
-fn offending_fragments(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface], sets: &[Vec<CellId>], cp: &CellPolys, only: Option<&std::collections::BTreeSet<CellId>>) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
+fn offending_fragments(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface], sets: &[Vec<CellId>], cp: &CellPolys, only: Option<&std::collections::BTreeSet<CellId>>, inter_cell_only: bool) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
     let g = &comp.geometry;
     let parts: Vec<(Vec<usize>, Vec<(usize, bool)>)> = sets
         .par_iter()
         .filter(|set| only.map(|o| set.iter().any(|c| o.contains(c))).unwrap_or(true))
         .map(|set| cp.boundary_of(set, |c| set.binary_search(&c).is_ok(), g))
         .collect();
-    offending_in(g, verts, surfaces, &parts)
+    offending_in(g, verts, surfaces, &parts, inter_cell_only)
 }
 
 /// Exact self-intersection check of closed surface parts (exterior polygons
 /// plus oriented patches); returns the patches and exterior vertices of
 /// intersecting triangle pairs.
-fn offending_in(g: &ComponentGeometry, verts: &[DVec3], surfaces: &[PatchSurface], parts: &[(Vec<usize>, Vec<(usize, bool)>)]) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
+fn offending_in(g: &ComponentGeometry, verts: &[DVec3], surfaces: &[PatchSurface], parts: &[(Vec<usize>, Vec<(usize, bool)>)], inter_cell_only: bool) -> (Vec<usize>, Vec<u32>, Vec<u32>) {
     #[allow(clippy::type_complexity)]
     let bad: Vec<(Vec<usize>, Vec<u32>, Vec<u32>)> = parts
         .par_iter()
@@ -355,6 +392,7 @@ fn offending_in(g: &ComponentGeometry, verts: &[DVec3], surfaces: &[PatchSurface
             let mut m = TriMesh::default();
             let mut tag: Vec<Option<usize>> = Vec::new();
             let mut ext_of: Vec<Option<usize>> = Vec::new();
+            let mut owner: Vec<u32> = Vec::new();
             for &i in exts {
                 let e = &g.ext_polys[i];
                 for t in &e.tris {
@@ -363,16 +401,19 @@ fn offending_in(g: &ComponentGeometry, verts: &[DVec3], surfaces: &[PatchSurface
                     m.tris.push([base, base + 1, base + 2]);
                     tag.push(None);
                     ext_of.push(Some(i));
+                    owner.push(e.cell.0);
                 }
             }
             for &(pi, flip) in pats {
                 let srf = &surfaces[pi];
                 let base = m.verts.len() as u32;
                 m.verts.extend(srf.pos.iter().copied());
+                let inside = if flip { g.patches[pi].cells.1 } else { g.patches[pi].cells.0 };
                 for t in &srf.tris {
                     m.tris.push(if flip { [base + t[0], base + t[2], base + t[1]] } else { [base + t[0], base + t[1], base + t[2]] });
                     tag.push(Some(pi));
                     ext_of.push(None);
+                    owner.push(inside.0);
                 }
             }
             // weld by exact coordinates without dropping triangles (keep tags aligned)
@@ -393,7 +434,10 @@ fn offending_in(g: &ComponentGeometry, verts: &[DVec3], surfaces: &[PatchSurface
             let mut out = Vec::new();
             let mut ev = Vec::new();
             let mut pv = Vec::new();
-            for (a, b) in wm.self_intersections(usize::MAX) {
+            // with every cell mesh already valid, triangles of the same cell
+            // cannot intersect (they are the same triangles)
+            let keep = |a: u32, b: u32| !inter_cell_only || owner[a as usize] != owner[b as usize];
+            for (a, b) in wm.self_intersections_where(usize::MAX, keep) {
                 if wm.is_degenerate(a as usize) || wm.is_degenerate(b as usize) {
                     continue;
                 }
@@ -753,9 +797,11 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                 d
             };
             let mut dirty: Option<std::collections::BTreeSet<CellId>> = None;
+            let mut cells_clean = false;
             for round in 0..6 {
                 let (bad, mut bad_verts, patch_verts) = offending_patches(comp, &verts, &surfaces, dirty.as_ref());
                 if bad.is_empty() && bad_verts.is_empty() {
+                    cells_clean = true;
                     break;
                 }
                 if round >= 1 {
@@ -793,7 +839,23 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                 .collect();
             let mut dirty: Option<std::collections::BTreeSet<CellId>> = None;
             for round in 0..6 {
-                let (bad, mut bad_verts, patch_verts) = offending_fragments(comp, &verts, &surfaces, &sets, &cp, dirty.as_ref());
+                // With every cell mesh valid, a multi-cell mesh can only fail
+                // between triangles of different cells; cells changed by a
+                // previous round are re-checked in full.
+                let (mut bad, mut bad_verts, mut patch_verts) = offending_fragments(comp, &verts, &surfaces, &sets, &cp, dirty.as_ref(), cells_clean);
+                if cells_clean && round > 0 {
+                    let (b, v, p) = offending_patches(comp, &verts, &surfaces, dirty.as_ref());
+                    for (x, y) in [(&mut bad, b)] {
+                        x.extend(y);
+                        x.sort_unstable();
+                        x.dedup();
+                    }
+                    for (x, y) in [(&mut bad_verts, v), (&mut patch_verts, p)] {
+                        x.extend(y);
+                        x.sort_unstable();
+                        x.dedup();
+                    }
+                }
                 if bad.is_empty() && bad_verts.is_empty() {
                     break;
                 }
@@ -843,6 +905,8 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
             let origin = f.mass.com;
             let mut m = FragMesh::default();
             let mut ext_map: BTreeMap<(u32, u32), u32> = BTreeMap::new();
+            let mut ext_owner: Vec<u32> = Vec::new();
+            let mut int_owner: Vec<u32> = Vec::new();
             for &ei in &exts {
                 let e = &comp.geometry.ext_polys[ei];
                 let pts: Vec<DVec3> = e.verts.iter().map(|&v| cr.verts[v as usize]).collect();
@@ -866,6 +930,7 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                         let k = e.verts.iter().position(|&x| x == v).unwrap();
                         m.ext_indices.push(ids[k]);
                     }
+                    ext_owner.push(e.cell.0);
                 }
             }
             for &(pi, flip) in &pats {
@@ -878,15 +943,19 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                     m.normals.push(n.as_vec3());
                     m.uvs.push(triplanar_uv(x, pt.normal, uv_scale));
                 }
+                let inside = if flip { pt.cells.1 } else { pt.cells.0 };
                 for t in &srf.tris {
                     if flip {
                         m.int_indices.extend_from_slice(&[base + t[0], base + t[2], base + t[1]]);
                     } else {
                         m.int_indices.extend_from_slice(&[base + t[0], base + t[1], base + t[2]]);
                     }
+                    int_owner.push(inside.0);
                 }
             }
             let _ = origin;
+            ext_owner.extend(int_owner);
+            m.owner = ext_owner;
             // LODs
             let mut lods = vec![compact(m)];
             if s.triangle_budget > 0 && lods[0].triangle_count() > s.triangle_budget as usize {
@@ -969,6 +1038,7 @@ fn simplify(m: &FragMesh, target_tris: usize) -> FragMesh {
     let es = m.ext_indices.len() as f64 / 3.0 / total as f64;
     out.ext_indices = simplify_part(&m.ext_indices, es);
     out.int_indices = simplify_part(&m.int_indices, 1.0 - es);
+    out.owner = Vec::new();
     compact(out)
 }
 
@@ -991,6 +1061,7 @@ fn compact(m: FragMesh) -> FragMesh {
     let int: Vec<u32> = m.int_indices.iter().map(|&i| take(i, &mut out)).collect();
     out.ext_indices = ext;
     out.int_indices = int;
+    out.owner = m.owner;
     out.positions.shrink_to_fit();
     out.normals.shrink_to_fit();
     out.uvs.shrink_to_fit();
