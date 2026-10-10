@@ -1,9 +1,14 @@
 //! `prefracture preview`: software-rasterized PNG previews of a baked asset,
 //! one distinct colour per fragment, optionally exploded, for any hierarchy
-//! level (or all levels side by side). Uses the exact clean fragment
-//! boundaries from the asset JSON; deterministic.
+//! level (or all levels side by side), or of an input mesh before baking.
+//! Uses the exact clean fragment boundaries from the asset JSON;
+//! deterministic. Every image carries panel titles and a legend (what the
+//! colours mean; for the strength view a colour bar with its range and
+//! units), drawn with an 8×8 bitmap font.
 
-use frac_core::Asset;
+use font8x8::UnicodeFonts;
+use frac_core::input::InputScene;
+use frac_core::{Asset, InterfaceKind};
 use glam::DVec3;
 use rayon::prelude::*;
 use std::path::Path;
@@ -73,6 +78,22 @@ fn kind_colour(k: frac_core::InterfaceKind) -> [f32; 3] {
     }
 }
 
+fn kind_label(k: InterfaceKind) -> &'static str {
+    use frac_core::InterfaceKind as K;
+    match k {
+        K::ColdJoint => "cold joint",
+        K::Bearing => "bearing",
+        K::MortarJoint => "mortar joint",
+        K::Adhesive => "adhesive",
+        K::Weld => "weld",
+        K::Bolted => "bolted",
+        K::GrainBoundary => "grain boundary",
+        K::Anchor => "anchor (to ground)",
+        K::Monolithic => "monolithic (same material)",
+        K::ComponentConnection => "component connection",
+    }
+}
+
 /// Perceptual-ish heat map (dark blue → teal → yellow) for t ∈ [0, 1].
 fn heat(t: f64) -> [f32; 3] {
     let t = t.clamp(0.0, 1.0);
@@ -93,15 +114,15 @@ fn heat(t: f64) -> [f32; 3] {
     ]
 }
 
-/// Bond contact surfaces of a level, coloured by kind or tensile capacity.
-fn bond_tris(
-    asset: &Asset,
+/// Bonds of a level (after the cutaway) with their tensile capacity (Pa):
+/// the interface material's tensile strength, else the weaker side's
+/// material strength, times the bond's Weibull strength scale.
+fn level_bonds<'a>(
+    asset: &'a Asset,
     lib: &frac_material::MaterialLibrary,
     level: u8,
-    mode: BondColour,
     clip_z: Option<f64>,
-    light: DVec3,
-) -> (Vec<Tri>, String) {
+) -> Vec<(&'a frac_core::Bond, f64)> {
     let cap = |b: &frac_core::Bond| -> f64 {
         let comp = b.composition.first();
         let mat_t = |f: frac_core::FragmentId| {
@@ -124,32 +145,48 @@ fn bond_tris(
             .unwrap_or(side);
         ft * b.strength_scale as f64
     };
-    let bonds: Vec<&frac_core::Bond> = asset
+    asset
         .level_bonds(level)
         .filter(|b| clip_z.is_none_or(|z| b.centroid.z <= z))
-        .collect();
-    let caps: Vec<f64> = bonds.iter().map(|b| cap(b).max(1.0)).collect();
-    let (lo, hi) = caps
-        .iter()
-        .fold((f64::INFINITY, 0.0f64), |(l, h), &c| (l.min(c), h.max(c)));
+        .map(|b| (b, cap(b).max(1.0)))
+        .collect()
+}
+
+fn bond_kind(b: &frac_core::Bond) -> InterfaceKind {
+    if b.anchor {
+        InterfaceKind::Anchor
+    } else {
+        b.composition
+            .first()
+            .map(|c| c.kind)
+            .unwrap_or(InterfaceKind::Monolithic)
+    }
+}
+
+/// Position of a capacity on the log colour scale [lo, hi].
+fn log_t(c: f64, lo: f64, hi: f64) -> f64 {
+    if hi > lo * (1.0 + 1e-9) {
+        (c.ln() - lo.ln()) / (hi.ln() - lo.ln())
+    } else {
+        0.5
+    }
+}
+
+/// Bond contact surfaces, coloured by kind or by tensile capacity on the
+/// log scale [lo, hi] (Pa; shared by all panels of one image).
+fn bond_tris(
+    bonds: &[(&frac_core::Bond, f64)],
+    asset: &Asset,
+    mode: BondColour,
+    (lo, hi): (f64, f64),
+    light: DVec3,
+) -> Vec<Tri> {
     let mut tris = Vec::new();
-    for (k, b) in bonds.iter().enumerate() {
-        let kind = if b.anchor {
-            frac_core::InterfaceKind::Anchor
-        } else {
-            b.composition
-                .first()
-                .map(|c| c.kind)
-                .unwrap_or(frac_core::InterfaceKind::Monolithic)
-        };
+    for (k, &(b, c)) in bonds.iter().enumerate() {
         let rgb = match mode {
-            BondColour::Kind => kind_colour(kind),
+            BondColour::Kind => kind_colour(bond_kind(b)),
             BondColour::Strength if b.anchor => [0.05, 0.05, 0.05],
-            BondColour::Strength => heat(if hi > lo {
-                (caps[k].ln() - lo.ln()) / (hi.ln() - lo.ln())
-            } else {
-                0.5
-            }),
+            BondColour::Strength => heat(log_t(c, lo, hi)),
         };
         let shade = (0.55 + 0.45 * b.normal.dot(light).abs()) as f32;
         for &i in &b.interfaces {
@@ -168,11 +205,7 @@ fn bond_tris(
             }
         }
     }
-    let legend = match mode {
-        BondColour::Kind => "colour = joint kind: cold joint blue, bearing orange, mortar red-brown, adhesive green, weld/bolted yellow, grain boundary purple, monolithic grey, anchor black".to_string(),
-        BondColour::Strength => format!("colour = tensile capacity, log scale {:.2} MPa (dark blue) → {:.2} MPa (yellow); anchors black", lo / 1e6, hi / 1e6),
-    };
-    (tris, legend)
+    tris
 }
 
 fn level_tris(
@@ -329,75 +362,404 @@ fn render_panel(tris: &[Tri], w: u32, h: u32, view: DVec3, up: DVec3) -> Vec<[u8
     out
 }
 
+/// RGB image with simple drawing primitives and bitmap text.
+struct Canvas {
+    w: u32,
+    h: u32,
+    px: Vec<[u8; 3]>,
+}
+
+const INK: [u8; 3] = [30, 30, 36];
+const DIM: [u8; 3] = [95, 95, 105];
+
+fn rgb8(c: [f32; 3]) -> [u8; 3] {
+    c.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+}
+
+impl Canvas {
+    fn new(w: u32, h: u32) -> Canvas {
+        Canvas {
+            w,
+            h,
+            px: vec![[247, 247, 250]; (w * h) as usize],
+        }
+    }
+    fn rect(&mut self, x: i64, y: i64, w: i64, h: i64, c: [u8; 3]) {
+        for yy in y.max(0)..(y + h).min(self.h as i64) {
+            for xx in x.max(0)..(x + w).min(self.w as i64) {
+                self.px[(yy as u32 * self.w + xx as u32) as usize] = c;
+            }
+        }
+    }
+    /// Text with its top-left corner at (x, y); glyphs are 8×8 × `scale`.
+    /// Returns the width drawn.
+    fn text(&mut self, x: i64, y: i64, scale: i64, s: &str, c: [u8; 3]) -> i64 {
+        let mut cx = x;
+        for ch in s.chars() {
+            if let Some(g) = font8x8::BASIC_FONTS.get(ch) {
+                for (row, bits) in g.iter().enumerate() {
+                    for col in 0..8 {
+                        if bits >> col & 1 == 1 {
+                            self.rect(cx + col * scale, y + row as i64 * scale, scale, scale, c);
+                        }
+                    }
+                }
+            }
+            cx += 8 * scale;
+        }
+        cx - x
+    }
+    fn blit(&mut self, src: &[[u8; 3]], x0: u32, y0: u32, w: u32, h: u32) {
+        for y in 0..h {
+            for x in 0..w {
+                self.px[((y0 + y) * self.w + x0 + x) as usize] = src[(y * w + x) as usize];
+            }
+        }
+    }
+    fn save(&self, out: &Path) -> Result<(), String> {
+        let f = std::fs::File::create(out).map_err(|e| format!("{}: {e}", out.display()))?;
+        let mut enc = png::Encoder::new(std::io::BufWriter::new(f), self.w, self.h);
+        enc.set_color(png::ColorType::Rgb);
+        enc.set_depth(png::BitDepth::Eight);
+        let mut wr = enc.write_header().map_err(|e| e.to_string())?;
+        wr.write_image_data(&self.px.concat())
+            .map_err(|e| e.to_string())
+    }
+}
+
+fn text_w(s: &str, scale: i64) -> i64 {
+    s.chars().count() as i64 * 8 * scale
+}
+
+/// What the colours of an image mean.
+enum Legend {
+    /// One arbitrary colour per fragment.
+    Fragments,
+    /// One arbitrary colour per input part.
+    Parts,
+    /// Joint kinds present, with bond counts.
+    Kind(Vec<(InterfaceKind, usize)>),
+    /// Log colour bar over [lo, hi] Pa, and the number of anchor bonds.
+    Strength { lo: f64, hi: f64, anchors: usize },
+}
+
+impl Legend {
+    fn height(&self) -> u32 {
+        match self {
+            Legend::Fragments | Legend::Parts => 44,
+            Legend::Kind(k) => 52 + 30 * k.len().div_ceil(3) as u32,
+            Legend::Strength { .. } => 130,
+        }
+    }
+}
+
+/// Capacity in MPa with 2–3 significant digits.
+fn fmt_mpa(pa: f64) -> String {
+    let v = pa / 1e6;
+    if v >= 100.0 {
+        format!("{v:.0}")
+    } else if v >= 10.0 {
+        format!("{v:.1}")
+    } else if v >= 1.0 {
+        format!("{v:.2}")
+    } else {
+        format!("{v:.3}")
+    }
+}
+
+fn draw_legend(c: &mut Canvas, y0: i64, lg: &Legend) {
+    let x0 = 24i64;
+    match lg {
+        Legend::Fragments => {
+            c.text(
+                x0,
+                y0 + 14,
+                2,
+                "Colour = fragment identity (arbitrary, no scale)",
+                INK,
+            );
+        }
+        Legend::Parts => {
+            c.text(
+                x0,
+                y0 + 14,
+                2,
+                "Input mesh as imported. Colour = part (arbitrary, no scale)",
+                INK,
+            );
+        }
+        Legend::Kind(kinds) => {
+            c.text(
+                x0,
+                y0 + 12,
+                2,
+                "Bond colour = joint kind (number of bonds)",
+                INK,
+            );
+            let col_w = ((c.w as i64 - 2 * x0) / 3).max(200);
+            for (i, &(k, n)) in kinds.iter().enumerate() {
+                let x = x0 + (i % 3) as i64 * col_w;
+                let y = y0 + 44 + (i / 3) as i64 * 30;
+                c.rect(x, y, 22, 22, rgb8(kind_colour(k)));
+                c.rect(x, y, 22, 1, DIM);
+                c.text(x + 32, y + 3, 2, &format!("{} ({n})", kind_label(k)), INK);
+            }
+        }
+        &Legend::Strength { lo, hi, anchors } => {
+            c.text(
+                x0,
+                y0 + 10,
+                2,
+                "Bond tensile capacity, MPa (log colour scale)",
+                INK,
+            );
+            c.text(
+                x0,
+                y0 + 32,
+                1,
+                "capacity = tensile strength of the joint (or of the weaker side's material) x the bond's Weibull strength scale",
+                DIM,
+            );
+            let reserve = if anchors > 0 { 330 } else { 0 };
+            let bw = (c.w as i64 - 2 * x0 - reserve - 60).clamp(200, 1400);
+            let (bx, by, bh) = (x0 + 30, y0 + 52, 26i64);
+            for i in 0..bw {
+                c.rect(bx + i, by, 1, bh, rgb8(heat(i as f64 / (bw - 1) as f64)));
+            }
+            // ticks: the range ends plus 1-2-5 values in between
+            let mut ticks = vec![lo];
+            if hi > lo * (1.0 + 1e-9) {
+                let mut d = 10f64.powf((lo / 1e6).log10().floor()) * 1e6;
+                while d <= hi {
+                    for m in [1.0, 2.0, 5.0] {
+                        let v = d * m;
+                        if v > lo && v < hi {
+                            ticks.push(v);
+                        }
+                    }
+                    d *= 10.0;
+                }
+                ticks.push(hi);
+            }
+            let mut last_right = i64::MIN;
+            let n = ticks.len();
+            for (k, &v) in ticks.iter().enumerate() {
+                let x = bx + (log_t(v, lo, hi) * (bw - 1) as f64).round() as i64;
+                let label = match k {
+                    0 => format!("{} min", fmt_mpa(v)),
+                    _ if k == n - 1 => format!("max {}", fmt_mpa(v)),
+                    _ => fmt_mpa(v),
+                };
+                let w = text_w(&label, 2);
+                let lx = if k == 0 {
+                    x
+                } else if k == n - 1 {
+                    x - w
+                } else {
+                    x - w / 2
+                };
+                // keep both ends; drop middle labels that would collide
+                let is_end = k == 0 || k == n - 1;
+                if !is_end
+                    && (lx < last_right + 12 || lx + w > bx + bw - text_w("max 000.0", 2) - 12)
+                {
+                    continue;
+                }
+                c.rect(x, by + bh, 2, 8, INK);
+                c.text(lx, by + bh + 12, 2, &label, INK);
+                last_right = lx + w;
+            }
+            if anchors > 0 {
+                let ax = bx + bw + 40;
+                c.rect(ax, by, 26, bh, [13, 13, 13]);
+                c.rect(ax, by, 26, 1, DIM);
+                c.text(ax + 36, by + 5, 2, &format!("anchor ({anchors})"), INK);
+            }
+        }
+    }
+}
+
+/// Compose panels (titled) above a legend and write the PNG.
+fn compose(
+    panels: &[Vec<[u8; 3]>],
+    titles: &[String],
+    o: &PreviewOptions,
+    lg: &Legend,
+    out: &Path,
+) -> Result<(u32, u32), String> {
+    let head = 40u32;
+    let total_w = o.width * panels.len() as u32;
+    let total_h = head + o.height + lg.height();
+    let mut c = Canvas::new(total_w, total_h);
+    for (k, (p, t)) in panels.iter().zip(titles).enumerate() {
+        c.blit(p, k as u32 * o.width, head, o.width, o.height);
+        c.text(k as i64 * o.width as i64 + 16, 12, 2, t, INK);
+        if k > 0 {
+            c.rect(
+                k as i64 * o.width as i64,
+                0,
+                1,
+                (head + o.height) as i64,
+                [200, 200, 206],
+            );
+        }
+    }
+    c.rect(
+        0,
+        (head + o.height) as i64,
+        total_w as i64,
+        1,
+        [200, 200, 206],
+    );
+    draw_legend(&mut c, (head + o.height) as i64, lg);
+    c.save(out)?;
+    Ok((total_w, total_h))
+}
+
+fn view_light(o: &PreviewOptions) -> (DVec3, DVec3) {
+    let (az, el) = (o.azimuth_deg.to_radians(), o.elevation_deg.to_radians());
+    // camera looks along -view; `view` points from the scene towards the camera
+    let view = DVec3::new(az.sin() * el.cos(), el.sin(), az.cos() * el.cos()).normalize();
+    let light = (view + DVec3::new(0.3, 0.6, 0.2)).normalize();
+    (view, light)
+}
+
 pub fn preview(
     asset: &Asset,
     lib: &frac_material::MaterialLibrary,
     out: &Path,
     o: &PreviewOptions,
 ) -> Result<String, String> {
-    let (az, el) = (o.azimuth_deg.to_radians(), o.elevation_deg.to_radians());
-    // camera looks along -view; `view` points from the scene towards the camera
-    let view = DVec3::new(az.sin() * el.cos(), el.sin(), az.cos() * el.cos()).normalize();
-    let up = DVec3::Y;
-    let light = (view + DVec3::new(0.3, 0.6, 0.2)).normalize();
+    let (view, light) = view_light(o);
     let leaf = asset.hierarchy.levels.saturating_sub(1);
     let levels: Vec<u8> = if o.all_levels {
         (0..asset.hierarchy.levels).collect()
     } else {
         vec![o.level.unwrap_or(leaf).min(leaf)]
     };
-    let mut legend = String::new();
-    let panels: Vec<Vec<[u8; 3]>> = levels
-        .iter()
-        .map(|&l| {
-            let tris = match o.bonds {
-                Some(mode) => {
-                    let (t, lg) = bond_tris(asset, lib, l, mode, o.clip_z, light);
-                    legend = lg;
-                    t
-                }
-                None => level_tris(asset, l, o.explode, o.clip_z, light),
-            };
-            render_panel(&tris, o.width, o.height, view, up)
-        })
-        .collect();
-    let total_w = o.width * panels.len() as u32;
-    let mut img = vec![0u8; (total_w * o.height * 3) as usize];
-    for (k, p) in panels.iter().enumerate() {
-        for y in 0..o.height {
-            for x in 0..o.width {
-                let src = p[(y * o.width + x) as usize];
-                let dst = ((y * total_w + k as u32 * o.width + x) * 3) as usize;
-                img[dst..dst + 3].copy_from_slice(&src);
+    let mut titles = Vec::new();
+    let (panels, legend): (Vec<Vec<[u8; 3]>>, Legend) = match o.bonds {
+        Some(mode) => {
+            let per: Vec<Vec<(&frac_core::Bond, f64)>> = levels
+                .iter()
+                .map(|&l| level_bonds(asset, lib, l, o.clip_z))
+                .collect();
+            // one colour scale for all panels (non-anchor bonds)
+            let (lo, hi) = per
+                .iter()
+                .flatten()
+                .filter(|(b, _)| !b.anchor)
+                .fold((f64::INFINITY, 0.0f64), |(l, h), &(_, c)| {
+                    (l.min(c), h.max(c))
+                });
+            let (lo, hi) = if lo.is_finite() { (lo, hi) } else { (1.0, 1.0) };
+            let mut kinds: std::collections::BTreeMap<u8, (InterfaceKind, usize)> =
+                Default::default();
+            let mut anchors = 0;
+            for &(b, _) in per.iter().flatten() {
+                let k = bond_kind(b);
+                kinds.entry(k as u8).or_insert((k, 0)).1 += 1;
+                anchors += b.anchor as usize;
             }
+            let panels = levels
+                .iter()
+                .zip(&per)
+                .map(|(&l, bs)| {
+                    titles.push(format!("L{l}: {} bonds", bs.len()));
+                    render_panel(
+                        &bond_tris(bs, asset, mode, (lo, hi), light),
+                        o.width,
+                        o.height,
+                        view,
+                        DVec3::Y,
+                    )
+                })
+                .collect();
+            let legend = match mode {
+                BondColour::Kind => Legend::Kind(kinds.into_values().collect()),
+                BondColour::Strength => Legend::Strength { lo, hi, anchors },
+            };
+            (panels, legend)
+        }
+        None => {
+            let panels = levels
+                .iter()
+                .map(|&l| {
+                    titles.push(format!(
+                        "L{l}: {} fragments",
+                        asset.level_fragments(l).len()
+                    ));
+                    render_panel(
+                        &level_tris(asset, l, o.explode, o.clip_z, light),
+                        o.width,
+                        o.height,
+                        view,
+                        DVec3::Y,
+                    )
+                })
+                .collect();
+            (panels, Legend::Fragments)
+        }
+    };
+    let (w, h) = compose(&panels, &titles, o, &legend, out)?;
+    let detail = match &legend {
+        Legend::Strength { lo, hi, .. } => format!(
+            "\ncolour = bond tensile capacity, log scale {} MPa (dark blue) to {} MPa (yellow); anchors black",
+            fmt_mpa(*lo),
+            fmt_mpa(*hi)
+        ),
+        _ => String::new(),
+    };
+    Ok(format!(
+        "wrote {} ({w}x{h}; {}){detail}",
+        out.display(),
+        titles.join(", ")
+    ))
+}
+
+/// Preview of an input scene before baking: one colour per part.
+pub fn preview_input(scene: &InputScene, out: &Path, o: &PreviewOptions) -> Result<String, String> {
+    let (view, light) = view_light(o);
+    let centre_of = |m: &frac_geom::TriMesh| {
+        let n = m.verts.len().max(1) as f64;
+        m.verts.iter().copied().sum::<DVec3>() / n
+    };
+    let all: Vec<DVec3> = scene.parts.iter().map(|p| centre_of(&p.mesh)).collect();
+    let centre = all.iter().copied().sum::<DVec3>() / all.len().max(1) as f64;
+    let mut tris = Vec::new();
+    let mut ntri = 0usize;
+    for (pi, part) in scene.parts.iter().enumerate() {
+        let off = (all[pi] - centre) * o.explode;
+        for t in &part.mesh.tris {
+            let p = t.map(|i| part.mesh.verts[i as usize] + off);
+            if o.clip_z
+                .is_some_and(|z| (p[0].z + p[1].z + p[2].z) / 3.0 > z)
+            {
+                continue;
+            }
+            let n = (p[1] - p[0]).cross(p[2] - p[0]);
+            if n.length_squared() == 0.0 {
+                continue;
+            }
+            ntri += 1;
+            // two-sided: input soups may be inconsistently oriented
+            let lam = n.normalize().dot(light).abs();
+            tris.push(Tri {
+                p,
+                frag: pi as u32,
+                shade: (0.35 + 0.65 * lam) as f32,
+                rgb: None,
+            });
         }
     }
-    let f = std::fs::File::create(out).map_err(|e| format!("{}: {e}", out.display()))?;
-    let mut enc = png::Encoder::new(std::io::BufWriter::new(f), total_w, o.height);
-    enc.set_color(png::ColorType::Rgb);
-    enc.set_depth(png::BitDepth::Eight);
-    let mut wr = enc.write_header().map_err(|e| e.to_string())?;
-    wr.write_image_data(&img).map_err(|e| e.to_string())?;
-    let counts: Vec<String> = levels
-        .iter()
-        .map(|&l| {
-            if o.bonds.is_some() {
-                format!("L{l}: {} bonds", asset.level_bonds(l).count())
-            } else {
-                format!("L{l}: {} fragments", asset.level_fragments(l).len())
-            }
-        })
-        .collect();
-    Ok(format!(
-        "wrote {} ({}×{}; {}){}",
-        out.display(),
-        total_w,
-        o.height,
-        counts.join(", "),
-        if legend.is_empty() {
-            String::new()
-        } else {
-            format!("\n{legend}")
-        }
-    ))
+    let title = format!("input: {} parts, {ntri} triangles", scene.parts.len());
+    let panel = render_panel(&tris, o.width, o.height, view, DVec3::Y);
+    let (w, h) = compose(
+        &[panel],
+        std::slice::from_ref(&title),
+        o,
+        &Legend::Parts,
+        out,
+    )?;
+    Ok(format!("wrote {} ({w}x{h}; {title})", out.display()))
 }

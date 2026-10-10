@@ -165,7 +165,8 @@ enum Cmd {
     /// Generate the procedural benchmark suite (spec §13.8).
     /// Render a PNG preview of a baked asset (one colour per fragment).
     Preview {
-        /// Baked asset JSON (`<name>.asset.json`).
+        /// Baked asset JSON (`<name>.asset.json`), or an input mesh
+        /// (glb/gltf/obj/ply/stl) to preview before baking.
         #[arg(long)]
         input: PathBuf,
         #[arg(long)]
@@ -237,6 +238,22 @@ fn hash(b: &[u8]) -> String {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// `path` if it does not exist yet, else the first free `stem-N.ext`.
+fn free_path(path: &Path) -> PathBuf {
+    if !path.exists() {
+        return path.to_path_buf();
+    }
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("preview");
+    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("png");
+    (2..)
+        .map(|n| path.with_file_name(format!("{stem}-{n}.{ext}")))
+        .find(|p| !p.exists())
+        .unwrap()
+}
+
 fn bake(
     input: &Path,
     materials: &Option<PathBuf>,
@@ -322,24 +339,34 @@ fn bake(
         let log = std::env::var_os("FRAC_LOG").is_some();
         let tw = std::time::Instant::now();
         let asset_path = out.join(format!("{vname}.asset.json"));
+        // the asset JSON dump is about 8x the physics payload; reserve it
+        // in flatc's scratch-space check (both write concurrently)
+        let json_estimate = std::fs::metadata(&phys)
+            .map(|m| m.len())
+            .unwrap_or(0)
+            .saturating_mul(8);
         let (khronos, flatc, written) = std::thread::scope(|sc| {
             let k = sc.spawn(|| {
                 let t = std::time::Instant::now();
                 let r = frac_io::khronos_validate(&glb);
                 (r, t.elapsed().as_secs_f64())
             });
+            let f = sc.spawn(|| {
+                let t = std::time::Instant::now();
+                let r = match frac_io::flatc_scratch_check(&phys, json_estimate) {
+                    Ok(()) => frac_io::flatc_validate(&phys).map(|r| r.map(|()| None)),
+                    Err(note) => Some(Ok(Some(note))),
+                };
+                (r, t.elapsed().as_secs_f64())
+            });
             let t = std::time::Instant::now();
             let w = frac_io::write_asset_json(&res.asset, &asset_path).map_err(|e| e.to_string());
             let w = (w, t.elapsed().as_secs_f64());
-            // flatc after the asset dump, so its scratch-space check sees
-            // the disk as it is (both write gigabytes on building scale)
-            let t = std::time::Instant::now();
-            let r = match frac_io::flatc_scratch_check(&phys) {
-                Ok(()) => frac_io::flatc_validate(&phys).map(|r| r.map(|()| None)),
-                Err(note) => Some(Ok(Some(note))),
-            };
-            let f = (r, t.elapsed().as_secs_f64());
-            (k.join().expect("khronos validator thread"), f, w)
+            (
+                k.join().expect("khronos validator thread"),
+                f.join().expect("flatc thread"),
+                w,
+            )
         });
         if log {
             eprintln!(
@@ -1079,10 +1106,8 @@ fn main() -> ExitCode {
             bonds,
             clip_z,
         } => (|| -> Result<bool, String> {
-            let text =
-                std::fs::read_to_string(input).map_err(|e| format!("{}: {e}", input.display()))?;
-            let asset: frac_core::Asset =
-                serde_json::from_str(&text).map_err(|e| format!("{}: {e}", input.display()))?;
+            // never overwrite an earlier preview: number the new file instead
+            let out = &free_path(out);
             let bonds = match bonds.as_deref() {
                 None => None,
                 Some("kind") => Some(preview::BondColour::Kind),
@@ -1100,10 +1125,22 @@ fn main() -> ExitCode {
                 azimuth_deg: *azimuth,
                 elevation_deg: *elevation,
             };
-            println!(
-                "{}",
+            let is_asset = input
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("json"));
+            let msg = if is_asset {
+                let text = std::fs::read_to_string(input)
+                    .map_err(|e| format!("{}: {e}", input.display()))?;
+                let asset: frac_core::Asset =
+                    serde_json::from_str(&text).map_err(|e| format!("{}: {e}", input.display()))?;
                 preview::preview(&asset, &MaterialLibrary::builtin(), out, &o)?
-            );
+            } else {
+                // an input mesh (glb/gltf/obj/ply/stl) before baking
+                let scene = frac_io::load_scene(input, &frac_io::ImportOptions::default())
+                    .map_err(|e| e.to_string())?;
+                preview::preview_input(&scene, out, &o)?
+            };
+            println!("{msg}");
             Ok(true)
         })(),
         Cmd::Hulls {

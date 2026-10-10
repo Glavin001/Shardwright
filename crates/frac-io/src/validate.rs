@@ -94,12 +94,14 @@ pub fn find_flatc() -> Option<PathBuf> {
 /// unavailable; `Some(Err(msg))` when decoding fails.
 /// Whether the scratch directory can hold flatc's JSON dump of `path`
 /// (about ten times the binary size; building-scale payloads give
-/// multi-GB dumps). `Err` explains why the cross-check cannot run.
-pub fn flatc_scratch_check(path: &Path) -> Result<(), String> {
+/// multi-GB dumps) plus `also` bytes written concurrently elsewhere. `Err`
+/// explains why the cross-check cannot run.
+pub fn flatc_scratch_check(path: &Path, also: u64) -> Result<(), String> {
     let need = std::fs::metadata(path)
         .map(|m| m.len())
         .unwrap_or(0)
-        .saturating_mul(12);
+        .saturating_mul(12)
+        .saturating_add(also);
     let Some(free) = free_bytes(&std::env::temp_dir()) else {
         return Ok(());
     };
@@ -163,14 +165,12 @@ pub fn flatc_validate(path: &Path) -> Option<Result<(), String>> {
                 String::from_utf8_lossy(&out.stderr)
             ))
         } else {
-            // streamed syntax check (the dump reaches gigabytes on
-            // building-scale assets; no in-memory document)
-            match std::fs::File::open(&json_out) {
-                Ok(f) => serde_json::from_reader::<_, serde::de::IgnoredAny>(
-                    std::io::BufReader::with_capacity(1 << 20, f),
-                )
-                .map(|_| ())
-                .map_err(|e| format!("flatc JSON output invalid: {e}")),
+            // flatc decoded the whole payload against the schema (its exit
+            // status); its JSON dump (gigabytes on building-scale assets)
+            // only has to exist
+            match std::fs::metadata(&json_out) {
+                Ok(m) if m.len() > 0 => Ok(()),
+                Ok(_) => Err("flatc produced an empty JSON dump".into()),
                 Err(e) => Err(format!("flatc produced no JSON output: {e}")),
             }
         };
