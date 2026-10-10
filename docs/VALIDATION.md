@@ -82,6 +82,23 @@ confirm this:
   Its relative effect is largest where |σ·n| is small, such as the torsion
   core and the corners of the square section.
 
+Where the default-resolution torsion error sits (per-bond errors from the
+harness, `<cache>/rc_column.bond_errors.npz`):
+
+* **Small facets.** The worst 5% of bonds have median area 0.0008 m² (all
+  bonds: 0.0028 m²) and median FEM traction 10% of the case maximum (all
+  bonds: 39%). They are near the axis (r < 0.04 m: p95 0.78) and in the
+  section corners (r > 0.24 m: p95 1.2), the two places where torsional
+  shear vanishes, so their absolute error is measured against the 5% floor.
+* **Not the clamp.** Dropping bonds within 0.05–0.3 m of either end, where
+  the clamped edge makes the FEM field singular, lowers torsion p95 only to
+  0.317–0.322. The error is the interior first-order term.
+* **Resolution is the remedy, and it is per asset.** Doubling the library
+  default would double every asset's cell count. The two-storey building
+  already peaks at 7.45 GB of RAM at the default, and doubling would also
+  break the 300 s budget. That is why the column asset authors its own
+  resolution.
+
 How the network got here, all at the default resolution and with the same
 oracle:
 
