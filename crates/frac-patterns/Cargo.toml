@@ -1,7 +1,16 @@
 [package]
 name = "frac-patterns"
+description = "Runtime fracture pattern library (pre-bonded canonical cell patterns, .fracpat)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
+frac-core.workspace = true
+frac-geom.workspace = true
+frac-cells.workspace = true
+frac-material.workspace = true
+flatbuffers.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+libm.workspace = true

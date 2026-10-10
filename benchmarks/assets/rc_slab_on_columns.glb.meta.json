@@ -1,0 +1,81 @@
+{
+  "parts": {
+    "column_0": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "column_1": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "column_2": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "column_3": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "slab": {
+      "component_role": "slab",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    }
+  },
+  "connections": [],
+  "ground_height": 0.0
+}

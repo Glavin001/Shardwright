@@ -9,6 +9,7 @@
 pub mod assemble;
 pub mod export;
 pub mod level1;
+pub mod oracle;
 pub mod report;
 
 use assemble::{add_anchors, add_contacts, assemble, asset_bbox, BuiltComponent};

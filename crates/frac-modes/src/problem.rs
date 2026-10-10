@@ -23,7 +23,6 @@ pub(crate) struct Problem {
     /// All groups (sorted (a<b)), physical areas, weights.
     pub groups: Vec<(u32, u32)>,
     pub group_area: Vec<f64>,
-    #[allow(dead_code)]
     pub group_weight: Vec<f64>,
     /// Jump operator for all groups (rows of group g in `rows_all[g]`),
     /// normalized by the length scale: `‖B̂_g u‖² = ∫_g ‖D‖² dA / L²`.
@@ -71,7 +70,26 @@ pub(crate) fn mdot(a: &[f64], b: &[f64], m: &[f64]) -> f64 {
     s
 }
 
+/// Per free exploded node: super-cell (cells merged across forbidden
+/// interfaces) and position; used by the cell-polynomial reduction.
+pub(crate) struct NodeInfo {
+    pub super_cell: Vec<u32>,
+    pub pos: Vec<[f64; 3]>,
+    pub n_super: usize,
+    /// Anchored (fixed) exploded nodes: super-cell and position.
+    pub anchored_super: Vec<u32>,
+    pub anchored_pos: Vec<[f64; 3]>,
+}
+
+#[cfg(test)]
 pub(crate) fn build(input: &ModesInput, timings: &mut Vec<(String, f64)>) -> Result<Problem, String> {
+    build_full(input, timings).map(|(p, _)| p)
+}
+
+pub(crate) fn build_full(
+    input: &ModesInput,
+    timings: &mut Vec<(String, f64)>,
+) -> Result<(Problem, NodeInfo), String> {
     let mesh = input.mesh;
     let nt = mesh.tets.len();
     let nv = mesh.verts.len();
@@ -101,7 +119,7 @@ pub(crate) fn build(input: &ModesInput, timings: &mut Vec<(String, f64)>) -> Res
     // ---- continuous eigenproblem (initialization), physical units ----
     let unanchored = input.anchored_vertices.is_empty();
     let (evals, evecs) =
-        frac_fem::analysis::eigenmodes(mesh, input.tet_material, input.anchored_vertices, p.k, p.seed)?;
+        frac_fem::analysis::eigenmodes_tol(mesh, input.tet_material, input.anchored_vertices, p.k, p.seed, 1e-6)?;
     if evals.is_empty() {
         return Err("no non-rigid eigenmodes found on the continuous mesh".into());
     }
@@ -179,6 +197,28 @@ pub(crate) fn build(input: &ModesInput, timings: &mut Vec<(String, f64)>) -> Res
     }
     let node = |v: u32, c: u32| node_id[node_of(v, c) as usize];
     let n_nodes = n_nodes as usize;
+    // super-cells: cells merged across forbidden interfaces
+    let n_cells = input.tet_cell.iter().copied().max().unwrap_or(0) as usize + 1;
+    let mut cdsu = Dsu((0..n_cells as u32).collect());
+    for (g, &(a, b)) in groups.iter().enumerate() {
+        if group_weight[g].is_infinite() {
+            cdsu.union(a, b);
+        }
+    }
+    let mut node_cell = vec![0u32; n_nodes];
+    for k in 0..pairs.len() {
+        node_cell[node_id[k] as usize] = pairs[k].1;
+    }
+    let mut super_id = vec![u32::MAX; n_cells];
+    let mut n_super = 0u32;
+    for c in 0..n_cells as u32 {
+        let r = cdsu.find(c) as usize;
+        if super_id[r] == u32::MAX {
+            super_id[r] = n_super;
+            n_super += 1;
+        }
+        super_id[c as usize] = super_id[r];
+    }
 
     // exploded mesh
     let ex = TetMesh {
@@ -256,26 +296,7 @@ pub(crate) fn build(input: &ModesInput, timings: &mut Vec<(String, f64)>) -> Res
     // drop exact zeros (merged copies) to keep the operator lean
     let b_all = prune(&b_all);
 
-    let mut active = Vec::new();
-    let mut rows_act = Vec::new();
-    let mut lam_act = Vec::new();
-    let mut keep_row = vec![usize::MAX; b_all.n_rows];
-    let mut nr = 0;
-    for g in 0..groups.len() {
-        let w = group_weight[g];
-        if w > 0.0 && w.is_finite() {
-            active.push(g);
-            lam_act.push(p.omega * w);
-            let s = nr;
-            for r in rows_all[g].clone() {
-                keep_row[r] = nr;
-                nr += 1;
-            }
-            rows_act.push(s..nr);
-        }
-    }
-    let ident: Vec<usize> = (0..n).collect();
-    let b_act = b_all.restrict(&keep_row, nr, &ident, n);
+    let (active, b_act, rows_act, lam_act) = active_groups(&b_all, &rows_all, &group_weight, p.omega);
 
     // ---- rigid-mode rows (unanchored) ----
     let mut rigid_rows = Vec::new();
@@ -325,8 +346,26 @@ pub(crate) fn build(input: &ModesInput, timings: &mut Vec<(String, f64)>) -> Res
         }
         init.push(v);
     }
+    let mut info = NodeInfo {
+        super_cell: Vec::new(),
+        pos: Vec::new(),
+        n_super: n_super as usize,
+        anchored_super: Vec::new(),
+        anchored_pos: Vec::new(),
+    };
+    for nd in 0..n_nodes {
+        let sc = super_id[node_cell[nd] as usize];
+        let pos = mesh.verts[node_vertex[nd] as usize];
+        if map[3 * nd] != usize::MAX {
+            info.super_cell.push(sc);
+            info.pos.push(pos);
+        } else {
+            info.anchored_super.push(sc);
+            info.anchored_pos.push(pos);
+        }
+    }
     timings.push(("assemble".into(), t1.elapsed().as_secs_f64() * 1e3));
-    Ok(Problem {
+    Ok((Problem {
         n,
         q,
         m,
@@ -343,10 +382,41 @@ pub(crate) fn build(input: &ModesInput, timings: &mut Vec<(String, f64)>) -> Res
         eigenvalues: evals,
         init,
         length_scale,
-    })
+    }, info))
 }
 
-fn prune(a: &CsrMatrix) -> CsrMatrix {
+/// Stacks the rows of the active groups (0 < w < ∞).
+pub(crate) fn active_groups(
+    b_all: &CsrMatrix,
+    rows_all: &[Range<usize>],
+    group_weight: &[f64],
+    omega: f64,
+) -> (Vec<usize>, CsrMatrix, Vec<Range<usize>>, Vec<f64>) {
+    let mut active = Vec::new();
+    let mut rows_act = Vec::new();
+    let mut lam_act = Vec::new();
+    let mut keep_row = vec![usize::MAX; b_all.n_rows];
+    let mut nr = 0;
+    for g in 0..rows_all.len() {
+        let w = group_weight[g];
+        if w > 0.0 && w.is_finite() {
+            active.push(g);
+            lam_act.push(omega * w);
+            let s = nr;
+            for r in rows_all[g].clone() {
+                keep_row[r] = nr;
+                nr += 1;
+            }
+            rows_act.push(s..nr);
+        }
+    }
+    let n = b_all.n_cols;
+    let ident: Vec<usize> = (0..n).collect();
+    let b_act = b_all.restrict(&keep_row, nr, &ident, n);
+    (active, b_act, rows_act, lam_act)
+}
+
+pub(crate) fn prune(a: &CsrMatrix) -> CsrMatrix {
     let mut row_ptr = vec![0usize; a.n_rows + 1];
     let mut col_idx = Vec::with_capacity(a.nnz());
     let mut vals = Vec::with_capacity(a.nnz());

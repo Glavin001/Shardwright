@@ -1,0 +1,25 @@
+{
+  "parts": {
+    "pane": {
+      "component_role": null,
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": [
+        0.45,
+        0.65,
+        0.003
+      ]
+    }
+  },
+  "connections": [],
+  "ground_height": null
+}

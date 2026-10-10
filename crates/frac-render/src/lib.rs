@@ -317,7 +317,7 @@ fn patch_surface(verts: &[DVec3], p: &Patch, spec: Option<NoiseSpec>, amp_cap: f
 
 /// Patches whose displaced triangles take part in a self-intersection of
 /// some cell's render mesh (exact test, zero-area triangles ignored).
-fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface]) -> Vec<usize> {
+fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface]) -> (Vec<usize>, Vec<u32>) {
     let g = &comp.geometry;
     let mut per_cell: BTreeMap<CellId, (Vec<usize>, Vec<(usize, bool)>)> = BTreeMap::new();
     for (i, e) in g.ext_polys.iter().enumerate() {
@@ -327,11 +327,12 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
         per_cell.entry(pt.cells.0).or_default().1.push((pi, false));
         per_cell.entry(pt.cells.1).or_default().1.push((pi, true));
     }
-    let bad: Vec<Vec<usize>> = per_cell
+    let bad: Vec<(Vec<usize>, Vec<u32>)> = per_cell
         .par_iter()
         .map(|(_, (exts, pats))| {
             let mut m = TriMesh::default();
             let mut tag: Vec<Option<usize>> = Vec::new();
+            let mut ext_of: Vec<Option<usize>> = Vec::new();
             for &i in exts {
                 let e = &g.ext_polys[i];
                 let base = m.verts.len() as u32;
@@ -339,6 +340,7 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
                 for k in 1..e.verts.len() as u32 - 1 {
                     m.tris.push([base, base + k, base + k + 1]);
                     tag.push(None);
+                    ext_of.push(Some(i));
                 }
             }
             for &(pi, flip) in pats {
@@ -348,6 +350,7 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
                 for t in &srf.tris {
                     m.tris.push(if flip { [base + t[0], base + t[2], base + t[1]] } else { [base + t[0], base + t[1], base + t[2]] });
                     tag.push(Some(pi));
+                    ext_of.push(None);
                 }
             }
             // weld by exact coordinates without dropping triangles (keep tags aligned)
@@ -366,6 +369,7 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
             let tris: Vec<[u32; 3]> = m.tris.iter().map(|t| [remap[t[0] as usize], remap[t[1] as usize], remap[t[2] as usize]]).collect();
             let wm = TriMesh { verts: nv, tris };
             let mut out = Vec::new();
+            let mut ev = Vec::new();
             for (a, b) in wm.self_intersections(usize::MAX) {
                 if wm.is_degenerate(a as usize) || wm.is_degenerate(b as usize) {
                     continue;
@@ -374,15 +378,21 @@ fn offending_patches(comp: &Component, verts: &[DVec3], surfaces: &[PatchSurface
                     if let Some(pi) = tag[t as usize] {
                         out.push(pi);
                     }
+                    if let Some(ei) = ext_of[t as usize] {
+                        ev.extend(g.ext_polys[ei].verts.iter().copied());
+                    }
                 }
             }
-            out
+            (out, ev)
         })
         .collect();
-    let mut v: Vec<usize> = bad.into_iter().flatten().collect();
+    let mut v: Vec<usize> = bad.iter().flat_map(|b| b.0.iter().copied()).collect();
     v.sort_unstable();
     v.dedup();
-    v
+    let mut ev: Vec<u32> = bad.into_iter().flat_map(|b| b.1).collect();
+    ev.sort_unstable();
+    ev.dedup();
+    (v, ev)
 }
 
 /// Interior dihedral angles (cell A side, cell B side) at every boundary
@@ -490,10 +500,23 @@ fn chip_vertices(comp: &Component, ratio: f64, seed: u64) -> Vec<DVec3> {
         for k in 0..n {
             let v = e.verts[k];
             src.entry(v).or_default().push(e.src_tri);
-            let l = (g.verts[e.verts[(k + 1) % n] as usize] - g.verts[v as usize]).length();
-            let pl = (g.verts[e.verts[(k + n - 1) % n] as usize] - g.verts[v as usize]).length();
+            let pv = g.verts[v as usize];
+            let mut m_here = f64::INFINITY;
+            // distance to every polygon edge not incident to v (fold safety)
+            for j in 0..n {
+                let (a, b) = (e.verts[j], e.verts[(j + 1) % n]);
+                let d = if a == v || b == v {
+                    (g.verts[if a == v { b } else { a } as usize] - pv).length()
+                } else {
+                    let (pa, pb) = (g.verts[a as usize], g.verts[b as usize]);
+                    let ab = pb - pa;
+                    let t = if ab.length_squared() > 0.0 { ((pv - pa).dot(ab) / ab.length_squared()).clamp(0.0, 1.0) } else { 0.0 };
+                    (pa + ab * t - pv).length()
+                };
+                m_here = m_here.min(d);
+            }
             let m = minlen.entry(v).or_insert(f64::INFINITY);
-            *m = m.min(l).min(pl);
+            *m = m.min(m_here);
         }
     }
     for (&v, tris) in src.iter_mut() {
@@ -506,7 +529,7 @@ fn chip_vertices(comp: &Component, ratio: f64, seed: u64) -> Vec<DVec3> {
         if unit_f64(h) >= ratio {
             continue;
         }
-        let amp = 0.3 * minlen[&v];
+        let amp = 0.25 * minlen[&v];
         let r1 = unit_f64(stable_hash(&[h, 1])) * 2.0 - 1.0;
         let r2 = unit_f64(stable_hash(&[h, 2])) * 2.0 - 1.0;
         let [a, b, c] = comp.solid.tri_points(tris[0] as usize);
@@ -609,7 +632,39 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
         .par_iter()
         .map(|comp| {
             let chip = if s.chipping { (p.chipping_for)(comp.id) } else { 0.0 };
-            let verts = chip_vertices(comp, chip, p.seed);
+            let mut verts = chip_vertices(comp, chip, p.seed);
+            // the whole exterior surface must stay embedded after chipping
+            if chip > 0.0 {
+                for _ in 0..4 {
+                    let mut tris = Vec::new();
+                    let mut owner = Vec::new();
+                    for (i, e) in comp.geometry.ext_polys.iter().enumerate() {
+                        for k in 1..e.verts.len() - 1 {
+                            tris.push([e.verts[0], e.verts[k], e.verts[k + 1]]);
+                            owner.push(i);
+                        }
+                    }
+                    let m = TriMesh { verts: verts.clone(), tris };
+                    let si = m.self_intersections(usize::MAX);
+                    let mut changed = false;
+                    for (a, b) in si {
+                        if m.is_degenerate(a as usize) || m.is_degenerate(b as usize) {
+                            continue;
+                        }
+                        for t in [a, b] {
+                            for &v in &comp.geometry.ext_polys[owner[t as usize]].verts {
+                                if verts[v as usize] != comp.geometry.verts[v as usize] {
+                                    verts[v as usize] = comp.geometry.verts[v as usize];
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+                    if !changed {
+                        break;
+                    }
+                }
+            }
             let spec = (p.noise_for)(comp.id);
             let dihedrals = patch_dihedrals(comp);
             let seed = stable_hash(&[p.seed, comp.id.0 as u64, 0x401]);
@@ -619,25 +674,43 @@ pub fn build_render(asset: &Asset, p: &RenderParams) -> RenderOut {
                 .iter()
                 .map(|pt| 0.2 * cell_min_extent(&asset.cells[pt.cells.0.idx()]).min(cell_min_extent(&asset.cells[pt.cells.1.idx()])))
                 .collect();
-            let make = |pi: usize, scale: f64| -> PatchSurface {
+            let make = |verts: &[DVec3], pi: usize, scale: f64| -> PatchSurface {
                 let sp = spec.map(|mut x| {
                     x.amplitude *= scale;
                     x
                 });
-                patch_surface(&verts, &comp.geometry.patches[pi], sp, caps[pi], s, seed, &dihedrals[pi])
+                patch_surface(verts, &comp.geometry.patches[pi], sp, caps[pi], s, seed, &dihedrals[pi])
             };
+            let mut vpatches: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
+            for (pi, pt) in comp.geometry.patches.iter().enumerate() {
+                for l in &pt.loops {
+                    for &v in l {
+                        vpatches.entry(v).or_default().push(pi);
+                    }
+                }
+            }
             let mut scale = vec![1.0f64; comp.geometry.patches.len()];
-            let mut surfaces: Vec<PatchSurface> = (0..comp.geometry.patches.len()).map(|pi| make(pi, 1.0)).collect();
+            let mut surfaces: Vec<PatchSurface> = (0..comp.geometry.patches.len()).map(|pi| make(&verts, pi, 1.0)).collect();
             // Guarantee validity: exact self-intersection check per cell;
-            // halve the noise of offending patches, flat on the last round.
-            for round in 0..4 {
-                let bad = offending_patches(comp, &verts, &surfaces);
-                if bad.is_empty() {
+            // halve the noise of offending patches (flat on late rounds) and
+            // undo chipping on offending exterior vertices.
+            for round in 0..5 {
+                let (bad, bad_verts) = offending_patches(comp, &verts, &surfaces);
+                if bad.is_empty() && bad_verts.is_empty() {
                     break;
                 }
-                for pi in bad {
+                let mut rebuild: std::collections::BTreeSet<usize> = bad.iter().copied().collect();
+                for &pi in &bad {
                     scale[pi] = if round >= 2 { 0.0 } else { scale[pi] * 0.5 };
-                    surfaces[pi] = make(pi, scale[pi]);
+                }
+                for v in bad_verts {
+                    if verts[v as usize] != comp.geometry.verts[v as usize] {
+                        verts[v as usize] = comp.geometry.verts[v as usize];
+                        rebuild.extend(vpatches.get(&v).into_iter().flatten().copied());
+                    }
+                }
+                for pi in rebuild {
+                    surfaces[pi] = make(&verts, pi, scale[pi]);
                 }
             }
             CompRender { verts, surfaces }

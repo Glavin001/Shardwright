@@ -52,6 +52,7 @@ mod admm;
 mod clarabel_solver;
 mod level1;
 pub mod problem;
+mod reduce;
 
 pub use level1::{segment_level1, Level1};
 
@@ -114,8 +115,9 @@ pub struct ModesOutput {
     /// ICCM iterations per mode.
     pub iterations: Vec<usize>,
     pub converged: Vec<bool>,
-    /// Number of free exploded DOFs (after merging forbidden interfaces and
-    /// removing anchored copies).
+    /// Number of unknowns of the solved problem: free exploded DOFs (after
+    /// merging forbidden interfaces and removing anchored copies) for the full
+    /// discretization, reduced coefficients for the cell-polynomial one.
     pub n_dofs: usize,
     pub solver_used: String,
     /// Wall-clock timings (not deterministic; excluded from comparisons).
@@ -152,12 +154,58 @@ enum Backend {
     Admm(Box<admm::Admm>),
 }
 
+/// Discretization of the exploded displacement field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Discretization {
+    /// Full cell-exploded P1 space (spec §4.1).
+    Full,
+    /// Galerkin subspace of the full space: per (super-)cell nodal
+    /// interpolant of a vector polynomial of the given degree (1 or 2); see
+    /// the `reduce` module docs. Unknowns ≈ 3·s·#cells (s = 4 or 10)
+    /// regardless of the tet count.
+    CellPolynomial(u8),
+}
+
+/// Polynomial degree used by [`Solver::Auto`] for large problems.
+pub const AUTO_REDUCED_DEGREE: u8 = 2;
+
 /// Computes `k` fracture modes (spec §4.3) and their per-interface jumps.
+///
+/// Discretization/solver choice: [`Solver::Clarabel`] and [`Solver::Admm`]
+/// solve the full exploded problem. [`Solver::Auto`] solves the full problem
+/// with Clarabel when it has fewer than [`AUTO_CLARABEL_MAX_DOFS`] free DOFs;
+/// otherwise it switches to the [`Discretization::CellPolynomial`] subspace
+/// (degree [`AUTO_REDUCED_DEGREE`]) and solves that with Clarabel if it is
+/// small, else ADMM. Use [`compute_modes_with`] to force a discretization.
 pub fn compute_modes(input: &ModesInput) -> Result<ModesOutput, String> {
+    compute_modes_impl(input, None)
+}
+
+/// [`compute_modes`] with an explicit discretization. The solver is taken
+/// from `params.solver` (`Auto` = Clarabel below [`AUTO_CLARABEL_MAX_DOFS`]
+/// unknowns of the chosen discretization, ADMM otherwise).
+pub fn compute_modes_with(input: &ModesInput, disc: Discretization) -> Result<ModesOutput, String> {
+    compute_modes_impl(input, Some(disc))
+}
+
+fn compute_modes_impl(input: &ModesInput, disc: Option<Discretization>) -> Result<ModesOutput, String> {
     let mut timings = Vec::new();
     let t_all = Instant::now();
-    let pb = problem::build(input, &mut timings)?;
     let p = input.params;
+    let (full, info) = problem::build_full(input, &mut timings)?;
+    let disc = disc.unwrap_or(match p.solver {
+        Solver::Auto if full.n >= AUTO_CLARABEL_MAX_DOFS => Discretization::CellPolynomial(AUTO_REDUCED_DEGREE),
+        _ => Discretization::Full,
+    });
+    let (pb, disc_name) = match disc {
+        Discretization::Full => (full, "full".to_string()),
+        Discretization::CellPolynomial(d) => {
+            let t = Instant::now();
+            let r = reduce::reduce(&full, &info, d, p.omega)?;
+            timings.push(("reduce".into(), t.elapsed().as_secs_f64() * 1e3));
+            (r, format!("cell-p{}", d.clamp(1, 2)))
+        }
+    };
     let use_clarabel = match p.solver {
         Solver::Clarabel => true,
         Solver::Admm => false,
@@ -175,10 +223,13 @@ pub fn compute_modes(input: &ModesInput) -> Result<ModesOutput, String> {
     let t_iccm = Instant::now();
     let res = iccm(&pb, &p, &mut backend)?;
     timings.push(("iccm".into(), t_iccm.elapsed().as_secs_f64() * 1e3));
-    let solver_used = match &backend {
+    let mut solver_used = match &backend {
         Backend::Clarabel => "clarabel".to_string(),
         Backend::Admm(a) => format!("admm(refactorizations={}, rho={:.3e})", a.refactorizations, a.rho),
     };
+    if disc_name != "full" {
+        solver_used = format!("{disc_name}+{solver_used}");
+    }
     let l2 = pb.length_scale * pb.length_scale;
     let mut jumps = Vec::new();
     let mut energies = Vec::new();
@@ -270,6 +321,7 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend) -> Result<IccmResu
         let mut tol = ADMM_TOL_MAX.max(tol_min);
         let mut last_diff = f64::INFINITY;
         let mut confirm = false;
+        let mut inner_total = 0usize;
         for it in 0..p.max_iters.max(1) {
             its = it + 1;
             let cur: Vec<f64> = (0..n).map(|q| m[q] * c[q]).collect();
@@ -286,7 +338,8 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend) -> Result<IccmResu
                     a.solve(pb, &persistent, &cur, &rhs, tol)?
                 }
             };
-            let _ = (sub.iterations, sub.ok);
+            inner_total += sub.iterations;
+            let sub_ok = sub.ok;
             u = sub.u;
             let mut d2 = 0.0;
             for q in 0..n {
@@ -304,7 +357,8 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend) -> Result<IccmResu
             }
             if last_diff <= p.eps {
                 if matches!(backend, Backend::Clarabel) || tol <= tol_min {
-                    conv = true;
+                    // only a subproblem solved to tolerance certifies convergence
+                    conv = sub_ok;
                     break;
                 }
                 confirm = true;
@@ -315,6 +369,9 @@ fn iccm(pb: &Problem, p: &ModesParams, backend: &mut Backend) -> Result<IccmResu
             orthogonalize(&mut c, &basis, m);
             let nc = mdot(&c, &c, m).sqrt();
             c.iter_mut().for_each(|x| *x /= nc);
+        }
+        if admm::debug_enabled() {
+            eprintln!("[iccm] mode {i}: {its} iterations, {inner_total} inner iterations, converged {conv}");
         }
         let nu = mdot(&u, &u, m).sqrt();
         let ui: Vec<f64> = u.iter().map(|x| x / nu).collect();

@@ -192,6 +192,18 @@ pub fn eigenmodes(
     n: usize,
     seed: u64,
 ) -> Result<(Vec<f64>, Vec<Vec<f64>>), String> {
+    eigenmodes_tol(mesh, materials, fixed_vertices, n, seed, EigenOptions::default().tol)
+}
+
+/// [`eigenmodes`] with an explicit relative residual tolerance.
+pub fn eigenmodes_tol(
+    mesh: &TetMesh,
+    materials: &[ElasticMaterial],
+    fixed_vertices: &[u32],
+    n: usize,
+    seed: u64,
+    tol: f64,
+) -> Result<(Vec<f64>, Vec<Vec<f64>>), String> {
     let nv = mesh.verts.len();
     let k = assemble_stiffness(mesh, materials);
     let m = assemble_lumped_mass(mesh, materials);
@@ -210,7 +222,7 @@ pub fn eigenmodes(
         &kf,
         &mf,
         &defl,
-        &EigenOptions { n: n + extra, seed, ..Default::default() },
+        &EigenOptions { n: n + extra, seed, tol, ..Default::default() },
     )?;
     let trk: f64 = kf.diagonal().iter().sum();
     let trm: f64 = mf.iter().sum();

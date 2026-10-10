@@ -21,8 +21,9 @@ try {
     maxIssues: 1000,
     externalResourceFunction: async (uri) => new Uint8Array(await readFile(path.join(dir, decodeURIComponent(uri)))),
   });
-  process.stdout.write(JSON.stringify(report, null, 2) + '\n');
-  process.exit(report.issues.numErrors > 0 ? 1 : 0);
+  // exit only after the (possibly large) report is flushed to the pipe
+  const code = report.issues.numErrors > 0 ? 1 : 0;
+  process.stdout.write(JSON.stringify(report, null, 2) + '\n', () => process.exit(code));
 } catch (e) {
   console.error('validation failed:', e && e.stack ? e.stack : e);
   process.exit(2);

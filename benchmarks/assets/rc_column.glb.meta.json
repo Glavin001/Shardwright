@@ -1,0 +1,82 @@
+{
+  "parts": {
+    "column": {
+      "component_role": null,
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              -0.15,
+              -0.1,
+              -0.15
+            ],
+            [
+              -0.15,
+              3.1,
+              -0.15
+            ]
+          ],
+          "diameter": 0.02
+        },
+        {
+          "points": [
+            [
+              0.15,
+              -0.1,
+              -0.15
+            ],
+            [
+              0.15,
+              3.1,
+              -0.15
+            ]
+          ],
+          "diameter": 0.02
+        },
+        {
+          "points": [
+            [
+              0.15,
+              -0.1,
+              0.15
+            ],
+            [
+              0.15,
+              3.1,
+              0.15
+            ]
+          ],
+          "diameter": 0.02
+        },
+        {
+          "points": [
+            [
+              -0.15,
+              -0.1,
+              0.15
+            ],
+            [
+              -0.15,
+              3.1,
+              0.15
+            ]
+          ],
+          "diameter": 0.02
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    }
+  },
+  "connections": [],
+  "ground_height": 0.0
+}

@@ -176,3 +176,53 @@ fn rho_sweep() {
         }
     }
 }
+
+#[test]
+fn jump_operator_integrates_exactly() {
+    // two tets sharing the face (1,2,3), in different cells
+    let mesh = frac_fem::TetMesh {
+        verts: vec![[0.0, 0.0, -1.0], [0.0, 0.0, 0.0], [1.3, 0.1, 0.0], [0.2, 0.9, 0.05], [0.4, 0.3, 1.0]],
+        tets: vec![[0, 1, 3, 2], [4, 1, 2, 3]],
+    };
+    assert!(mesh.min_volume() > 0.0);
+    let mats = vec![ElasticMaterial::isotropic(1e3, 0.3, 1.0); 2];
+    let input = ModesInput {
+        mesh: &mesh,
+        tet_material: &mats,
+        tet_cell: &[0, 1],
+        group_weight: &|_, _| 1.0,
+        anchored_vertices: &[],
+        params: ModesParams { k: 1, ..Default::default() },
+    };
+    let mut t = Vec::new();
+    let pb = problem::build(&input, &mut t).unwrap();
+    assert_eq!(pb.groups, vec![(0, 1)]);
+    // nodes sorted by (vertex, cell): (0,0) (1,0) (1,1) (2,0) (2,1) (3,0) (3,1) (4,1)
+    let nodes = [(0, 0), (1, 0), (1, 1), (2, 0), (2, 1), (3, 0), (3, 1), (4, 1)];
+    assert_eq!(pb.n, 3 * nodes.len());
+    let f = |v: usize, c: usize, k: usize| ((v * 7 + c * 3 + k * 5) % 11) as f64 * 0.1 - 0.4 + c as f64 * 0.05 * k as f64;
+    let mut u = vec![0.0; pb.n];
+    for (i, &(v, c)) in nodes.iter().enumerate() {
+        for k in 0..3 {
+            u[3 * i + k] = f(v, c, k);
+        }
+    }
+    let l2 = pb.length_scale * pb.length_scale;
+    let got = pb.group_norms(&u)[0].powi(2) * l2;
+    // exact: for a linear field on a triangle, ∫ f² = A/6 (f0² + f1² + f2² + f0 f1 + f1 f2 + f2 f0)
+    let p = [mesh.verts[1], mesh.verts[2], mesh.verts[3]];
+    let e1 = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
+    let e2 = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
+    let cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    let area = 0.5 * (cr[0] * cr[0] + cr[1] * cr[1] + cr[2] * cr[2]).sqrt();
+    let mut exact = 0.0;
+    for k in 0..3 {
+        let j: Vec<f64> = [1, 2, 3].iter().map(|&v| f(v, 0, k) - f(v, 1, k)).collect();
+        exact += area / 6.0 * (j[0] * j[0] + j[1] * j[1] + j[2] * j[2] + j[0] * j[1] + j[1] * j[2] + j[2] * j[0]);
+    }
+    assert!((got - exact).abs() < 1e-12 * exact.max(1e-30), "{got} vs {exact}");
+    assert!((pb.group_area[0] - area).abs() < 1e-14);
+    // normalization: total mass 1
+    let mt: f64 = pb.m.iter().sum::<f64>() / 3.0;
+    assert!((mt - 1.0).abs() < 1e-12);
+}

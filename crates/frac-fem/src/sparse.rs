@@ -258,6 +258,41 @@ impl CsrMatrix {
         CsrMatrix { n_rows: n, n_cols: n, row_ptr, col_idx, vals }
     }
 
+    /// Sparse product `A B` (Gustavson; deterministic accumulation order).
+    pub fn matmul(&self, b: &CsrMatrix) -> CsrMatrix {
+        assert_eq!(self.n_cols, b.n_rows);
+        let n = b.n_cols;
+        let mut row_ptr = vec![0usize; self.n_rows + 1];
+        let mut col_idx = Vec::new();
+        let mut vals = Vec::new();
+        let mut acc = vec![0.0f64; n];
+        let mut mark = vec![usize::MAX; n];
+        let mut cols: Vec<usize> = Vec::new();
+        for i in 0..self.n_rows {
+            cols.clear();
+            let (ca, va) = self.row(i);
+            for k in 0..ca.len() {
+                let (cb, vb) = b.row(ca[k]);
+                for m in 0..cb.len() {
+                    let c = cb[m];
+                    if mark[c] != i {
+                        mark[c] = i;
+                        acc[c] = 0.0;
+                        cols.push(c);
+                    }
+                    acc[c] += va[k] * vb[m];
+                }
+            }
+            cols.sort_unstable();
+            for &c in &cols {
+                col_idx.push(c);
+                vals.push(acc[c]);
+            }
+            row_ptr[i + 1] = col_idx.len();
+        }
+        CsrMatrix { n_rows: self.n_rows, n_cols: n, row_ptr, col_idx, vals }
+    }
+
     /// Dense copy (row-major), for tests and tiny problems.
     pub fn to_dense(&self) -> Vec<f64> {
         let mut d = vec![0.0; self.n_rows * self.n_cols];
