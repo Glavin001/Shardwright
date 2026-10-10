@@ -286,7 +286,7 @@ fn hulls_cmd(asset: &Path, config: &Option<PathBuf>, out: &Path, coacd_threshold
             }
         }
     }
-    std::fs::write(out, frac_io::asset_to_json(&a)).map_err(|e| e.to_string())?;
+    frac_io::write_asset_json(&a, out).map_err(|e| e.to_string())?;
     println!("{}: {} hulls in {secs:.2} s; max neighbour hull overlap {worst:.3e} m3 over {pairs} pairs ({})", out.display(), a.hulls.len(), if worst <= 1e-9 { "PASS" } else { "FAIL" });
     Ok(worst <= 1e-9)
 }
