@@ -435,6 +435,10 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
     for level in (coarsest..nl).rev() {
         let tl = std::time::Instant::now();
         let r = h.level_ranges[level].clone();
+        // out-term budget per merge candidate: full on levels with few
+        // fragments, reduced on building-scale levels (a function of the
+        // data only, so independent of the thread count)
+        let max_tri_samples = (32768 / r.len().max(1)).clamp(64, 256);
         let (n_convex, n_particle, n_decomp) = (AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0));
         // (pieces, ns) per decomposed fragment (FRAC_PROFILE)
         let frag_times: std::sync::Mutex<Vec<(usize, u64)>> = std::sync::Mutex::new(Vec::new());
@@ -520,7 +524,7 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                     .unwrap_or_default();
                 let signer = coacd::Signer::new(&g.mesh);
                 tadd(&T_S_QUERY, t1);
-                let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: g.spacing, rv_k: 0.3, max_tri_samples: 64, foreign, intrusion_k: p.intrusion_k, upstream_density: None, seed: p.seed, batch: 1 };
+                let ctx = MergeCtx { q: &q, signer: Some(&signer), spacing: g.spacing, rv_k: 0.3, max_tri_samples, foreign, intrusion_k: p.intrusion_k, upstream_density: None, seed: p.seed, batch: 1 };
                 // Pieces keep their own costs from the finer level (atoms: from
                 // the cut search): a fragment's surface is a subset of its
                 // children's, so those costs bound the costs at this level.
