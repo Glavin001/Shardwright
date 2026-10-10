@@ -137,6 +137,7 @@ struct ViewRec {
 /// An accessor record (see [`ViewRec`]).
 struct AccRec {
     view: usize,
+    byte_offset: usize,
     component_type: u32,
     count: usize,
     ty: &'static str,
@@ -164,7 +165,11 @@ impl ViewRec {
 impl AccRec {
     fn write_json(&self, s: &mut String) {
         use std::fmt::Write;
-        let _ = write!(s, r#"{{"bufferView":{},"componentType":{},"count":{}"#, self.view, self.component_type, self.count);
+        let _ = write!(s, r#"{{"bufferView":{}"#, self.view);
+        if self.byte_offset > 0 {
+            let _ = write!(s, r#","byteOffset":{}"#, self.byte_offset);
+        }
+        let _ = write!(s, r#","componentType":{},"count":{}"#, self.component_type, self.count);
         if let Some((mn, mx)) = self.min_max {
             let f = |v: [f32; 3]| v.iter().map(|&x| json_f32_exact(x)).collect::<Vec<_>>().join(",");
             let _ = write!(s, r#","max":[{}],"min":[{}]"#, f(mx), f(mn));
@@ -284,10 +289,20 @@ fn encode_vertex_bytes(data: &[u8], stride: usize, count: usize) -> Result<Vec<u
             meshopt::encode_vertex_buffer(&v).map_err(|e| IoError::Meshopt(e.to_string()))
         }};
     }
+    // every stride an interleaved POSITION/NORMAL/TEXCOORD_0/TANGENT
+    // vertex can take (multiples of 4 up to 48)
     match stride {
         8 => enc!(8),
         12 => enc!(12),
         16 => enc!(16),
+        20 => enc!(20),
+        24 => enc!(24),
+        28 => enc!(28),
+        32 => enc!(32),
+        36 => enc!(36),
+        40 => enc!(40),
+        44 => enc!(44),
+        48 => enc!(48),
         _ => Err(IoError::Meshopt(format!(
             "unsupported vertex stride {stride}"
         ))),
@@ -720,17 +735,22 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
     // Meshes. View encoding (the expensive part) runs in parallel over
     // chunks of meshes; views are then laid out sequentially in mesh order,
     // so the output does not depend on the thread count.
+    // One interleaved vertex view (POSITION, NORMAL, TEXCOORD_0, TANGENT at
+    // byte offsets) and one index view (the primitives' triangle lists
+    // back to back, addressed by accessor byteOffset) per mesh: two views
+    // per mesh keeps the JSON (and the validators' work) small on
+    // building-scale scenes with hundreds of thousands of meshes.
     struct PMesh {
         name: String,
         nv: usize,
         mn: [f32; 3],
         mx: [f32; 3],
-        pos: PView,
-        normals: Option<PView>,
-        uvs: Option<PView>,
-        tangents: Option<PView>,
-        /// (material, index count, componentType, view)
-        prims: Vec<(u32, usize, u32, PView)>,
+        vertices: PView,
+        /// (attribute, byte offset, type) in the vertex view
+        attrs: Vec<(&'static str, usize, &'static str)>,
+        indices: PView,
+        /// (material, index count, componentType, byte offset)
+        prims: Vec<(u32, usize, u32, usize)>,
     }
     let compress = w.compress;
     let prep = |m: &RenderMesh| -> Result<Option<PMesh>, IoError> {
@@ -748,50 +768,63 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
                 mx[k] = mx[k].max(p[k]);
             }
         }
-        // Canonicalize -0.0 so min/max match the data bit-for-bit semantics.
-        let positions: Vec<[f32; 3]> = m.positions.iter().map(|p| [p[0] + 0.0, p[1] + 0.0, p[2] + 0.0]).collect();
         let (mn, mx) = (mn.map(|v| v + 0.0), mx.map(|v| v + 0.0));
-        let pos = prep_view(bytes_of(&positions), ViewKind::Attribute { stride: 12, count: nv }, compress)?;
         let has_normals = !m.normals.is_empty();
-        let normals = if has_normals {
-            let normals: Vec<[f32; 3]> = m.normals.iter().map(|&n| normalize3(n)).collect();
-            Some(prep_view(bytes_of(&normals), ViewKind::Attribute { stride: 12, count: nv }, compress)?)
-        } else {
-            None
-        };
-        let uvs = match &m.uvs {
-            Some(uvs) => {
-                let uvs: Vec<[f32; 2]> = uvs.iter().map(|t| t.map(|x| if x.is_finite() { x } else { 0.0 })).collect();
-                Some(prep_view(bytes_of(&uvs), ViewKind::Attribute { stride: 8, count: nv }, compress)?)
-            }
-            None => None,
-        };
-        let tangents = match (&m.tangents, has_normals) {
-            (Some(tangents), true) => {
-                let tangents: Vec<[f32; 4]> = tangents
-                    .iter()
-                    .map(|t| {
-                        let d = normalize3([t[0], t[1], t[2]]);
-                        [d[0], d[1], d[2], if t[3] < 0.0 { -1.0 } else { 1.0 }]
-                    })
-                    .collect();
-                Some(prep_view(bytes_of(&tangents), ViewKind::Attribute { stride: 16, count: nv }, compress)?)
-            }
-            _ => None,
-        };
-        let use_u16 = nv <= 65535;
-        let mut out_prims = Vec::with_capacity(prims.len());
-        for p in prims {
-            let count = p.indices.len();
-            let (data, stride, ct) = if use_u16 {
-                let v: Vec<u16> = p.indices.iter().map(|&i| i as u16).collect();
-                (bytes_of(&v), 2, UNSIGNED_SHORT)
-            } else {
-                (bytes_of(&p.indices), 4, UNSIGNED_INT)
-            };
-            out_prims.push((p.material, count, ct, prep_view(data, ViewKind::Index { stride, count }, compress)?));
+        let has_uvs = m.uvs.is_some();
+        let has_tangents = has_normals && m.tangents.is_some();
+        let mut attrs: Vec<(&'static str, usize, &'static str)> = vec![("POSITION", 0, "VEC3")];
+        let mut stride = 12;
+        if has_normals {
+            attrs.push(("NORMAL", stride, "VEC3"));
+            stride += 12;
         }
-        Ok(Some(PMesh { name: m.name.clone(), nv, mn, mx, pos, normals, uvs, tangents, prims: out_prims }))
+        if has_uvs {
+            attrs.push(("TEXCOORD_0", stride, "VEC2"));
+            stride += 8;
+        }
+        if has_tangents {
+            attrs.push(("TANGENT", stride, "VEC4"));
+            stride += 16;
+        }
+        let mut vb: Vec<f32> = Vec::with_capacity(nv * stride / 4);
+        for i in 0..nv {
+            // canonicalize -0.0 so min/max match the data bit-for-bit semantics
+            let p = m.positions[i];
+            vb.extend_from_slice(&[p[0] + 0.0, p[1] + 0.0, p[2] + 0.0]);
+            if has_normals {
+                vb.extend_from_slice(&normalize3(m.normals[i]));
+            }
+            if let Some(uvs) = &m.uvs {
+                vb.extend(uvs[i].map(|x| if x.is_finite() { x } else { 0.0 }));
+            }
+            if has_tangents {
+                let t = m.tangents.as_ref().unwrap()[i];
+                let d = normalize3([t[0], t[1], t[2]]);
+                vb.extend_from_slice(&[d[0], d[1], d[2], if t[3] < 0.0 { -1.0 } else { 1.0 }]);
+            }
+        }
+        let vertices = prep_view(bytes_of(&vb), ViewKind::Attribute { stride, count: nv }, compress)?;
+        let use_u16 = nv <= 65535;
+        let total: usize = prims.iter().map(|p| p.indices.len()).sum();
+        let (istride, ct) = if use_u16 { (2, UNSIGNED_SHORT) } else { (4, UNSIGNED_INT) };
+        let mut out_prims = Vec::with_capacity(prims.len());
+        let data = if use_u16 {
+            let mut v: Vec<u16> = Vec::with_capacity(total);
+            for p in &prims {
+                out_prims.push((p.material, p.indices.len(), ct, v.len() * 2));
+                v.extend(p.indices.iter().map(|&i| i as u16));
+            }
+            bytes_of(&v)
+        } else {
+            let mut v: Vec<u32> = Vec::with_capacity(total);
+            for p in &prims {
+                out_prims.push((p.material, p.indices.len(), ct, v.len() * 4));
+                v.extend_from_slice(&p.indices);
+            }
+            bytes_of(&v)
+        };
+        let indices = prep_view(data, ViewKind::Index { stride: istride, count: total }, compress)?;
+        Ok(Some(PMesh { name: m.name.clone(), nv, mn, mx, vertices, attrs, indices, prims: out_prims }))
     };
     let mut mesh_map: Vec<Option<usize>> = Vec::with_capacity(mesh_list.len());
     // mesh JSON written directly (one entry per mesh; spliced into the root)
@@ -817,36 +850,27 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
             };
             use std::fmt::Write;
             let nv = pm.nv;
-            let v = w.push_view(pm.pos);
-            let a = w.add_accessor(AccRec { view: v, component_type: FLOAT, count: nv, ty: "VEC3", min_max: Some((pm.mn, pm.mx)) });
+            let vv = w.push_view(pm.vertices);
+            let mut attr: Vec<(&str, usize)> = Vec::with_capacity(pm.attrs.len());
+            for &(name, off, ty) in &pm.attrs {
+                let min_max = (name == "POSITION").then_some((pm.mn, pm.mx));
+                attr.push((name, w.add_accessor(AccRec { view: vv, byte_offset: off, component_type: FLOAT, count: nv, ty, min_max })));
+            }
             // attribute keys in serde_json's (sorted) order
-            let mut attr: Vec<(&str, usize)> = vec![("POSITION", a)];
-            if let Some(pv) = pm.normals {
-                let v = w.push_view(pv);
-                attr.push(("NORMAL", w.add_accessor(AccRec { view: v, component_type: FLOAT, count: nv, ty: "VEC3", min_max: None })));
-            }
-            if let Some(pv) = pm.uvs {
-                let v = w.push_view(pv);
-                attr.push(("TEXCOORD_0", w.add_accessor(AccRec { view: v, component_type: FLOAT, count: nv, ty: "VEC2", min_max: None })));
-            }
-            if let Some(pv) = pm.tangents {
-                let v = w.push_view(pv);
-                attr.push(("TANGENT", w.add_accessor(AccRec { view: v, component_type: FLOAT, count: nv, ty: "VEC4", min_max: None })));
-            }
             attr.sort_unstable();
             let mut attrs = String::from("{");
             for (i, (k, a)) in attr.iter().enumerate() {
                 let _ = write!(attrs, "{}\"{k}\":{a}", if i > 0 { "," } else { "" });
             }
             attrs.push('}');
+            let iv = w.push_view(pm.indices);
             let mut mj = String::from("{");
             if !pm.name.is_empty() {
                 let _ = write!(mj, "\"name\":{},", serde_json::to_string(&pm.name).unwrap_or_default());
             }
             mj.push_str("\"primitives\":[");
-            for (i, (material, count, ct, pv)) in pm.prims.into_iter().enumerate() {
-                let v = w.push_view(pv);
-                let a = w.add_accessor(AccRec { view: v, component_type: ct, count, ty: "SCALAR", min_max: None });
+            for (i, (material, count, ct, off)) in pm.prims.into_iter().enumerate() {
+                let a = w.add_accessor(AccRec { view: iv, byte_offset: off, component_type: ct, count, ty: "SCALAR", min_max: None });
                 if i > 0 {
                     mj.push(',');
                 }
