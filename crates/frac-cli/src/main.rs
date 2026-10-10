@@ -277,9 +277,42 @@ fn bake(
         res.gltf = Vec::new();
         res.physics = Vec::new();
         frac_io::release_free_memory();
-        // external schema validators (when available)
+        // External schema validators (when available) read the written
+        // files and run concurrently with the asset JSON dump.
+        let log = std::env::var_os("FRAC_LOG").is_some();
+        let tw = std::time::Instant::now();
+        let asset_path = out.join(format!("{vname}.asset.json"));
+        let (khronos, flatc, written) = std::thread::scope(|sc| {
+            let k = sc.spawn(|| {
+                let t = std::time::Instant::now();
+                let r = frac_io::khronos_validate(&glb);
+                (r, t.elapsed().as_secs_f64())
+            });
+            let f = sc.spawn(|| {
+                let t = std::time::Instant::now();
+                let r = match frac_io::flatc_scratch_check(&phys) {
+                    Ok(()) => frac_io::flatc_validate(&phys).map(|r| r.map(|()| None)),
+                    Err(note) => Some(Ok(Some(note))),
+                };
+                (r, t.elapsed().as_secs_f64())
+            });
+            let t = std::time::Instant::now();
+            let w = frac_io::write_asset_json(&res.asset, &asset_path).map_err(|e| e.to_string());
+            let w = (w, t.elapsed().as_secs_f64());
+            (k.join().expect("khronos validator thread"), f.join().expect("flatc thread"), w)
+        });
+        if log {
+            eprintln!(
+                "[{vname}] outputs: asset json {:.1} s, Khronos validator {:.1} s, flatc {:.1} s (concurrent; {:.1} s wall)",
+                written.1,
+                khronos.1,
+                flatc.1,
+                tw.elapsed().as_secs_f64()
+            );
+        }
+        written.0?;
         let mut schema_notes = Vec::new();
-        if let Some(r) = frac_io::khronos_validate(&glb) {
+        if let Some(r) = khronos.0 {
             match r {
                 Ok(rep) => schema_notes.push(format!("Khronos glTF validator: {} errors, {} warnings", rep["issues"]["numErrors"], rep["issues"]["numWarnings"])),
                 Err(e) => {
@@ -290,9 +323,10 @@ fn bake(
                 }
             }
         }
-        if let Some(r) = frac_io::flatc_validate(&phys) {
+        if let Some(r) = flatc.0 {
             match r {
-                Ok(()) => schema_notes.push("flatc schema decode OK".into()),
+                Ok(None) => schema_notes.push("flatc schema decode OK".into()),
+                Ok(Some(note)) => schema_notes.push(note),
                 Err(e) => {
                     schema_notes.push(format!("flatc decode FAILED: {e}"));
                     if let Some(g) = res.report.scorecard.gates.iter_mut().find(|g| g.name == "schema") {
@@ -306,7 +340,6 @@ fn bake(
                 g.detail = format!("{}; {}", g.detail, schema_notes.join("; "));
             }
         }
-        frac_io::write_asset_json(&res.asset, &out.join(format!("{vname}.asset.json"))).map_err(|e| e.to_string())?;
         std::fs::write(out.join(format!("{vname}.report.json")), res.report.to_json()).map_err(|e| e.to_string())?;
         std::fs::write(out.join(format!("{vname}.report.md")), res.report.to_markdown()).map_err(|e| e.to_string())?;
         if let Some(d) = dump {

@@ -29,7 +29,7 @@
 //! hold glTF mesh indices).
 
 use crate::IoError;
-use crate::glb::{read_glb_container, write_glb_container};
+use crate::glb::{write_glb_container_owned, read_glb_container, write_glb_container};
 use serde_json::{Map, Value, json};
 
 #[derive(Clone, Debug, Default)]
@@ -116,9 +116,89 @@ struct Writer {
     compress: bool,
     bin: Vec<u8>,
     fallback_len: usize,
-    views: Vec<Value>,
-    accessors: Vec<Value>,
+    views: Vec<ViewRec>,
+    accessors: Vec<AccRec>,
     used_compression: bool,
+}
+
+/// A bufferView record (serialized directly at the end: building-scale
+/// scenes have millions of views, and per-view JSON maps dominated the
+/// writer's time).
+struct ViewRec {
+    buffer: u8,
+    byte_offset: usize,
+    byte_length: usize,
+    byte_stride: Option<usize>,
+    target: u32,
+    /// EXT_meshopt_compression: (byteOffset, byteLength, byteStride, count, mode) in buffer 0.
+    meshopt: Option<(usize, usize, usize, usize, &'static str)>,
+}
+
+/// An accessor record (see [`ViewRec`]).
+struct AccRec {
+    view: usize,
+    component_type: u32,
+    count: usize,
+    ty: &'static str,
+    min_max: Option<([f32; 3], [f32; 3])>,
+}
+
+fn json_f32_exact(x: f32) -> String {
+    serde_json::to_string(&jexact(x)).unwrap_or_else(|_| "0".into())
+}
+
+impl ViewRec {
+    fn write_json(&self, s: &mut String) {
+        use std::fmt::Write;
+        let _ = write!(s, r#"{{"buffer":{},"byteLength":{},"byteOffset":{}"#, self.buffer, self.byte_length, self.byte_offset);
+        if let Some(st) = self.byte_stride {
+            let _ = write!(s, r#","byteStride":{st}"#);
+        }
+        if let Some((off, len, st, count, mode)) = self.meshopt {
+            let _ = write!(s, r#","extensions":{{"{EXT_MESHOPT}":{{"buffer":0,"byteLength":{len},"byteOffset":{off},"byteStride":{st},"count":{count},"mode":"{mode}"}}}}"#);
+        }
+        let _ = write!(s, r#","target":{}}}"#, self.target);
+    }
+}
+
+impl AccRec {
+    fn write_json(&self, s: &mut String) {
+        use std::fmt::Write;
+        let _ = write!(s, r#"{{"bufferView":{},"componentType":{},"count":{}"#, self.view, self.component_type, self.count);
+        if let Some((mn, mx)) = self.min_max {
+            let f = |v: [f32; 3]| v.iter().map(|&x| json_f32_exact(x)).collect::<Vec<_>>().join(",");
+            let _ = write!(s, r#","max":[{}],"min":[{}]"#, f(mx), f(mn));
+        }
+        let _ = write!(s, r#","type":"{}"}}"#, self.ty);
+    }
+}
+
+/// `[r0,r1,...]` of records serialized in parallel chunks (deterministic order).
+fn json_array<T: Sync>(items: &[T], f: impl Fn(&T, &mut String) + Sync) -> String {
+    use rayon::prelude::*;
+    let parts: Vec<String> = items
+        .par_chunks(8192)
+        .map(|c| {
+            let mut s = String::with_capacity(c.len() * 128);
+            for (i, it) in c.iter().enumerate() {
+                if i > 0 {
+                    s.push(',');
+                }
+                f(it, &mut s);
+            }
+            s
+        })
+        .collect();
+    let mut out = String::with_capacity(parts.iter().map(|p| p.len() + 1).sum::<usize>() + 2);
+    out.push('[');
+    for (i, p) in parts.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(p);
+    }
+    out.push(']');
+    out
 }
 
 fn align4(v: &mut Vec<u8>) {
@@ -126,82 +206,68 @@ fn align4(v: &mut Vec<u8>) {
     v.resize(n, 0);
 }
 
+/// A bufferView prepared off the writer (encoding is the expensive part
+/// and runs in parallel across meshes); [`Writer::push_view`] lays it out.
+struct PView {
+    kind: ViewKind,
+    /// Encoded bytes (compressed) or the raw view bytes.
+    bytes: Vec<u8>,
+    /// Decoded length (compressed views; the fallback buffer holds no data).
+    fallback_len: usize,
+    /// EXT_meshopt_compression (byteStride, count, mode) when compressed.
+    ext: Option<(usize, usize, &'static str)>,
+}
+
+fn prep_view(data: Vec<u8>, kind: ViewKind, compress: bool) -> Result<PView, IoError> {
+    if !compress {
+        return Ok(PView { kind, bytes: data, fallback_len: 0, ext: None });
+    }
+    let (encoded, fallback_len, ext) = match kind {
+        ViewKind::Attribute { stride, count } => {
+            let enc = encode_vertex_bytes(&data, stride, count)?;
+            (enc, data.len(), (stride, count, "ATTRIBUTES"))
+        }
+        ViewKind::Index { stride, count } => {
+            let idx: Vec<u32> = if stride == 2 {
+                data.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]]) as u32).collect()
+            } else {
+                data.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
+            };
+            let vcount = idx.iter().copied().max().map(|m| m as usize + 1).unwrap_or(0);
+            let enc = meshopt::encode_index_buffer(&idx, vcount).map_err(|e| IoError::Meshopt(e.to_string()))?;
+            // The fallback buffer holds no data, only the decoded length.
+            // (The codec may rotate triangle corners; winding is preserved.)
+            (enc, count * stride, (stride, count, "TRIANGLES"))
+        }
+    };
+    Ok(PView { kind, bytes: encoded, fallback_len, ext: Some(ext) })
+}
+
 impl Writer {
-    /// Add a bufferView; returns (view index, the bytes the view decodes to).
-    fn add_view(&mut self, data: Vec<u8>, kind: ViewKind) -> Result<usize, IoError> {
-        let (target, stride_field) = match kind {
+    /// Lay out a prepared bufferView; returns its index.
+    fn push_view(&mut self, pv: PView) -> usize {
+        let (target, byte_stride) = match pv.kind {
             ViewKind::Attribute { stride, .. } => (ARRAY_BUFFER, Some(stride)),
             ViewKind::Index { .. } => (ELEMENT_ARRAY_BUFFER, None),
         };
-        let mut view = Map::new();
-        if self.compress {
-            let (encoded, fallback, ext) = match kind {
-                ViewKind::Attribute { stride, count } => {
-                    let enc = encode_vertex_bytes(&data, stride, count)?;
-                    (
-                        enc,
-                        data,
-                        json!({"byteStride": stride, "count": count, "mode": "ATTRIBUTES"}),
-                    )
-                }
-                ViewKind::Index { stride, count } => {
-                    let idx: Vec<u32> = if stride == 2 {
-                        data.chunks_exact(2)
-                            .map(|c| u16::from_le_bytes([c[0], c[1]]) as u32)
-                            .collect()
-                    } else {
-                        data.chunks_exact(4)
-                            .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                            .collect()
-                    };
-                    let vcount = idx
-                        .iter()
-                        .copied()
-                        .max()
-                        .map(|m| m as usize + 1)
-                        .unwrap_or(0);
-                    let enc = meshopt::encode_index_buffer(&idx, vcount)
-                        .map_err(|e| IoError::Meshopt(e.to_string()))?;
-                    // The index codec may rotate triangle corners (winding is
-                    // preserved); make the fallback identical to the decoded data.
-                    let decoded = decode_meshopt(&enc, count, stride, "TRIANGLES", None)?;
-                    (
-                        enc,
-                        decoded,
-                        json!({"byteStride": stride, "count": count, "mode": "TRIANGLES"}),
-                    )
-                }
-            };
-            align4(&mut self.bin);
+        align4(&mut self.bin);
+        let rec = if let Some((st, count, mode)) = pv.ext {
             let c_off = self.bin.len();
-            self.bin.extend_from_slice(&encoded);
+            self.bin.extend_from_slice(&pv.bytes);
             let fb_off = self.fallback_len.next_multiple_of(4);
-            self.fallback_len = fb_off + fallback.len();
-            let mut ext = ext;
-            ext["buffer"] = json!(0);
-            ext["byteOffset"] = json!(c_off);
-            ext["byteLength"] = json!(encoded.len());
-            view.insert("buffer".into(), json!(1));
-            view.insert("byteOffset".into(), json!(fb_off));
-            view.insert("byteLength".into(), json!(fallback.len()));
-            view.insert("extensions".into(), json!({ EXT_MESHOPT: ext }));
+            self.fallback_len = fb_off + pv.fallback_len;
             self.used_compression = true;
+            ViewRec { buffer: 1, byte_offset: fb_off, byte_length: pv.fallback_len, byte_stride, target, meshopt: Some((c_off, pv.bytes.len(), st, count, mode)) }
         } else {
-            align4(&mut self.bin);
-            view.insert("buffer".into(), json!(0));
-            view.insert("byteOffset".into(), json!(self.bin.len()));
-            view.insert("byteLength".into(), json!(data.len()));
-            self.bin.extend_from_slice(&data);
-        }
-        if let Some(s) = stride_field {
-            view.insert("byteStride".into(), json!(s));
-        }
-        view.insert("target".into(), json!(target));
-        self.views.push(Value::Object(view));
-        Ok(self.views.len() - 1)
+            let off = self.bin.len();
+            self.bin.extend_from_slice(&pv.bytes);
+            ViewRec { buffer: 0, byte_offset: off, byte_length: pv.bytes.len(), byte_stride, target, meshopt: None }
+        };
+        self.views.push(rec);
+        self.views.len() - 1
     }
 
-    fn add_accessor(&mut self, acc: Value) -> usize {
+    fn add_accessor(&mut self, acc: AccRec) -> usize {
         self.accessors.push(acc);
         self.accessors.len() - 1
     }
@@ -573,13 +639,17 @@ impl MeshList<'_> {
             MeshList::Owned(m) => &m[i],
         }
     }
-    fn release(&mut self, i: usize) {
+    fn release(&mut self, i: usize, freed: &mut usize) {
         if let MeshList::Owned(m) = self {
-            m[i] = RenderMesh::default();
+            let mesh = std::mem::take(&mut m[i]);
+            *freed += mesh.positions.capacity() * 12 + mesh.normals.capacity() * 12 + mesh.uvs.as_ref().map_or(0, |u| u.capacity() * 8) + mesh.primitives.iter().map(|p| p.indices.capacity() * 4).sum::<usize>();
+            drop(mesh);
             // the binary buffer is one large (mmap'd) allocation that cannot
-            // reuse the freed mesh memory; hand it back to the OS regularly
-            if i % 4096 == 4095 {
+            // reuse the freed mesh memory; hand it back to the OS every
+            // ~256 MB (malloc_trim walks the heap, so not per mesh)
+            if *freed > 256 << 20 {
                 release_free_memory();
+                *freed = 0;
             }
         }
     }
@@ -596,6 +666,8 @@ pub fn release_free_memory() {
 }
 
 fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptions) -> Result<Vec<u8>, IoError> {
+    let t0 = std::time::Instant::now();
+    let glog = std::env::var_os("FRAC_LOG").is_some();
     // reserve the (uncompressed) binary size up front: doubling growth of a
     // multi-GB buffer would nearly double the peak memory
     let estimate: usize = (0..mesh_list.len())
@@ -645,22 +717,28 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
         })
         .collect();
 
-    // Meshes.
-    let mut mesh_map: Vec<Option<usize>> = Vec::with_capacity(mesh_list.len());
-    let mut meshes: Vec<Value> = Vec::new();
-    for mi in 0..mesh_list.len() {
-        let m = mesh_list.get(mi);
+    // Meshes. View encoding (the expensive part) runs in parallel over
+    // chunks of meshes; views are then laid out sequentially in mesh order,
+    // so the output does not depend on the thread count.
+    struct PMesh {
+        name: String,
+        nv: usize,
+        mn: [f32; 3],
+        mx: [f32; 3],
+        pos: PView,
+        normals: Option<PView>,
+        uvs: Option<PView>,
+        tangents: Option<PView>,
+        /// (material, index count, componentType, view)
+        prims: Vec<(u32, usize, u32, PView)>,
+    }
+    let compress = w.compress;
+    let prep = |m: &RenderMesh| -> Result<Option<PMesh>, IoError> {
         let nv = m.positions.len();
-        let prims: Vec<&RenderPrimitive> = m
-            .primitives
-            .iter()
-            .filter(|p| !p.indices.is_empty())
-            .collect();
+        let prims: Vec<&RenderPrimitive> = m.primitives.iter().filter(|p| !p.indices.is_empty()).collect();
         if nv == 0 || prims.is_empty() {
-            mesh_map.push(None);
-            continue;
+            return Ok(None);
         }
-        let mut attrs = Map::new();
         // POSITION with exact min/max.
         let mut mn = [f32::INFINITY; 3];
         let mut mx = [f32::NEG_INFINITY; 3];
@@ -671,79 +749,38 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
             }
         }
         // Canonicalize -0.0 so min/max match the data bit-for-bit semantics.
-        let positions: Vec<[f32; 3]> = m
-            .positions
-            .iter()
-            .map(|p| [p[0] + 0.0, p[1] + 0.0, p[2] + 0.0])
-            .collect();
+        let positions: Vec<[f32; 3]> = m.positions.iter().map(|p| [p[0] + 0.0, p[1] + 0.0, p[2] + 0.0]).collect();
         let (mn, mx) = (mn.map(|v| v + 0.0), mx.map(|v| v + 0.0));
-        let v = w.add_view(
-            bytes_of(&positions),
-            ViewKind::Attribute {
-                stride: 12,
-                count: nv,
-            },
-        )?;
-        let a = w.add_accessor(json!({
-            "bufferView": v, "componentType": FLOAT, "count": nv, "type": "VEC3",
-            "min": mn.iter().map(|&x| jexact(x)).collect::<Vec<_>>(),
-            "max": mx.iter().map(|&x| jexact(x)).collect::<Vec<_>>(),
-        }));
-        attrs.insert("POSITION".into(), json!(a));
+        let pos = prep_view(bytes_of(&positions), ViewKind::Attribute { stride: 12, count: nv }, compress)?;
         let has_normals = !m.normals.is_empty();
-        if has_normals {
+        let normals = if has_normals {
             let normals: Vec<[f32; 3]> = m.normals.iter().map(|&n| normalize3(n)).collect();
-            let v = w.add_view(
-                bytes_of(&normals),
-                ViewKind::Attribute {
-                    stride: 12,
-                    count: nv,
-                },
-            )?;
-            let a = w.add_accessor(
-                json!({"bufferView": v, "componentType": FLOAT, "count": nv, "type": "VEC3"}),
-            );
-            attrs.insert("NORMAL".into(), json!(a));
-        }
-        if let Some(uvs) = &m.uvs {
-            let uvs: Vec<[f32; 2]> = uvs
-                .iter()
-                .map(|t| t.map(|x| if x.is_finite() { x } else { 0.0 }))
-                .collect();
-            let v = w.add_view(
-                bytes_of(&uvs),
-                ViewKind::Attribute {
-                    stride: 8,
-                    count: nv,
-                },
-            )?;
-            let a = w.add_accessor(
-                json!({"bufferView": v, "componentType": FLOAT, "count": nv, "type": "VEC2"}),
-            );
-            attrs.insert("TEXCOORD_0".into(), json!(a));
-        }
-        if let (Some(tangents), true) = (&m.tangents, has_normals) {
-            let tangents: Vec<[f32; 4]> = tangents
-                .iter()
-                .map(|t| {
-                    let d = normalize3([t[0], t[1], t[2]]);
-                    [d[0], d[1], d[2], if t[3] < 0.0 { -1.0 } else { 1.0 }]
-                })
-                .collect();
-            let v = w.add_view(
-                bytes_of(&tangents),
-                ViewKind::Attribute {
-                    stride: 16,
-                    count: nv,
-                },
-            )?;
-            let a = w.add_accessor(
-                json!({"bufferView": v, "componentType": FLOAT, "count": nv, "type": "VEC4"}),
-            );
-            attrs.insert("TANGENT".into(), json!(a));
-        }
+            Some(prep_view(bytes_of(&normals), ViewKind::Attribute { stride: 12, count: nv }, compress)?)
+        } else {
+            None
+        };
+        let uvs = match &m.uvs {
+            Some(uvs) => {
+                let uvs: Vec<[f32; 2]> = uvs.iter().map(|t| t.map(|x| if x.is_finite() { x } else { 0.0 })).collect();
+                Some(prep_view(bytes_of(&uvs), ViewKind::Attribute { stride: 8, count: nv }, compress)?)
+            }
+            None => None,
+        };
+        let tangents = match (&m.tangents, has_normals) {
+            (Some(tangents), true) => {
+                let tangents: Vec<[f32; 4]> = tangents
+                    .iter()
+                    .map(|t| {
+                        let d = normalize3([t[0], t[1], t[2]]);
+                        [d[0], d[1], d[2], if t[3] < 0.0 { -1.0 } else { 1.0 }]
+                    })
+                    .collect();
+                Some(prep_view(bytes_of(&tangents), ViewKind::Attribute { stride: 16, count: nv }, compress)?)
+            }
+            _ => None,
+        };
         let use_u16 = nv <= 65535;
-        let mut prim_json = Vec::new();
+        let mut out_prims = Vec::with_capacity(prims.len());
         for p in prims {
             let count = p.indices.len();
             let (data, stride, ct) = if use_u16 {
@@ -752,29 +789,87 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
             } else {
                 (bytes_of(&p.indices), 4, UNSIGNED_INT)
             };
-            let v = w.add_view(data, ViewKind::Index { stride, count })?;
-            let a = w.add_accessor(
-                json!({"bufferView": v, "componentType": ct, "count": count, "type": "SCALAR"}),
-            );
-            let mut pj = Map::new();
-            pj.insert("attributes".into(), Value::Object(attrs.clone()));
-            pj.insert("indices".into(), json!(a));
-            if !scene.materials.is_empty() {
-                pj.insert("material".into(), json!(p.material));
+            out_prims.push((p.material, count, ct, prep_view(data, ViewKind::Index { stride, count }, compress)?));
+        }
+        Ok(Some(PMesh { name: m.name.clone(), nv, mn, mx, pos, normals, uvs, tangents, prims: out_prims }))
+    };
+    let mut mesh_map: Vec<Option<usize>> = Vec::with_capacity(mesh_list.len());
+    // mesh JSON written directly (one entry per mesh; spliced into the root)
+    let mut meshes: Vec<String> = Vec::new();
+    const CHUNK: usize = 1024;
+    let n_meshes = mesh_list.len();
+    let (mut t_prep, mut t_lay) = (0.0f64, 0.0f64);
+    let mut freed = 0usize;
+    for c0 in (0..n_meshes).step_by(CHUNK) {
+        let c1 = (c0 + CHUNK).min(n_meshes);
+        let tp = std::time::Instant::now();
+        let prepared: Vec<Result<Option<PMesh>, IoError>> = {
+            use rayon::prelude::*;
+            let ml = &mesh_list;
+            (c0..c1).into_par_iter().map(|mi| prep(ml.get(mi))).collect()
+        };
+        t_prep += tp.elapsed().as_secs_f64();
+        let tl = std::time::Instant::now();
+        for (k, pm) in prepared.into_iter().enumerate() {
+            let Some(pm) = pm? else {
+                mesh_map.push(None);
+                continue;
+            };
+            use std::fmt::Write;
+            let nv = pm.nv;
+            let v = w.push_view(pm.pos);
+            let a = w.add_accessor(AccRec { view: v, component_type: FLOAT, count: nv, ty: "VEC3", min_max: Some((pm.mn, pm.mx)) });
+            // attribute keys in serde_json's (sorted) order
+            let mut attr: Vec<(&str, usize)> = vec![("POSITION", a)];
+            if let Some(pv) = pm.normals {
+                let v = w.push_view(pv);
+                attr.push(("NORMAL", w.add_accessor(AccRec { view: v, component_type: FLOAT, count: nv, ty: "VEC3", min_max: None })));
             }
-            pj.insert("mode".into(), json!(4));
-            prim_json.push(Value::Object(pj));
+            if let Some(pv) = pm.uvs {
+                let v = w.push_view(pv);
+                attr.push(("TEXCOORD_0", w.add_accessor(AccRec { view: v, component_type: FLOAT, count: nv, ty: "VEC2", min_max: None })));
+            }
+            if let Some(pv) = pm.tangents {
+                let v = w.push_view(pv);
+                attr.push(("TANGENT", w.add_accessor(AccRec { view: v, component_type: FLOAT, count: nv, ty: "VEC4", min_max: None })));
+            }
+            attr.sort_unstable();
+            let mut attrs = String::from("{");
+            for (i, (k, a)) in attr.iter().enumerate() {
+                let _ = write!(attrs, "{}\"{k}\":{a}", if i > 0 { "," } else { "" });
+            }
+            attrs.push('}');
+            let mut mj = String::from("{");
+            if !pm.name.is_empty() {
+                let _ = write!(mj, "\"name\":{},", serde_json::to_string(&pm.name).unwrap_or_default());
+            }
+            mj.push_str("\"primitives\":[");
+            for (i, (material, count, ct, pv)) in pm.prims.into_iter().enumerate() {
+                let v = w.push_view(pv);
+                let a = w.add_accessor(AccRec { view: v, component_type: ct, count, ty: "SCALAR", min_max: None });
+                if i > 0 {
+                    mj.push(',');
+                }
+                let _ = write!(mj, "{{\"attributes\":{attrs},\"indices\":{a}");
+                if !scene.materials.is_empty() {
+                    let _ = write!(mj, ",\"material\":{material}");
+                }
+                mj.push_str(",\"mode\":4}");
+            }
+            mj.push_str("]}");
+            mesh_map.push(Some(meshes.len()));
+            meshes.push(mj);
+            mesh_list.release(c0 + k, &mut freed);
         }
-        let mut mj = Map::new();
-        if !m.name.is_empty() {
-            mj.insert("name".into(), json!(m.name));
-        }
-        mj.insert("primitives".into(), Value::Array(prim_json));
-        mesh_map.push(Some(meshes.len()));
-        meshes.push(Value::Object(mj));
-        mesh_list.release(mi);
+        t_lay += tl.elapsed().as_secs_f64();
+    }
+    if glog {
+        eprintln!("  glb mesh loop: encode {t_prep:.1} s (parallel), layout {t_lay:.1} s");
     }
 
+    if std::env::var_os("FRAC_LOG").is_some() {
+        eprintln!("  glb meshes: {} meshes, {} bufferViews, {:.0} MB binary ({:.1} s)", meshes.len(), w.views.len(), w.bin.len() as f64 / 1048576.0, t0.elapsed().as_secs_f64());
+    }
     // Nodes.
     let n = scene.nodes.len();
     let mut children: Vec<Vec<usize>> = vec![Vec::new(); n];
@@ -900,21 +995,8 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
     if !materials.is_empty() {
         root.insert("materials".into(), Value::Array(materials));
     }
-    if !meshes.is_empty() {
-        root.insert("meshes".into(), Value::Array(meshes));
-    }
-    if !w.accessors.is_empty() {
-        root.insert(
-            "accessors".into(),
-            Value::Array(std::mem::take(&mut w.accessors)),
-        );
-    }
-    if !w.views.is_empty() {
-        root.insert(
-            "bufferViews".into(),
-            Value::Array(std::mem::take(&mut w.views)),
-        );
-    }
+
+
     let has_bin = !w.bin.is_empty();
     let mut buffers = Vec::new();
     if has_bin {
@@ -926,11 +1008,45 @@ fn write_glb_core(scene: &RenderScene, mut mesh_list: MeshList, opts: &GltfOptio
     if !buffers.is_empty() {
         root.insert("buffers".into(), Value::Array(buffers));
     }
-    let json_bytes = serde_json::to_vec(&Value::Object(root))?;
-    Ok(write_glb_container(
-        &json_bytes,
-        has_bin.then_some(&w.bin[..]),
-    ))
+    if glog {
+        eprintln!("  glb json tree: {:.1} s", t0.elapsed().as_secs_f64());
+    }
+    // the root without accessors/bufferViews through serde, the two big
+    // arrays serialized directly and spliced in (JSON key order is free)
+    let rest = serde_json::to_vec(&Value::Object(root))?;
+    let mut json_bytes: Vec<u8> = Vec::with_capacity(rest.len() + 64 * (w.views.len() + w.accessors.len()));
+    json_bytes.push(b'{');
+    if !w.accessors.is_empty() {
+        json_bytes.extend_from_slice(b"\"accessors\":");
+        json_bytes.extend_from_slice(json_array(&w.accessors, AccRec::write_json).as_bytes());
+        json_bytes.push(b',');
+    }
+    if !w.views.is_empty() {
+        json_bytes.extend_from_slice(b"\"bufferViews\":");
+        json_bytes.extend_from_slice(json_array(&w.views, ViewRec::write_json).as_bytes());
+        json_bytes.push(b',');
+    }
+    if !meshes.is_empty() {
+        json_bytes.extend_from_slice(b"\"meshes\":");
+        json_bytes.extend_from_slice(json_array(&meshes, |m, s| s.push_str(m)).as_bytes());
+        json_bytes.push(b',');
+    }
+    if rest.len() > 2 {
+        json_bytes.extend_from_slice(&rest[1..]);
+    } else if json_bytes.len() > 1 {
+        json_bytes.pop();
+        json_bytes.push(b'}');
+    } else {
+        json_bytes.push(b'}');
+    }
+    if glog {
+        eprintln!("  glb json serialized ({:.0} MB): {:.1} s", json_bytes.len() as f64 / 1048576.0, t0.elapsed().as_secs_f64());
+    }
+    let out = write_glb_container_owned(&json_bytes, has_bin.then(|| std::mem::take(&mut w.bin)));
+    if glog {
+        eprintln!("  glb container: {:.1} s", t0.elapsed().as_secs_f64());
+    }
+    Ok(out)
 }
 
 /// Rewrite a GLB that uses `EXT_meshopt_compression` into an equivalent

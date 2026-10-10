@@ -31,6 +31,30 @@ pub(crate) fn write_glb_container(json: &[u8], bin: Option<&[u8]>) -> Vec<u8> {
     out
 }
 
+/// [`write_glb_container`] that takes the BIN chunk by value and builds the
+/// file in place (header and JSON are inserted in front of it), avoiding a
+/// fresh multi-GB allocation and copy for building-scale scenes.
+pub(crate) fn write_glb_container_owned(json: &[u8], bin: Option<Vec<u8>>) -> Vec<u8> {
+    let Some(mut b) = bin else { return write_glb_container(json, None) };
+    let json_len = json.len().next_multiple_of(4);
+    let bin_len = b.len().next_multiple_of(4);
+    let total = 12 + 8 + json_len + 8 + bin_len;
+    b.resize(bin_len, 0);
+    let mut head = Vec::with_capacity(12 + 8 + json_len + 8);
+    head.extend_from_slice(&MAGIC.to_le_bytes());
+    head.extend_from_slice(&2u32.to_le_bytes());
+    head.extend_from_slice(&(total as u32).to_le_bytes());
+    head.extend_from_slice(&(json_len as u32).to_le_bytes());
+    head.extend_from_slice(&CHUNK_JSON.to_le_bytes());
+    head.extend_from_slice(json);
+    head.resize(20 + json_len, b' ');
+    head.extend_from_slice(&(bin_len as u32).to_le_bytes());
+    head.extend_from_slice(&CHUNK_BIN.to_le_bytes());
+    b.splice(0..0, head);
+    debug_assert_eq!(b.len(), total);
+    b
+}
+
 /// Split a GLB into (JSON value, BIN chunk).
 pub(crate) fn read_glb_container(
     bytes: &[u8],

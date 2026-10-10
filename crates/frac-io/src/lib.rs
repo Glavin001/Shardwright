@@ -45,4 +45,4 @@ pub use import::{ImportOptions, load_scene, load_scene_bytes};
 pub use physics::{
     PhysicsBond, PhysicsFragment, PhysicsView, physics_to_json, read_physics, write_physics,
 };
-pub use validate::{FRAC_FBS, find_flatc, flatc_validate, khronos_validate};
+pub use validate::{FRAC_FBS, find_flatc, flatc_scratch_check, flatc_validate, khronos_validate};

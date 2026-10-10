@@ -349,6 +349,9 @@ pub fn run_with(input: &InputSpec, settings: &Settings, lib: &MaterialLibrary, k
     let scene = export::render_scene(&asset, &mut render, lib, !keep_render);
     let render = if keep_render { Some(render) } else { None };
     frac_io::release_free_memory();
+    if log {
+        eprintln!("[{}] glb scene: {:.1} s", input.name, tg.elapsed().as_secs_f64());
+    }
     let gltf = frac_io::write_glb_owned(scene, &frac_io::GltfOptions { meshopt_compression: settings.render.meshopt_compression })
         .map_err(|e| FracError::new(Stage::Export, "glb", e.to_string()))?;
     if let Some(e) = report.timings.iter_mut().find(|x| x.stage == "export") {

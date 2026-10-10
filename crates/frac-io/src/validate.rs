@@ -83,6 +83,41 @@ pub fn find_flatc() -> Option<PathBuf> {
 /// Decode a `.fracphys` file with `flatc --json --strict-json --raw-binary`
 /// against [`FRAC_FBS`] (the spec's schema gate). `None` when `flatc` is
 /// unavailable; `Some(Err(msg))` when decoding fails.
+/// Whether the scratch directory can hold flatc's JSON dump of `path`
+/// (about ten times the binary size; building-scale payloads give
+/// multi-GB dumps). `Err` explains why the cross-check cannot run.
+pub fn flatc_scratch_check(path: &Path) -> Result<(), String> {
+    let need = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0).saturating_mul(12);
+    let Some(free) = free_bytes(&std::env::temp_dir()) else { return Ok(()) };
+    if free < need {
+        return Err(format!(
+            "flatc cross-check not run: its JSON dump needs ~{:.1} GB scratch, {:.1} GB free (the FlatBuffers verifier still checks the payload)",
+            need as f64 / 1e9,
+            free as f64 / 1e9
+        ));
+    }
+    Ok(())
+}
+
+/// Free bytes on the filesystem holding `dir` (statvfs; `None` elsewhere).
+fn free_bytes(dir: &Path) -> Option<u64> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let c = std::ffi::CString::new(dir.as_os_str().as_bytes()).ok()?;
+        let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
+        if unsafe { libc::statvfs(c.as_ptr(), &mut st) } != 0 {
+            return None;
+        }
+        Some(st.f_bavail as u64 * st.f_frsize as u64)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = dir;
+        None
+    }
+}
+
 pub fn flatc_validate(path: &Path) -> Option<Result<(), String>> {
     let flatc = find_flatc()?;
     remove_stale_scratch("flatc");

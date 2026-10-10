@@ -44,4 +44,15 @@ fn main() {
     for g in &sc.gates {
         eprintln!("  {} {:?} {}", g.name, g.status, g.detail);
     }
+    let t = Instant::now();
+    let c = cpu_s();
+    let mut render = render;
+    let scene = frac_pipeline::export::render_scene(&asset, &mut render, &lib, true);
+    drop(render);
+    frac_io::release_free_memory();
+    eprintln!("glb scene: {:.1} s (cpu {:.1} s)", t.elapsed().as_secs_f64(), cpu_s() - c);
+    let t = Instant::now();
+    let c = cpu_s();
+    let glb = frac_io::write_glb_owned(scene, &frac_io::GltfOptions { meshopt_compression: settings.render.meshopt_compression }).unwrap();
+    eprintln!("glb write: {:.1} s (cpu {:.1} s), {:.0} MB", t.elapsed().as_secs_f64(), cpu_s() - c, glb.len() as f64 / 1048576.0);
 }
