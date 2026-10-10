@@ -208,6 +208,12 @@ impl Default for ModeSettings {
 pub struct HierarchySettings {
     /// Optional agglomeration target for L2 (0 = keep analysis cells).
     pub level2_target: u32,
+    /// Extent-based L2 (metres; 0 = off, overrides `level2_target`): each
+    /// Level-1 fragment is split into `max(1, round(max(V / (t e²), V / e³)))`
+    /// compact, connected clusters of analysis cells (fragment volume `V`,
+    /// part thickness `t`). Fragments already about `e` across stay one L2
+    /// piece; large thin ones (floor pieces) are split by footprint.
+    pub level2_extent: f64,
     /// Compactness penalty weight in agglomeration (method B).
     pub compactness: f64,
 }
@@ -216,6 +222,7 @@ impl Default for HierarchySettings {
     fn default() -> Self {
         HierarchySettings {
             level2_target: 0,
+            level2_extent: 0.0,
             compactness: 0.5,
         }
     }

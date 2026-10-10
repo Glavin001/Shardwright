@@ -353,7 +353,27 @@ pub fn run_with(
         }
         let comp = &asset.components[ci];
         let na = infos[ci].n_analysis as usize;
-        let l2 = if settings.hierarchy.level2_target > 0
+        let l2 = if settings.hierarchy.level2_extent > 0.0 {
+            let ac = &asset.analysis_cells
+                [comp.analysis_cells.start as usize..comp.analysis_cells.end as usize];
+            let (ev, _, _) = frac_cells::recipes::principal_axes(&comp.solid);
+            let thick = (12.0 * ev.x.max(0.0)).sqrt().max(1e-6);
+            let mut l = level2_by_extent(
+                ac,
+                adj,
+                &r.labels,
+                settings.hierarchy.level2_extent,
+                thick,
+                settings.hierarchy.compactness,
+            );
+            l = frac_hierarchy::connected_labels(&l, adj);
+            let (moves, left) =
+                manifold::repair_labels(comp, &infos[ci], adj, &mut l, Some(&r.labels));
+            if left > 0 {
+                warnings.push(format!("component '{}': level 2 manifold repair moved {moves} analysis cells, {left} defects left", comp.name));
+            }
+            l
+        } else if settings.hierarchy.level2_target > 0
             && (settings.hierarchy.level2_target as usize) < na
         {
             let ac = &asset.analysis_cells
@@ -594,4 +614,65 @@ pub fn collision_params(settings: &Settings) -> frac_collision::CollisionParams 
 /// parts; the volume term covers chunky ones.
 fn extent_count(area: f64, volume: f64, e: f64) -> f64 {
     (area / (2.0 * e * e)).max(volume / (e * e * e))
+}
+
+/// Extent-based Level 2: each Level-1 fragment's analysis cells are grouped
+/// into `max(1, round(max(V / (t e²), V / e³)))` compact, connected clusters
+/// (fragment volume `V`, part thickness `t`), by agglomeration restricted to
+/// the fragment. Returns one global L2 label per analysis cell.
+fn level2_by_extent(
+    ac: &[AnalysisCell],
+    adj: &[(u32, u32, f64, f64)],
+    l1: &[u32],
+    e: f64,
+    thick: f64,
+    compactness: f64,
+) -> Vec<u32> {
+    let n = ac.len();
+    let mut members: std::collections::BTreeMap<u32, Vec<u32>> = Default::default();
+    for (i, &f) in l1.iter().enumerate() {
+        members.entry(f).or_default().push(i as u32);
+    }
+    let mut out = vec![0u32; n];
+    let mut next = 0u32;
+    for cells in members.values() {
+        let v: f64 = cells.iter().map(|&c| ac[c as usize].mass.volume).sum();
+        let want = ((v / (thick.min(e) * e * e)).max(v / (e * e * e)).round() as usize).max(1);
+        if want >= cells.len() {
+            for &c in cells {
+                out[c as usize] = next;
+                next += 1;
+            }
+            continue;
+        }
+        if want == 1 {
+            for &c in cells {
+                out[c as usize] = next;
+            }
+            next += 1;
+            continue;
+        }
+        // local agglomeration over the fragment's cells
+        let local: std::collections::BTreeMap<u32, u32> = cells
+            .iter()
+            .enumerate()
+            .map(|(k, &c)| (c, k as u32))
+            .collect();
+        let cen: Vec<DVec3> = cells.iter().map(|&c| ac[c as usize].mass.com).collect();
+        let vol: Vec<f64> = cells.iter().map(|&c| ac[c as usize].mass.volume).collect();
+        let ladj: Vec<(u32, u32, f64, f64)> = adj
+            .iter()
+            .filter_map(|&(a, b, ar, w)| Some((*local.get(&a)?, *local.get(&b)?, ar, w)))
+            .collect();
+        let lab = frac_hierarchy::agglomerate(&cen, &vol, &ladj, want, compactness, None);
+        let mut remap: std::collections::BTreeMap<u32, u32> = Default::default();
+        for (k, &c) in cells.iter().enumerate() {
+            let g = *remap.entry(lab[k]).or_insert_with(|| {
+                next += 1;
+                next - 1
+            });
+            out[c as usize] = g;
+        }
+    }
+    out
 }
