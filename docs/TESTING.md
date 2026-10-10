@@ -14,6 +14,7 @@ frozen answers in seconds.
 | 0 | every commit | minutes | unit and property tests; exact-answer tests; differential tests against frozen oracle outputs; determinism | `cargo test --release --workspace`, `tools/ci/determinism.sh` |
 | 1 | every PR | ~1 min per asset | bake each golden asset, score it against the frozen oracles, compare with the committed baseline | `tools/ci/golden.sh` |
 | 2 | nightly / release | hours | regenerate the oracles from scratch (Docker image), full benchmark suite incl. the building, performance targets, re-freeze when oracle versions change | `docker build -t shardwright .`, `prefracture validate --no-golden --write-golden …` |
+| perf | release / on demand | ~10 min | end-to-end suite: every asset baked with its config, wall time (CLI incl. external validators), peak RSS and gates against a 300 s budget | `tools/ci/suite.sh benchmarks/configs/bake.toml`, `tools/ci/suite.sh benchmarks/configs/building.toml building_v0 building_v1` (`KEEP_OUTPUTS=0` drops payloads) |
 
 Tier 0 exact-answer tests:
 

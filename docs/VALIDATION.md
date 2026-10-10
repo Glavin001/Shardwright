@@ -9,6 +9,19 @@ reproduces PL/EA to 0.2%.
 
 <!-- SUITE -->
 
+## Status against the oracles
+
+| Oracle / check | Result |
+|---|---|
+| Hard gates (§13.1) | all pass on all 14 benchmark assets incl. held-out and both buildings (`tools/ci/suite.sh`) |
+| Voro++ (§13.2) | cell volumes and vertices match (frozen differential test) |
+| Upstream CoACD 1.0.14 (§13.2) | at equal hull budget our hulls fit better on every asset (e.g. rc_column L1 Hausdorff/diam 0.060 vs 0.100 median); see `crates/frac-collision/README.md`. rc_column L1 coverage 0.933 (target 0.95) |
+| Authors' fracture modes (§13.2) | 0.0° principal angles, energy error ≤ 5e-8, ARI 1.0 on notched bar, L-shape and bunny; on the 4-fold symmetric plate our energies are equal or lower in every mode but the symmetric cuts differ |
+| Kratos FEM bond fidelity (§13.3) | all targets met at 2× resolution; at the default resolution all except torsion p95 (0.355 vs ≤ 0.30), a first-order resolution limit of rigid-cell kinematics (connector-alignment and midpoint-placement variants of the kinematic centres do not reduce it) |
+| Analytical (patch tests, pure bending, known-answer modes) | pass |
+| Rankine crack oracle (§13.4) | L3 recall ≥ 0.8 met; L1 recall and weak-region Spearman below target (load-independent modes vs load-specific cracks; see below) |
+| Performance (§17) | every asset end to end in ≤ 300 s on 4 cores (two-storey building 255 s, 5-storey building 149 s), peak ≤ 7.4 GB |
+
 ## Bond fidelity (spec §13.3)
 
 `prefracture validate --input out/rc_column.asset.json --oracle-cache DIR`

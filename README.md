@@ -51,8 +51,39 @@ cargo build --release
 ```
 
 Configs: `benchmarks/configs/bake.toml` is the spec defaults with fracture
-modes enabled. `fast.toml` disables modes and uses agglomeration for Level 1.
-`ablation_geometric.toml` and `ablation_fallback.toml` are the M3 ablations.
+modes enabled. `building.toml` keeps every quality feature (modes, interface
+noise, chipping, 3 LODs, CoACD hulls) with cells sized for multi-storey
+buildings (~29 cm analysis / ~18 cm fine cells; bake.toml's 8.5 cm fine
+cells give ~450k cells on a 5-storey frame). `building_lite.toml` is a quick
+starter (no modes, no noise, one LOD). `fast.toml` disables modes and uses
+agglomeration for Level 1. `ablation_geometric.toml` and
+`ablation_fallback.toml` are the M3 ablations.
+
+## Performance
+
+`tools/ci/suite.sh [config] [assets...]` bakes the suite and records wall
+time (whole CLI run: bake, payloads, Khronos glTF validator, flatc, asset
+dump), peak RSS and gates against a per-asset budget (`BUDGET_S`, default
+300 s). On a 4-core machine (all gates pass on every asset):
+
+| Asset | Config | Time (s) | Peak RSS (MB) |
+|---|---|---|---|
+| ceramic_bowl | bake.toml | 4.6 | 52 |
+| glass_annealed_pane | bake.toml | 1.0 | 18 |
+| glass_tempered_pane | bake.toml | 19.3 | 134 |
+| brick_wall_window | bake.toml | 14.3 | 439 |
+| rc_column | bake.toml | 5.1 | 135 |
+| timber_beam | bake.toml | 3.6 | 83 |
+| rc_slab_on_columns | bake.toml | 30.3 | 895 |
+| messy_scan | bake.toml | 30.2 | 796 |
+| two_storey_building (60,920 cells) | bake.toml | 255 | 7,393 |
+| held-out: concrete_pipe / drywall_door / stone_arch | bake.toml | 3.1 / 1.5 / 5.6 | ≤ 150 |
+| building_v0 (2 storeys, 132 parts) | building.toml | 46.1 | 1,181 |
+| building_v1 (5 storeys, 419 parts, 42,547 cells) | building.toml | 149.5 | 3,807 |
+
+Two-storey stages (bake.toml): cells 13 s, fracture modes 35 s, collision
+31 s, render 40 s, validation 47 s, glTF 17 s, external validators ~45 s.
+`FRAC_LOG=1` prints per-stage times, sub-stage breakdowns and RSS.
 
 ## Previews
 
@@ -95,11 +126,11 @@ certificate in `tools/docker/certs/` and build with
 |---|---|
 | `crates/` | the 16 workspace crates (`frac-core` … `frac-cli`) |
 | `schemas/` | FlatBuffers schemas (`frac.fbs`, `fracpat.fbs`) and TypeScript bindings |
-| `benchmarks/` | benchmark assets (9 + 3 held-out) and configs |
+| `benchmarks/` | benchmark assets (11 + 3 held-out) and configs |
 | `tools/harness/` | oracles: Kratos FEM bond fidelity, scikit-fem modal, CoACD differential, Rankine crack oracle |
 | `tools/oracles/` | Voro++ differential oracle |
 | `tools/gltf_validate/` | Khronos glTF validator wrapper |
-| `tools/ci/` | determinism script (also run by `.github/workflows/ci.yml` on Linux and macOS) |
+| `tools/ci/` | determinism, golden and suite scripts (determinism also runs in `.github/workflows/ci.yml` on Linux and macOS) |
 
 ## Oracle environment
 
