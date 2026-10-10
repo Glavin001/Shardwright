@@ -820,6 +820,7 @@ dependencies = [
  "gltf-json",
  "libc",
  "meshopt",
+ "rayon",
  "serde",
  "serde_json",
  "smallvec",
