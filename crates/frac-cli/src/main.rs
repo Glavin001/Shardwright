@@ -216,6 +216,13 @@ enum Cmd {
         /// Draw the level's convex collision hulls instead of the fragments.
         #[arg(long)]
         hulls: bool,
+        /// Render the frames of a rigid-body simulation (`tools/sim` output)
+        /// to `<out stem>_NNNN.png`.
+        #[arg(long)]
+        sim: Option<PathBuf>,
+        /// Fixed camera box for `--sim`: xmin,ymin,zmin,xmax,ymax,zmax.
+        #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
+        fit: Vec<f64>,
     },
     /// Generate the procedural benchmark suite (spec §13.8).
     GenBench {
@@ -1135,6 +1142,8 @@ fn main() -> ExitCode {
             radius,
             cell_groups,
             hulls,
+            sim,
+            fit,
         } => (|| -> Result<bool, String> {
             // never overwrite an earlier preview: number the new file instead
             let out = &free_path(out);
@@ -1203,7 +1212,25 @@ fn main() -> ExitCode {
                     .map_err(|e| format!("{}: {e}", input.display()))?;
                 let asset: frac_core::Asset =
                     serde_json::from_str(&text).map_err(|e| format!("{}: {e}", input.display()))?;
-                preview::preview(&asset, &MaterialLibrary::builtin(), out, &o)?
+                match sim {
+                    Some(sp) => {
+                        let v: serde_json::Value = serde_json::from_str(
+                            &std::fs::read_to_string(sp)
+                                .map_err(|e| format!("{}: {e}", sp.display()))?,
+                        )
+                        .map_err(|e| format!("{}: {e}", sp.display()))?;
+                        let fit = match fit.as_slice() {
+                            [] => None,
+                            &[a, b, c, d, e, f] => Some((
+                                frac_geom::DVec3::new(a, b, c),
+                                frac_geom::DVec3::new(d, e, f),
+                            )),
+                            _ => return Err("--fit: expected xmin,ymin,zmin,xmax,ymax,zmax".into()),
+                        };
+                        preview::preview_sim(&asset, &v, out, &o, fit)?
+                    }
+                    None => preview::preview(&asset, &MaterialLibrary::builtin(), out, &o)?,
+                }
             } else {
                 // an input mesh (glb/gltf/obj/ply/stl) before baking
                 let scene = frac_io::load_scene(input, &frac_io::ImportOptions::default())

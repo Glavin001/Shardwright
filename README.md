@@ -371,11 +371,25 @@ flowchart TB
 
 Every fragment at every level can be a rigid body with its own compound
 collider. A runtime starts coarse and swaps a broken fragment for its
-children only where it broke, so distant parts stay cheap. Below, the
-`prefracture preview --impact` view replaces fragments near an impact with
-progressively finer levels:
+children only where it broke, so distant parts stay cheap.
 
-<p align="center"><img src="docs/readme/partial_break_two_storey.gif" width="700" alt="Partial break around an impact: nearby fragments are replaced by their children, finer towards the impact"></p>
+Below, a wrecking ball goes through the two-storey building in
+[Rapier](https://rapier.rs), at half speed. The demo is in
+[`tools/sim`](tools/sim/README.md); `tools/sim/make.sh` reproduces it.
+
+* It starts from the 1,182 Level-2 chunks. Chunks joined by intact bonds
+  move as one rigid body.
+* A stress solver on the baked bonds breaks bonds when their force or moment
+  exceeds their capacity.
+* The ball breaks a column. The first floor loses support and comes down,
+  and the roof follows it.
+* Chunks are refined to Level-3 cells (orange) only where they are hit.
+
+<p align="center"><img src="docs/readme/collapse_two_storey.gif" width="760" alt="Rapier simulation: a wrecking ball breaks a column, the first floor and then the roof collapse; chunks hit hard are refined into finer Level-3 cells (orange)"></p>
+<p align="center"><sub><a href="docs/readme/collapse_two_storey.mp4">MP4 version</a>. Grey: Level-2 chunks. Orange: Level-3 cells refined on impact. The counters show bonds broken, rigid bodies and refined chunks.</sub></p>
+
+The `prefracture preview --impact` view shows the same idea without physics:
+fragments near an impact are replaced by progressively finer levels.
 
 ```mermaid
 sequenceDiagram

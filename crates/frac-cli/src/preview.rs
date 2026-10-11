@@ -361,17 +361,46 @@ fn debris_tris(asset: &Asset, explode: f64, clip_z: Option<f64>, light: DVec3) -
 
 /// Render one panel into an RGB buffer (supersampled ×2, then box-filtered).
 fn render_panel(tris: &[Tri], w: u32, h: u32, view: DVec3, up: DVec3) -> Vec<[u8; 3]> {
+    render_panel_fit(tris, w, h, view, up, None)
+}
+
+/// [`render_panel`] framing the world box `fit` (min, max) instead of the
+/// triangles, so a camera stays put across the frames of an animation.
+fn render_panel_fit(
+    tris: &[Tri],
+    w: u32,
+    h: u32,
+    view: DVec3,
+    up: DVec3,
+    fit: Option<(DVec3, DVec3)>,
+) -> Vec<[u8; 3]> {
     let ss = 2u32;
     let (sw, sh) = (w * ss, h * ss);
     let right = up.cross(view).normalize();
     let up2 = view.cross(right).normalize();
     let proj = |p: DVec3| DVec3::new(p.dot(right), p.dot(up2), p.dot(view));
     let (mut lo, mut hi) = (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY));
-    for t in tris {
-        for p in t.p {
-            let q = proj(p);
-            lo = lo.min(q);
-            hi = hi.max(q);
+    match fit {
+        Some((a, b)) => {
+            for k in 0..8 {
+                let c = DVec3::new(
+                    if k & 1 == 0 { a.x } else { b.x },
+                    if k & 2 == 0 { a.y } else { b.y },
+                    if k & 4 == 0 { a.z } else { b.z },
+                );
+                let q = proj(c);
+                lo = lo.min(q);
+                hi = hi.max(q);
+            }
+        }
+        None => {
+            for t in tris {
+                for p in t.p {
+                    let q = proj(p);
+                    lo = lo.min(q);
+                    hi = hi.max(q);
+                }
+            }
         }
     }
     let ext = (hi - lo).max(DVec3::splat(1e-9));
@@ -1317,4 +1346,170 @@ pub fn preview_input(scene: &InputScene, out: &Path, o: &PreviewOptions) -> Resu
         out,
     )?;
     Ok(format!("wrote {} ({w}x{h}; {title})", out.display()))
+}
+
+/// Frames of a rigid-body simulation (`tools/sim`): one PNG per frame, with
+/// every active fragment drawn at its pose, the projectile and the ground,
+/// from a fixed camera framing `fit` (default: the asset, enlarged).
+pub fn preview_sim(
+    asset: &Asset,
+    sim: &serde_json::Value,
+    out: &Path,
+    o: &PreviewOptions,
+    fit: Option<(DVec3, DVec3)>,
+) -> Result<String, String> {
+    use std::collections::HashMap;
+    let (view, light) = view_light(o);
+    let frames = sim["frames"].as_array().ok_or("--sim: no frames")?;
+    let fit = fit.unwrap_or_else(|| {
+        let (mut lo, mut hi) = (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY));
+        for c in &asset.cells {
+            lo = lo.min(c.mass.com);
+            hi = hi.max(c.mass.com);
+        }
+        let pad = (hi - lo) * 0.2;
+        (DVec3::new(lo.x - pad.x, 0.0, lo.z - pad.z), hi + pad)
+    });
+    // fragment surfaces in their rest frame, relative to the fragment COM
+    let mut meshes: HashMap<u32, Vec<[DVec3; 3]>> = HashMap::new();
+    let mut needed: Vec<u32> = frames
+        .iter()
+        .flat_map(|f| f["bodies"].as_array().into_iter().flatten())
+        .filter_map(|b| b[0].as_u64().map(|x| x as u32))
+        .collect();
+    needed.sort_unstable();
+    needed.dedup();
+    let built: Vec<(u32, Vec<[DVec3; 3]>)> = needed
+        .par_iter()
+        .map(|&f| {
+            let fr = &asset.hierarchy.fragments[f as usize];
+            let m = frac_collision::cells_boundary_mesh(asset, asset.fragment_cells(fr));
+            let com = fr.mass.com;
+            (
+                f,
+                (0..m.tris.len())
+                    .map(|t| m.tri_points(t).map(|p| p - com))
+                    .collect(),
+            )
+        })
+        .collect();
+    meshes.extend(built);
+    // a UV sphere for the projectile
+    let sphere = |c: DVec3, r: f64| {
+        let (nu, nv) = (24, 14);
+        let pt = |i: usize, j: usize| {
+            let (u, v) = (
+                i as f64 / nu as f64 * std::f64::consts::TAU,
+                j as f64 / nv as f64 * std::f64::consts::PI,
+            );
+            c + DVec3::new(v.sin() * u.cos(), v.cos(), v.sin() * u.sin()) * r
+        };
+        let mut t = Vec::new();
+        for i in 0..nu {
+            for j in 0..nv {
+                let (a, b, cc, d) = (pt(i, j), pt(i + 1, j), pt(i + 1, j + 1), pt(i, j + 1));
+                t.push([a, cc, b]);
+                t.push([a, d, cc]);
+            }
+        }
+        t
+    };
+    let stem = out.with_extension("");
+    let total = frames.len();
+    let done: Vec<Result<(), String>> = frames
+        .par_iter()
+        .enumerate()
+        .map(|(k, fr)| {
+            let mut tris = Vec::new();
+            let shade_of = |p: &[DVec3; 3]| {
+                let n = (p[1] - p[0]).cross(p[2] - p[0]);
+                if n.length_squared() == 0.0 {
+                    None
+                } else {
+                    Some((0.35 + 0.65 * n.normalize().dot(light).max(0.0)) as f32)
+                }
+            };
+            // ground
+            let (a, b) = fit;
+            let g = [
+                DVec3::new(a.x - 50.0, -0.002, a.z - 50.0),
+                DVec3::new(b.x + 50.0, -0.002, a.z - 50.0),
+                DVec3::new(b.x + 50.0, -0.002, b.z + 50.0),
+                DVec3::new(a.x - 50.0, -0.002, b.z + 50.0),
+            ];
+            for p in [[g[0], g[2], g[1]], [g[0], g[3], g[2]]] {
+                tris.push(Tri {
+                    p,
+                    frag: u32::MAX - 2,
+                    shade: 1.0,
+                    rgb: Some([0.86, 0.86, 0.88]),
+                });
+            }
+            for bd in fr["bodies"].as_array().into_iter().flatten() {
+                let v: Vec<f64> = bd
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|x| x.as_f64().unwrap_or(0.0))
+                    .collect();
+                let f = v[0] as u32;
+                let t = DVec3::new(v[1], v[2], v[3]);
+                let q = glam::DQuat::from_xyzw(v[4], v[5], v[6], v[7]).normalize();
+                // colour by hierarchy level, a little varied per fragment so
+                // neighbours stay distinct: L0/L1 blue-grey, L2 (the starting
+                // chunks) light concrete, L3 (refined on impact) orange
+                let level = asset.hierarchy.fragments[f as usize].level;
+                let base = match level {
+                    0 | 1 => [0.55, 0.62, 0.72],
+                    2 => [0.80, 0.79, 0.76],
+                    _ => [0.96, 0.56, 0.20],
+                };
+                let jit =
+                    0.88 + 0.12 * (((f as u64).wrapping_mul(2654435761) % 1000) as f32 / 1000.0);
+                let rgb = base.map(|c| c * jit);
+                if let Some(m) = meshes.get(&f) {
+                    for p in m {
+                        let p = p.map(|x| q * x + t);
+                        if let Some(sh) = shade_of(&p) {
+                            tris.push(Tri {
+                                p,
+                                frag: f,
+                                shade: sh,
+                                rgb: Some(rgb),
+                            });
+                        }
+                    }
+                }
+            }
+            if let Some(pr) = fr["projectile"].as_array() {
+                let v: Vec<f64> = pr.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect();
+                for p in sphere(DVec3::new(v[0], v[1], v[2]), v[3]) {
+                    if let Some(sh) = shade_of(&p) {
+                        tris.push(Tri {
+                            p,
+                            frag: u32::MAX - 3,
+                            shade: sh,
+                            rgb: Some([0.25, 0.25, 0.28]),
+                        });
+                    }
+                }
+            }
+            let px = render_panel_fit(&tris, o.width, o.height, view, DVec3::Y, Some(fit));
+            let path = format!("{}_{k:04}.png", stem.display());
+            let f = std::fs::File::create(&path).map_err(|e| format!("{path}: {e}"))?;
+            let mut enc = png::Encoder::new(std::io::BufWriter::new(f), o.width, o.height);
+            enc.set_color(png::ColorType::Rgb);
+            enc.set_depth(png::BitDepth::Eight);
+            let mut wr = enc.write_header().map_err(|e| e.to_string())?;
+            let flat: Vec<u8> = px.into_iter().flatten().collect();
+            wr.write_image_data(&flat).map_err(|e| e.to_string())
+        })
+        .collect();
+    for d in done {
+        d?;
+    }
+    Ok(format!(
+        "wrote {total} frames to {}_NNNN.png",
+        stem.display()
+    ))
 }

@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# the Rapier destruction demo builds on its own (tools/sim/README.md)
+exclude = ["tools/sim"]
 
 [workspace.package]
 version = "0.1.0"
