@@ -33,27 +33,33 @@ scene plus optional authoring metadata, and bakes it into:
 
 ## TL;DR
 
-**The problem.** Pre-fractured destruction in games and simulations is
+**The problem.** Pre-fractured destruction in games, simulation and film is
 usually a random Voronoi shatter. Cracks land anywhere, glass and brick
-break the same way, and nothing tells the physics what holds what. The
-result looks fake, and the solver can't tell what should break.
+break the same way, pieces glue parts together, and nothing tells the
+physics what holds what. The result looks fake, and the solver can't tell
+what should break.
 
-**The pitch.** Shardwright bakes a mesh into everything a destruction
-runtime needs:
+![The problem: random cracks miss weak points, every material breaks the same, random pieces fuse parts together, and a flat level makes every piece a body](docs/readme/why_problem.png)
+
+**The pitch.** You author the structure and its materials. Shardwright bakes
+it into everything a destruction runtime needs:
 * pieces that break where the real object would, from fracture modes and
   material-specific fracture patterns;
-* an exact bond graph for stress solvers;
-* colliders that never overlap;
+* convex colliders that never overlap;
+* an exact bond graph for your stress solver, weaker along joints and
+  structural cuts;
 * a four-level hierarchy that adds detail only where something breaks.
 
-All of it is cut from one exact cell complex, so fragments, bonds and
-colliders always agree, and every bake is checked against hard gates and
+All of it is cut from one exact cell complex, so fragments, colliders and
+bonds always agree, and every bake is checked against hard gates and
 physics oracles.
 
 ## Contents
 
 [Why Shardwright?](#why-shardwright) ·
 [The evidence](#the-evidence) ·
+[Your inputs](#what-you-author-and-how-it-changes-the-result) ·
+[Built on proven ideas](#built-on-proven-ideas-improved-for-destruction) ·
 [Gallery](#gallery) ·
 [How it works](#how-it-works) ·
 [Stress-solver support graph](#a-support-graph-for-stress-solvers) ·
@@ -71,7 +77,7 @@ physics oracles.
 <p align="center">
   <img src="docs/readme/why_shardwright.gif" width="860" alt="Animated explainer: the problem with random shatter, then fracture modes, materials, bonds, hierarchy, colliders and validation, each with a measured comparison">
   <br>
-  <sub>The 90-second explainer (<a href="docs/readme/why_shardwright.mp4">MP4 version</a>). Every number in it is measured; see <a href="#the-evidence">the evidence</a> below.</sub>
+  <sub>The explainer, about two minutes (<a href="docs/readme/why_shardwright.mp4">MP4 version</a>). Every number in it is measured; see <a href="#the-evidence">the evidence</a> below.</sub>
 </p>
 
 | | Typical uniform shatter | Shardwright |
@@ -88,6 +94,7 @@ physics oracles.
 - building destruction for a game or simulation and want pieces that break believably and stay cheap at runtime;
 - feeding a **stress solver** (a support graph of chunks and bonds, as NVIDIA Blast-style solvers use) and need physically meaningful bond areas and strengths instead of guesses;
 - shipping to a rigid-body engine (PhysX, Jolt, Rapier, Havok, …) and need valid compound colliders with exact mass properties;
+- making film or VFX destruction and want physically plausible breakage from authored structure and materials, instead of hand-placed cuts;
 - running a content pipeline that must be reproducible: the same input and settings give the same bytes.
 
 ## The evidence
@@ -150,6 +157,8 @@ measured on the baked cells.
 
 ### Why should the same tool output the bonds?
 
+![Bond geometry guessed from adjacency vs the exact contact polygon](docs/readme/why_bond_contact.png)
+
 A stress solver decides what breaks from each bond's area, orientation and
 strength. If a separate tool only knows *which* pieces touch, it has to
 guess the rest. To measure what those guesses cost, we ran the same solver
@@ -169,6 +178,16 @@ match by construction; child bonds even sum exactly to their parent. On
 top of that, bonds on predefined cuts are deliberately weaker, so the solver
 breaks along them first ([support graph](#a-support-graph-for-stress-solvers)).
 You can reproduce the test with `cargo run --release -p frac-pipeline --example bond_geometry -- <asset.json>`.
+
+### Why decompose into convex hulls?
+
+Physics engines collide convex shapes, but fracture-mode pieces follow the
+object's shape, so they are non-convex. Shardwright decomposes every piece
+at every level into convex hulls of at most 64 vertices, with a pure-Rust
+port of CoACD. Convex cells skip this step, and the hulls of neighbouring
+pieces never overlap (see [colliders](#why-non-overlapping-colliders)).
+
+![Non-convex fracture-mode pieces and their convex hulls: 9 pieces, 105 hulls](docs/readme/why_convex.png)
 
 ### Why a hierarchy?
 
@@ -207,6 +226,51 @@ also checked against independent references:
 [`docs/VALIDATION.md`](docs/VALIDATION.md) records every result, including
 the targets not yet met and the bounds on them.
 
+## What you author, and how it changes the result
+
+You model the structure and choose materials; Shardwright does the rest.
+
+| You author | Required | Example |
+|---|---|---|
+| Meshes of the parts (glTF, OBJ, PLY, STL) | yes | a building as walls, slabs, beams, columns |
+| A material per part | yes (default library) | `"material": "brick_clay"` |
+| Joints between parts | optional | `{"a": "wall", "b": "column", "kind": "mortar_joint"}` |
+| Ground anchors, rebar, wood grain, impact points | optional | `"anchor": true`, `"grain": [1, 0, 0]` |
+
+Change one line of a part's metadata, re-bake, and the result follows it:
+
+<p align="center"><img src="docs/readme/why_inputs.png" width="760" alt="One glass pane with three materials, the impact point moved, and a beam's grain rotated"></p>
+
+Each material property drives a specific part of the result:
+
+| Material property | Drives |
+|---|---|
+| `recipe`, grain, masonry layout, impact point | the cell pattern: how it shatters |
+| Young's modulus, Poisson's ratio | fracture modes (FEM) and bond stiffness |
+| fracture energy (along / across the grain, at joints) | where cuts are cheap, so where it splits |
+| tensile and compressive strength, cohesion | bond capacity for the stress solver |
+| Weibull modulus | size-effect weakening of large cut surfaces |
+| density | mass and inertia of every piece |
+| noise profile, chipping ratio, interior colours | the render meshes |
+
+The built-in library is [`materials.toml`](crates/frac-material/materials.toml);
+calibrate it, or pass your own with `--materials`.
+
+## Built on proven ideas, improved for destruction
+
+None of the individual techniques is new. What Shardwright adds is one
+consistent chain, built from one exact cell complex, with each step
+improved for destruction:
+
+| Technique | Builds on | What Shardwright adds |
+|---|---|---|
+| Voronoi fracture | classic | material recipes (radial glass, tempered dicing, wood grain, masonry courses, stone bedding), exact clipping to the solid |
+| Fracture modes | [Sellán et al. 2023](#references) | weakest cuts first (energy-weighted segmentation), material-aware weights, an open-source solver (Clarabel), building scale |
+| Convex decomposition | [CoACD](#references), Wei et al. 2022 | pure Rust, neighbours never overlap, tighter fit at the same hull count (6% vs 21% outside volume) |
+| Stress-solver bonds | support graphs, e.g. NVIDIA Blast | exact contact geometry (about 10× lower stress error), Weibull size-effect weakening on joints and cuts |
+| Hierarchy | chunk hierarchies, e.g. Blast | four nested levels with consistent bonds, detail only where it breaks |
+| Validation | — | 14 hard gates, FEM / Voro++ / CoACD oracles, byte-identical builds |
+
 ## Gallery
 
 Each material gets its own fracture pattern, and structures split where
@@ -234,6 +298,19 @@ into structural fragments (L1), then into solver chunks (L2):
 More previews are in [`docs/previews/`](docs/previews/).
 
 ## How it works
+
+![End to end on the two-storey building: input, cells, fracture modes, solver chunks, convex hulls, bonds, export](docs/readme/why_chain.png)
+
+The levels are nested refinements of **one** set of exact cells, not
+separate fracture passes:
+1. the material recipes cut each part into small convex cells (L3);
+2. fracture modes group cells into structural pieces (L1);
+3. L2 clusters the cells of each L1 piece into solver chunks;
+4. every piece at every level then gets convex hulls and bonds.
+
+So L1 and L2 pieces can be non-convex (several hulls each), while L3
+cells are almost always one hull.
+
 
 ```mermaid
 flowchart TB
