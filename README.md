@@ -31,9 +31,29 @@ scene plus optional authoring metadata, and bakes it into:
   * a bond graph with exact contact geometry and strengths at every level;
 * a **report** (`.report.md` / `.report.json`): hard gates, quality metrics and stage timings.
 
+## TL;DR
+
+**The problem.** Pre-fractured destruction in games and simulations is
+usually a random Voronoi shatter. Cracks land anywhere, glass and brick
+break the same way, and nothing tells the physics what holds what. The
+result looks fake, and the solver can't tell what should break.
+
+**The pitch.** Shardwright bakes a mesh into everything a destruction
+runtime needs:
+* pieces that break where the real object would, from fracture modes and
+  material-specific fracture patterns;
+* an exact bond graph for stress solvers;
+* colliders that never overlap;
+* a four-level hierarchy that adds detail only where something breaks.
+
+All of it is cut from one exact cell complex, so fragments, bonds and
+colliders always agree, and every bake is checked against hard gates and
+physics oracles.
+
 ## Contents
 
 [Why Shardwright?](#why-shardwright) ·
+[The evidence](#the-evidence) ·
 [Gallery](#gallery) ·
 [How it works](#how-it-works) ·
 [Stress-solver support graph](#a-support-graph-for-stress-solvers) ·
@@ -48,10 +68,11 @@ scene plus optional authoring metadata, and bakes it into:
 
 ## Why Shardwright?
 
-Most real-time destruction pre-shatters meshes with uniform Voronoi cells.
-Cracks land at random, every material breaks the same way, and the pieces
-don't know what holds them up, so a stress solver has nothing physical to
-work with. Shardwright pre-computes what a destruction runtime needs.
+<p align="center">
+  <img src="docs/readme/why_shardwright.gif" width="860" alt="Animated explainer: the problem with random shatter, then fracture modes, materials, bonds, hierarchy, colliders and validation, each with a measured comparison">
+  <br>
+  <sub>The 90-second explainer (<a href="docs/readme/why_shardwright.mp4">MP4 version</a>). Every number in it is measured; see <a href="#the-evidence">the evidence</a> below.</sub>
+</p>
 
 | | Typical uniform shatter | Shardwright |
 |---|---|---|
@@ -68,6 +89,123 @@ work with. Shardwright pre-computes what a destruction runtime needs.
 - feeding a **stress solver** (a support graph of chunks and bonds, as NVIDIA Blast-style solvers use) and need physically meaningful bond areas and strengths instead of guesses;
 - shipping to a rigid-body engine (PhysX, Jolt, Rapier, Havok, …) and need valid compound colliders with exact mass properties;
 - running a content pipeline that must be reproducible: the same input and settings give the same bytes.
+
+## The evidence
+
+Each claim below compares Shardwright with a **uniform baseline**: the same
+pipeline and the same meshes, with an isotropic Voronoi recipe on every part
+and geometry-only clustering in place of fracture modes. That is the
+"random seeds everywhere" approach most tools use. The scripts that produce
+every number and image are in [`tools/explainer/`](tools/explainer/).
+
+### Why fracture modes instead of random seeds?
+
+Look at each input below and you can tell where it will break: the
+bracket at its neck, the bone across its shaft, the creature at its slender
+arms, the chair at its legs. Random Voronoi seeds can't see any of that.
+They cut wherever they land, so a stress solver never gets the break you
+expected. Fracture modes ([Sellán et al. 2023](#references)) solve an FEM
+model of the shape for the cuts that need the least energy, which are
+exactly those weak points.
+
+<p align="center"><img src="docs/readme/why_modes_models.png" width="860" alt="Bracket, bone, eight-armed creature and chair: input, three random Voronoi fractures of the same cells, and Shardwright's fracture-mode pieces"></p>
+
+<sub>Every column uses the same baked cells. The random columns group them by
+nearest random seed; the Shardwright column is the bake's Level 1 (2 pieces
+for the bracket and bone, 9 for the creature, 6 for the chair). The models
+are procedural, after the paper's figures (`tools/explainer/models.py`).</sub>
+
+This also holds up against an FEM crack oracle. On the
+reinforced-concrete column:
+* the lowest-energy mode detaches the column at its anchored root;
+* the crack oracle (Kratos FEM, 9 load cases) cracks it there in 5 of 9
+  cases;
+* the column's 12 structural fragments recover 26% of the oracle's crack
+  surface, against 20% for the uniform baseline. About 45% is the most any
+  12-piece split can reach at that resolution
+  ([details](docs/VALIDATION.md#crack-placement-spec-134--rankine-oracle)).
+
+### Why does each material need its own fracture pattern?
+
+Materials fail differently, and players notice:
+* **Annealed glass** cracks radially from the impact.
+* **Tempered glass** is pre-stressed, so it dices into small cubes.
+* **Wood** splinters along its grain into long, thin pieces.
+* **Masonry** fails at the mortar.
+
+A single Voronoi pattern gets all four wrong.
+
+![Four materials: random Voronoi vs the material recipe](docs/readme/why_materials.png)
+
+| Material | What the physics says | Uniform baseline | Shardwright |
+|---|---|---|---|
+| Annealed glass | small shards near the impact, large far away | about 17–22 cm everywhere | **7 cm near the impact, 20–25 cm far from it** |
+| Tempered glass | dices into small pieces | 32 pieces, median 16 cm | **1,993 pieces, median 2 cm** |
+| Pine (splinters) | splitting along the grain takes ~27× less energy than across it, so it splinters | blobs, 1.2× longer along the grain | **long splinters, 9.4× longer along the grain** |
+| Brick wall | mortar is ~10× weaker than brick | 19% of break surface on mortar joints | **95% on mortar joints** |
+
+The material ratios come from the built-in library
+([`materials.toml`](crates/frac-material/materials.toml)); the shapes are
+measured on the baked cells.
+
+### Why should the same tool output the bonds?
+
+A stress solver decides what breaks from each bond's area, orientation and
+strength. If a separate tool only knows *which* pieces touch, it has to
+guess the rest. To measure what those guesses cost, we ran the same solver
+on the same 1,537 pieces. The test applies a uniform stress, so the exact
+answer is known.
+
+![Stress error with exact vs approximated bond geometry](docs/readme/why_bonds_error.png)
+
+| Bond data | Stress error (p95) |
+|---|---|
+| **Exact bonds (Shardwright)** | **1.6%** |
+| Normals and centroids from the line between piece centres | 9.7% |
+| Adjacency only (equal areas) | 18.1% |
+
+Shardwright cuts bonds from the same exact cells as the fragments, so they
+match by construction; child bonds even sum exactly to their parent. On
+top of that, bonds on predefined cuts are deliberately weaker, so the solver
+breaks along them first ([support graph](#a-support-graph-for-stress-solvers)).
+You can reproduce the test with `cargo run --release -p frac-pipeline --example bond_geometry -- <asset.json>`.
+
+### Why a hierarchy?
+
+A flat shatter forces a choice: thousands of rigid bodies at once, or no
+detail. Shardwright's four nested levels let a runtime swap a fragment for
+its children only where it breaks. For the same local damage to the
+two-storey building that takes **324 bodies instead of 6,860 (21× fewer)**:
+
+![Partial break: rigid bodies, flat vs hierarchical](docs/readme/why_hierarchy.png)
+
+### Why non-overlapping colliders?
+
+When two neighbouring pieces spawn with overlapping hulls, the physics
+engine pushes them apart, and the pieces pop and jitter. Shardwright
+separates neighbouring hulls with a plane plus a margin, and a hard gate
+checks it on every bake. Against upstream CoACD at the same hull budget,
+the hulls also fit tighter:
+
+![Colliders: naive overlapping hulls vs separated hulls, and the CoACD comparison](docs/readme/why_colliders.png)
+
+| At equal hull budget | Upstream CoACD | Shardwright |
+|---|---|---|
+| Hull volume outside the fragment (median) | 21% | **6%** |
+| Neighbouring hulls overlap | yes | **never** |
+
+### How do we know it's right?
+
+Every bake runs [14 hard gates](#quality-and-validation). The pipeline is
+also checked against independent references:
+* Voro++;
+* the fracture-modes authors' reference code;
+* Kratos FEM;
+* upstream CoACD;
+* the Khronos glTF validator.
+
+[`docs/VALIDATION.md`](docs/VALIDATION.md) records every result, including
+the targets not yet met and the bounds on them.
 
 ## Gallery
 
@@ -508,6 +646,7 @@ The glTF gate uses Node with the Khronos validator in `tools/gltf_validate`.
 | `tools/harness/` | oracles: Kratos FEM bond fidelity, scikit-fem modal, CoACD differential, Rankine crack oracle |
 | `tools/oracles/` | Voro++ differential oracle |
 | `tools/gltf_validate/` | Khronos glTF validator wrapper |
+| `tools/explainer/` | the comparison bakes, measurements and video behind [the evidence](#the-evidence) (`make.sh`) |
 | `tools/ci/` | determinism, golden and suite scripts (determinism also runs in `.github/workflows/ci.yml` on Linux and macOS) |
 | `docs/` | [design](docs/DESIGN.md), [validation](docs/VALIDATION.md), [testing](docs/TESTING.md), previews |
 
