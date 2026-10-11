@@ -162,7 +162,6 @@ enum Cmd {
         #[arg(long, default_value = "upstream")]
         hb: String,
     },
-    /// Generate the procedural benchmark suite (spec §13.8).
     /// Render a PNG preview of a baked asset (one colour per fragment).
     Preview {
         /// Baked asset JSON (`<name>.asset.json`), or an input mesh
@@ -201,7 +200,17 @@ enum Cmd {
         /// With `--all-levels`: draw levels 0..=N only (e.g. 2 to omit L3).
         #[arg(long)]
         max_level: Option<u8>,
+        /// Partial break around this point (`x,y,z`, asset units): fragments
+        /// of `--level` (default 0) near it are replaced by their children,
+        /// finer towards the point, and pushed away from it by
+        /// `explode × radius × exp(−distance / radius)`.
+        #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
+        impact: Vec<f64>,
+        /// Radius of the partial break around `--impact`.
+        #[arg(long, default_value_t = 1.0)]
+        radius: f64,
     },
+    /// Generate the procedural benchmark suite (spec §13.8).
     GenBench {
         #[arg(long, default_value = "benchmarks/assets")]
         out: PathBuf,
@@ -1115,6 +1124,8 @@ fn main() -> ExitCode {
             clip_z,
             debris,
             max_level,
+            impact,
+            radius,
         } => (|| -> Result<bool, String> {
             // never overwrite an earlier preview: number the new file instead
             let out = &free_path(out);
@@ -1139,6 +1150,11 @@ fn main() -> ExitCode {
                 explode: *explode,
                 azimuth_deg: *azimuth,
                 elevation_deg: *elevation,
+                impact: match impact.as_slice() {
+                    [] => None,
+                    &[x, y, z] => Some((frac_geom::DVec3::new(x, y, z), *radius)),
+                    _ => return Err("--impact: expected x,y,z".into()),
+                },
             };
             let is_asset = input
                 .extension()

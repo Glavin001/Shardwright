@@ -41,6 +41,11 @@ pub struct PreviewOptions {
     pub explode: f64,
     pub azimuth_deg: f64,
     pub elevation_deg: f64,
+    /// Partial break (point, radius): start at `level` and replace each
+    /// fragment by its children where it lies near the point (see
+    /// [`impact_fragments`]); broken pieces are pushed away from the point by
+    /// `explode × radius × exp(−distance / radius)`.
+    pub impact: Option<(DVec3, f64)>,
 }
 
 struct Tri {
@@ -242,10 +247,55 @@ fn level_tris(
         }
         s / m.max(1e-300)
     };
+    fragment_tris(asset, &frs, |f| (f.mass.com - centre) * explode, light)
+}
+
+/// The fragments left after a partial break around `point`: starting from
+/// the fragments of `base`, a fragment is replaced by its children while one
+/// of its cells lies within `radius * 0.6^(depth below base)` of the point,
+/// so the pieces get finer towards the point (as a runtime swaps a broken
+/// fragment for its children only where it broke).
+pub fn impact_fragments(
+    asset: &Asset,
+    base: u8,
+    point: DVec3,
+    radius: f64,
+) -> Vec<&frac_core::Fragment> {
+    let near = |f: &frac_core::Fragment| {
+        let r = radius * 0.6f64.powi((f.level - base) as i32);
+        asset
+            .fragment_cells(f)
+            .iter()
+            .any(|c| asset.cells[c.idx()].mass.com.distance(point) < r)
+    };
+    let mut out = Vec::new();
+    let mut stack: Vec<&frac_core::Fragment> = asset.level_fragments(base).iter().rev().collect();
+    while let Some(f) = stack.pop() {
+        if !f.children.is_empty() && near(f) {
+            stack.extend(
+                f.children
+                    .clone()
+                    .rev()
+                    .map(|c| &asset.hierarchy.fragments[c as usize]),
+            );
+        } else {
+            out.push(f);
+        }
+    }
+    out
+}
+
+/// Boundary triangles of `frs`, each fragment moved by `offset(fragment)`.
+fn fragment_tris(
+    asset: &Asset,
+    frs: &[&frac_core::Fragment],
+    offset: impl Fn(&frac_core::Fragment) -> DVec3 + Sync,
+    light: DVec3,
+) -> Vec<Tri> {
     frs.par_iter()
         .flat_map_iter(|&f| {
             let mesh = frac_collision::cells_boundary_mesh(asset, asset.fragment_cells(f));
-            let off = (f.mass.com - centre) * explode;
+            let off = offset(f);
             let id = f.id.0;
             (0..mesh.tris.len())
                 .filter_map(move |t| {
@@ -544,7 +594,10 @@ impl Legend {
     fn height(&self, w: u32) -> u32 {
         match self {
             Legend::Fragments | Legend::Parts | Legend::Debris => 44,
-            Legend::Kind(k) => 52 + 30 * k.len().div_ceil(3) as u32,
+            Legend::Kind(k) => {
+                let (cols, _) = kind_columns(k, w);
+                52 + 30 * k.len().div_ceil(cols) as u32
+            }
             Legend::Weakening { rows, .. } => {
                 let notes: i64 = WEAKENING_NOTES
                     .iter()
@@ -555,6 +608,22 @@ impl Legend {
             Legend::Strength { .. } => 130,
         }
     }
+}
+
+fn kind_entry(k: InterfaceKind, n: usize) -> String {
+    format!("{} ({n})", kind_label(k))
+}
+
+/// Columns of the joint-kind legend: as many as fit the widest entry.
+fn kind_columns(kinds: &[(InterfaceKind, usize)], w: u32) -> (usize, i64) {
+    let widest = kinds
+        .iter()
+        .map(|&(k, n)| text_w(&kind_entry(k, n), 2))
+        .max()
+        .unwrap_or(0);
+    let col_w = 32 + widest + 28;
+    let cols = ((w as i64 - 48) / col_w).clamp(1, 3) as usize;
+    (cols, col_w.max((w as i64 - 48) / cols as i64))
 }
 
 /// Capacity in MPa with 2–3 significant digits.
@@ -662,13 +731,13 @@ fn draw_legend(c: &mut Canvas, y0: i64, lg: &Legend) {
                 "Bond colour = joint kind (number of bonds)",
                 INK,
             );
-            let col_w = ((c.w as i64 - 2 * x0) / 3).max(200);
+            let (cols, col_w) = kind_columns(kinds, c.w);
             for (i, &(k, n)) in kinds.iter().enumerate() {
-                let x = x0 + (i % 3) as i64 * col_w;
-                let y = y0 + 44 + (i / 3) as i64 * 30;
+                let x = x0 + (i % cols) as i64 * col_w;
+                let y = y0 + 44 + (i / cols) as i64 * 30;
                 c.rect(x, y, 22, 22, rgb8(kind_colour(k)));
                 c.rect(x, y, 22, 1, DIM);
-                c.text(x + 32, y + 3, 2, &format!("{} ({n})", kind_label(k)), INK);
+                c.text(x + 32, y + 3, 2, &kind_entry(k, n), INK);
             }
         }
         &Legend::Strength {
@@ -1010,6 +1079,36 @@ pub fn preview(
                 },
             };
             (panels, legend)
+        }
+        None if o.impact.is_some() => {
+            let (point, radius) = o.impact.unwrap();
+            let base = o.level.map_or(0, |l| l.min(leaf));
+            let frs: Vec<_> = impact_fragments(asset, base, point, radius)
+                .into_iter()
+                .filter(|f| o.clip_z.is_none_or(|z| f.mass.com.z <= z))
+                .collect();
+            let per: Vec<String> = (base..=leaf)
+                .map(|l| format!("{} L{l}", frs.iter().filter(|f| f.level == l).count()))
+                .collect();
+            titles.push(format!("partial break: {}", per.join(" + ")));
+            let tris = fragment_tris(
+                asset,
+                &frs,
+                |f| {
+                    // broken pieces fly away from the point, less so farther out
+                    let d = f.mass.com - point;
+                    if f.level > base && d.length() > 0.0 {
+                        d.normalize() * o.explode * radius * (-d.length() / radius).exp()
+                    } else {
+                        DVec3::ZERO
+                    }
+                },
+                light,
+            );
+            (
+                vec![render_panel(&tris, o.width, o.height, view, DVec3::Y)],
+                Legend::Fragments,
+            )
         }
         None => {
             let panels = levels
