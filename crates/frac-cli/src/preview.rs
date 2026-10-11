@@ -46,6 +46,9 @@ pub struct PreviewOptions {
     /// [`impact_fragments`]); broken pieces are pushed away from the point by
     /// `explode × radius × exp(−distance / radius)`.
     pub impact: Option<(DVec3, f64)>,
+    /// Draw an arbitrary grouping of the cells instead of a level: one group
+    /// id per cell (e.g. a random Voronoi fracture for comparison).
+    pub cell_groups: Option<Vec<u32>>,
 }
 
 struct Tri {
@@ -1079,6 +1082,64 @@ pub fn preview(
                 },
             };
             (panels, legend)
+        }
+        None if o.cell_groups.is_some() => {
+            let groups = o.cell_groups.as_ref().unwrap();
+            if groups.len() != asset.cells.len() {
+                return Err(format!(
+                    "--cell-groups: {} ids for {} cells",
+                    groups.len(),
+                    asset.cells.len()
+                ));
+            }
+            let mut members: std::collections::BTreeMap<u32, Vec<frac_core::CellId>> =
+                Default::default();
+            for (c, &g) in asset.cells.iter().zip(groups) {
+                members.entry(g).or_default().push(c.id);
+            }
+            let com = |cells: &[frac_core::CellId]| {
+                let (mut s, mut m) = (DVec3::ZERO, 0.0);
+                for c in cells {
+                    let cm = &asset.cells[c.idx()].mass;
+                    s += cm.com * cm.volume;
+                    m += cm.volume;
+                }
+                (s, m)
+            };
+            let all: Vec<frac_core::CellId> = asset.cells.iter().map(|c| c.id).collect();
+            let (s, m) = com(&all);
+            let centre = s / m.max(1e-300);
+            let groups: Vec<(u32, Vec<frac_core::CellId>)> = members.into_iter().collect();
+            titles.push(format!("{} pieces", groups.len()));
+            let tris: Vec<Tri> = groups
+                .par_iter()
+                .flat_map_iter(|(g, cells)| {
+                    let (s, m) = com(cells);
+                    let off = (s / m.max(1e-300) - centre) * o.explode;
+                    let mesh = frac_collision::cells_boundary_mesh(asset, cells);
+                    let id = *g;
+                    (0..mesh.tris.len())
+                        .filter_map(move |t| {
+                            let p = mesh.tri_points(t).map(|x| x + off);
+                            let n = (p[1] - p[0]).cross(p[2] - p[0]);
+                            if n.length_squared() == 0.0 {
+                                return None;
+                            }
+                            let lam = n.normalize().dot(light).max(0.0);
+                            Some(Tri {
+                                p,
+                                frag: id,
+                                shade: (0.35 + 0.65 * lam) as f32,
+                                rgb: None,
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            (
+                vec![render_panel(&tris, o.width, o.height, view, DVec3::Y)],
+                Legend::Fragments,
+            )
         }
         None if o.impact.is_some() => {
             let (point, radius) = o.impact.unwrap();

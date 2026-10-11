@@ -209,6 +209,10 @@ enum Cmd {
         /// Radius of the partial break around `--impact`.
         #[arg(long, default_value_t = 1.0)]
         radius: f64,
+        /// Draw this grouping of the cells instead of a level: a JSON array
+        /// with one group id per cell (e.g. a random Voronoi fracture).
+        #[arg(long)]
+        cell_groups: Option<PathBuf>,
     },
     /// Generate the procedural benchmark suite (spec §13.8).
     GenBench {
@@ -1126,6 +1130,7 @@ fn main() -> ExitCode {
             max_level,
             impact,
             radius,
+            cell_groups,
         } => (|| -> Result<bool, String> {
             // never overwrite an earlier preview: number the new file instead
             let out = &free_path(out);
@@ -1154,6 +1159,16 @@ fn main() -> ExitCode {
                     [] => None,
                     &[x, y, z] => Some((frac_geom::DVec3::new(x, y, z), *radius)),
                     _ => return Err("--impact: expected x,y,z".into()),
+                },
+                cell_groups: match cell_groups {
+                    None => None,
+                    Some(p) => Some(
+                        serde_json::from_str(
+                            &std::fs::read_to_string(p)
+                                .map_err(|e| format!("{}: {e}", p.display()))?,
+                        )
+                        .map_err(|e| format!("{}: {e}", p.display()))?,
+                    ),
                 },
             };
             let is_asset = input
