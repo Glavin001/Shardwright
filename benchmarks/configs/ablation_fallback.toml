@@ -1,0 +1,32 @@
+# M3 ablation: fallback agglomeration (method B); otherwise identical to bake.toml.
+seed = 1337
+variants = 1
+levels = 4
+
+[cells]
+target_analysis_cells_per_m3 = 200
+fine_per_analysis = 8
+min_cell_volume = 1.0e-7
+min_thickness_ratio = 0.05
+
+[modes]
+enabled = false
+k = 10
+omega = 1.0e-3
+material_aware = true
+target_level1_fragments = 12
+max_iccm_iters = 50
+tet_edge_ratio = 0.33
+
+[collision]
+method = "coacd"
+concavity = 0.02
+max_hulls_per_fragment = 8
+margin = 0.0005
+min_rigid_size = 0.01
+
+[render]
+lods = 3
+noise = true
+chipping = true
+interior_uv = "triplanar_asset_space"

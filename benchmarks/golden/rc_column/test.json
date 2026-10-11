@@ -1,0 +1,5 @@
+{
+  "input": "benchmarks/assets/rc_column.glb",
+  "config": "benchmarks/configs/fast.toml",
+  "oracles": ["bond", "crack"]
+}

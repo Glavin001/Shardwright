@@ -1,0 +1,21 @@
+[package]
+name = "frac-validate"
+description = "Hard gates, continuous metrics, reference bond-network solver and oracle adapters"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+frac-core.workspace = true
+frac-geom.workspace = true
+frac-material.workspace = true
+frac-collision.workspace = true
+frac-render.workspace = true
+frac-io.workspace = true
+glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rayon.workspace = true
+blake3.workspace = true
+faer.workspace = true
+libm.workspace = true

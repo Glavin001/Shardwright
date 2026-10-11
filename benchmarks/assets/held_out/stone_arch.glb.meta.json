@@ -1,0 +1,21 @@
+{
+  "parts": {
+    "arch": {
+      "component_role": null,
+      "material": "sandstone",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    }
+  },
+  "connections": [],
+  "ground_height": 0.0
+}

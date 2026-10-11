@@ -1,0 +1,203 @@
+{
+  "format": 1,
+  "asset": "rc_column",
+  "solid_sha1": "7a25b38cde3e7260601eadb893220f9f5232d971",
+  "material": {
+    "E": 30000000000.0,
+    "nu": 0.2,
+    "rho": 2400.0
+  },
+  "axis": 1,
+  "fixed_plane": 0.0,
+  "loaded_plane": 3.0,
+  "length": 3.0,
+  "fem": {
+    "h": 0.03440458993840348,
+    "nodes": 86354,
+    "tets": 57217,
+    "element": "SmallDisplacementElement3D10N",
+    "solver": "AMGCL CG 1e-10 (LU below 60k dofs)"
+  },
+  "load_cases": [
+    {
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "kind": "force",
+      "magnitude": 113011.2033679962,
+      "name": "axial"
+    },
+    {
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "kind": "force",
+      "magnitude": 11301.12033679962,
+      "name": "bending"
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "kind": "force",
+      "magnitude": 11301.12033679962,
+      "name": "shear"
+    },
+    {
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "kind": "torque",
+      "magnitude": 16951.68050519943,
+      "name": "torsion"
+    }
+  ],
+  "fem_response": {
+    "axial": 7.051100443532257e-05,
+    "bending": 0.0016030363363079127,
+    "shear": 0.001603037154241994,
+    "torsion": 0.0011316765958456739
+  },
+  "modal_hz": [
+    24.087743855488352,
+    24.109093462728723,
+    141.7409066766249,
+    141.82711067360705,
+    173.72094808637195,
+    288.83170750832045,
+    364.74330181986437,
+    364.88215893884023,
+    521.1607920508181,
+    647.1744153414031
+  ],
+  "versions": {
+    "KratosMultiphysics": "10.4.4",
+    "gmsh": "4.15.2",
+    "skfem": "12.0.2",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1"
+  },
+  "created": "2026-10-10",
+  "crack_cases": [
+    {
+      "name": "bending_x",
+      "kind": "face",
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "bending_z",
+      "kind": "face",
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "torsion",
+      "kind": "torque",
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "name": "impact_0",
+      "kind": "impact",
+      "center": [
+        0.02254601685004184,
+        1.273317266470059,
+        0.20000000298023224
+      ],
+      "direction": [
+        -0.0,
+        0.0,
+        -1.0
+      ]
+    },
+    {
+      "name": "impact_1",
+      "kind": "impact",
+      "center": [
+        0.20000000298023224,
+        1.0878969105637022,
+        0.17900847385843952
+      ],
+      "direction": [
+        -1.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "name": "impact_2",
+      "kind": "impact",
+      "center": [
+        0.17457742749605376,
+        1.1626140180215823,
+        -0.20000000298023224
+      ],
+      "direction": [
+        0.0,
+        -0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "impact_3",
+      "kind": "impact",
+      "center": [
+        -0.15786540364308146,
+        1.2759262260390354,
+        -0.20000000298023224
+      ],
+      "direction": [
+        -0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "impact_4",
+      "kind": "impact",
+      "center": [
+        0.1529025436566103,
+        1.7253748274492129,
+        -0.20000000298023224
+      ],
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "impact_5",
+      "kind": "impact",
+      "center": [
+        -0.17924440660702792,
+        1.1630058233209204,
+        -0.20000000298023224
+      ],
+      "direction": [
+        -0.0,
+        -0.0,
+        1.0
+      ]
+    }
+  ],
+  "crack_solid_sha1": "7a25b38cde3e7260601eadb893220f9f5232d971"
+}

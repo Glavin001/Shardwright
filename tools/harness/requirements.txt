@@ -1,0 +1,12 @@
+# Oracle harness environment (tools/setup.sh installs it into $FRACENV).
+# Pinned to the versions the validation results in docs/VALIDATION.md used.
+KratosMultiphysics==10.4.4
+KratosStructuralMechanicsApplication==10.4.4
+KratosLinearSolversApplication==10.4.4
+gmsh==4.15.2
+scikit-fem==12.0.2
+numpy==2.5.3
+scipy==1.18.1
+coacd==1.0.14
+manifold3d==3.5.4
+trimesh==5.1.1

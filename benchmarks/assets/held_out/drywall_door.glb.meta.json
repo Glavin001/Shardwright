@@ -1,0 +1,28 @@
+{
+  "parts": {
+    "drywall": {
+      "component_role": null,
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    }
+  },
+  "connections": [
+    {
+      "a": "drywall",
+      "b": "drywall",
+      "kind": "adhesive",
+      "interface_material": null
+    }
+  ],
+  "ground_height": 0.0
+}

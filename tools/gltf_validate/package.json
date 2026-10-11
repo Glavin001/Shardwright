@@ -1,0 +1,13 @@
+{
+  "name": "shardwright-gltf-validate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Khronos glTF Validator gate for Shardwright exports",
+  "type": "module",
+  "main": "validate.mjs",
+  "bin": { "gltf-validate": "validate.mjs" },
+  "scripts": { "validate": "node validate.mjs" },
+  "dependencies": {
+    "gltf-validator": "2.0.0-dev.3.10"
+  }
+}

@@ -1,0 +1,18 @@
+[package]
+name = "frac-core"
+description = "Data model, IDs, errors, settings and determinism utilities"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+frac-geom.workspace = true
+glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+blake3.workspace = true
+smallvec.workspace = true

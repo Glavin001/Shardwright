@@ -1,0 +1,14 @@
+[package]
+name = "frac-bonds"
+description = "Interfaces, contact/anchor interfaces, rebar crossings, bond aggregation with exact moments, crack spawn data"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+frac-core.workspace = true
+frac-geom.workspace = true
+glam.workspace = true
+smallvec.workspace = true
+libm.workspace = true
+rayon.workspace = true

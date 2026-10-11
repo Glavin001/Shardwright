@@ -1,0 +1,17 @@
+[package]
+name = "frac-modes"
+description = "Fracture modes (Sellan et al. 2022) weak-region analysis with material-aware weights"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+frac-fem.workspace = true
+frac-geom.workspace = true
+glam.workspace = true
+faer.workspace = true
+clarabel.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+libm.workspace = true
+rayon.workspace = true

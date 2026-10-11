@@ -1,0 +1,12 @@
+[package]
+name = "frac-hierarchy"
+description = "Fracture hierarchy levels, deterministic agglomeration (method B), fragment mass properties"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+frac-core.workspace = true
+frac-geom.workspace = true
+glam.workspace = true
+smallvec.workspace = true

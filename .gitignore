@@ -1,0 +1,10 @@
+/target
+**/__pycache__
+*.pyc
+/out
+/scratch
+node_modules/
+/out_full
+/.claude/worktrees
+/downloads
+/determinism.sha256

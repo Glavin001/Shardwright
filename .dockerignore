@@ -1,0 +1,6 @@
+target/
+out/
+out_full/
+.claude/
+**/__pycache__/
+tools/gltf_validate/node_modules/

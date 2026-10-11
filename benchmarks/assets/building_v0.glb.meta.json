@@ -1,0 +1,3211 @@
+{
+  "parts": {
+    "f0_beamx_0_0": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_beamx_0_1": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_beamx_0_2": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_beamx_1_0": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_beamx_1_1": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_beamx_1_2": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_beamz_0_0": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_beamz_0_1": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_beamz_1_0": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_beamz_1_1": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_beamz_2_0": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_beamz_2_1": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_col_0_0": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_col_0_1": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_col_0_2": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_col_1_0": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_col_1_1": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_col_1_2": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_col_2_0": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_col_2_1": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_col_2_2": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_partition_0_1": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_partition_1_1": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_slab": {
+      "component_role": "slab",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_0_0_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_0_0_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_0_0_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_0_0_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_0_0_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_0_2_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_0_2_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_0_2_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_0_2_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_0_2_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_1_0_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_1_0_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_1_0_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_1_0_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_1_0_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_1_2_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_1_2_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_1_2_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_1_2_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallx_1_2_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_0_0_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_0_0_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_0_0_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_0_0_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_0_0_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_0_1_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_0_1_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_0_1_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_0_1_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_0_1_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_2_0_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_2_0_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_2_0_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_2_0_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_2_0_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_2_1_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_2_1_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_2_1_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_2_1_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f0_wallz_2_1_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamx_0_0": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamx_0_1": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamx_0_2": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamx_1_0": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamx_1_1": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamx_1_2": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamz_0_0": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamz_0_1": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamz_1_0": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamz_1_1": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamz_2_0": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_beamz_2_1": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_col_0_0": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_col_0_1": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_col_0_2": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_col_1_0": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_col_1_1": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_col_1_2": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_col_2_0": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_col_2_1": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_col_2_2": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_partition_0_1": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_partition_1_1": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_slab": {
+      "component_role": "slab",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_0_0_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_0_0_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_0_0_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_0_0_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_0_0_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_0_2_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_0_2_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_0_2_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_0_2_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_0_2_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_1_0_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_1_0_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_1_0_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_1_0_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_1_0_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_1_2_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_1_2_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_1_2_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_1_2_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallx_1_2_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_0_0_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_0_0_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_0_0_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_0_0_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_0_0_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_0_1_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_0_1_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_0_1_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_0_1_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_0_1_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_2_0_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_2_0_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_2_0_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_2_0_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_2_0_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_2_1_glass": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_2_1_head": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_2_1_left": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_2_1_right": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "f1_wallz_2_1_sill": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "parapet_e": {
+      "component_role": "cosmetic",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "parapet_n": {
+      "component_role": "cosmetic",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "parapet_s": {
+      "component_role": "cosmetic",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    },
+    "parapet_w": {
+      "component_role": "cosmetic",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": "clustered_voronoi",
+      "group": null,
+      "impact_center": null
+    }
+  },
+  "connections": [
+    {
+      "a": "f0_wallx_0_0_glass",
+      "b": "f0_wallx_0_0_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_0_left",
+      "b": "f0_wallx_0_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_0_left",
+      "b": "f0_wallx_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_0_glass",
+      "b": "f0_wallx_0_0_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_0_right",
+      "b": "f0_wallx_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_0_glass",
+      "b": "f0_wallx_0_0_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_0_glass",
+      "b": "f0_wallx_0_0_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_0_head",
+      "b": "f0_wallx_0_0_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_0_head",
+      "b": "f0_wallx_0_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_0_head",
+      "b": "f0_wallx_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_0_left",
+      "b": "f0_col_0_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_0_right",
+      "b": "f0_col_1_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_glass",
+      "b": "f0_wallx_1_0_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_left",
+      "b": "f0_wallx_1_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_left",
+      "b": "f0_wallx_1_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_glass",
+      "b": "f0_wallx_1_0_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_right",
+      "b": "f0_wallx_1_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_glass",
+      "b": "f0_wallx_1_0_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_glass",
+      "b": "f0_wallx_1_0_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_head",
+      "b": "f0_wallx_1_0_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_head",
+      "b": "f0_wallx_1_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_head",
+      "b": "f0_wallx_1_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_left",
+      "b": "f0_col_1_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_0_right",
+      "b": "f0_col_2_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_glass",
+      "b": "f0_wallx_0_2_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_left",
+      "b": "f0_wallx_0_2_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_left",
+      "b": "f0_wallx_0_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_glass",
+      "b": "f0_wallx_0_2_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_right",
+      "b": "f0_wallx_0_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_glass",
+      "b": "f0_wallx_0_2_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_glass",
+      "b": "f0_wallx_0_2_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_head",
+      "b": "f0_wallx_0_2_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_head",
+      "b": "f0_wallx_0_2_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_head",
+      "b": "f0_wallx_0_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_left",
+      "b": "f0_col_0_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_0_2_right",
+      "b": "f0_col_1_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_glass",
+      "b": "f0_wallx_1_2_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_left",
+      "b": "f0_wallx_1_2_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_left",
+      "b": "f0_wallx_1_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_glass",
+      "b": "f0_wallx_1_2_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_right",
+      "b": "f0_wallx_1_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_glass",
+      "b": "f0_wallx_1_2_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_glass",
+      "b": "f0_wallx_1_2_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_head",
+      "b": "f0_wallx_1_2_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_head",
+      "b": "f0_wallx_1_2_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_head",
+      "b": "f0_wallx_1_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_left",
+      "b": "f0_col_1_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallx_1_2_right",
+      "b": "f0_col_2_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_glass",
+      "b": "f0_wallz_0_0_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_left",
+      "b": "f0_wallz_0_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_left",
+      "b": "f0_wallz_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_glass",
+      "b": "f0_wallz_0_0_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_right",
+      "b": "f0_wallz_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_glass",
+      "b": "f0_wallz_0_0_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_glass",
+      "b": "f0_wallz_0_0_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_head",
+      "b": "f0_wallz_0_0_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_head",
+      "b": "f0_wallz_0_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_head",
+      "b": "f0_wallz_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_left",
+      "b": "f0_col_0_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_0_right",
+      "b": "f0_col_0_1",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_glass",
+      "b": "f0_wallz_0_1_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_left",
+      "b": "f0_wallz_0_1_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_left",
+      "b": "f0_wallz_0_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_glass",
+      "b": "f0_wallz_0_1_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_right",
+      "b": "f0_wallz_0_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_glass",
+      "b": "f0_wallz_0_1_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_glass",
+      "b": "f0_wallz_0_1_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_head",
+      "b": "f0_wallz_0_1_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_head",
+      "b": "f0_wallz_0_1_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_head",
+      "b": "f0_wallz_0_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_left",
+      "b": "f0_col_0_1",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_0_1_right",
+      "b": "f0_col_0_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_glass",
+      "b": "f0_wallz_2_0_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_left",
+      "b": "f0_wallz_2_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_left",
+      "b": "f0_wallz_2_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_glass",
+      "b": "f0_wallz_2_0_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_right",
+      "b": "f0_wallz_2_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_glass",
+      "b": "f0_wallz_2_0_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_glass",
+      "b": "f0_wallz_2_0_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_head",
+      "b": "f0_wallz_2_0_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_head",
+      "b": "f0_wallz_2_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_head",
+      "b": "f0_wallz_2_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_left",
+      "b": "f0_col_2_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_0_right",
+      "b": "f0_col_2_1",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_glass",
+      "b": "f0_wallz_2_1_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_left",
+      "b": "f0_wallz_2_1_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_left",
+      "b": "f0_wallz_2_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_glass",
+      "b": "f0_wallz_2_1_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_right",
+      "b": "f0_wallz_2_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_glass",
+      "b": "f0_wallz_2_1_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_glass",
+      "b": "f0_wallz_2_1_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_head",
+      "b": "f0_wallz_2_1_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_head",
+      "b": "f0_wallz_2_1_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_head",
+      "b": "f0_wallz_2_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_left",
+      "b": "f0_col_2_1",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_wallz_2_1_right",
+      "b": "f0_col_2_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f0_partition_0_1",
+      "b": "f0_col_0_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_partition_0_1",
+      "b": "f0_col_1_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_partition_1_1",
+      "b": "f0_col_1_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f0_partition_1_1",
+      "b": "f0_col_2_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_glass",
+      "b": "f1_wallx_0_0_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_left",
+      "b": "f1_wallx_0_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_left",
+      "b": "f1_wallx_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_glass",
+      "b": "f1_wallx_0_0_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_right",
+      "b": "f1_wallx_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_glass",
+      "b": "f1_wallx_0_0_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_glass",
+      "b": "f1_wallx_0_0_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_head",
+      "b": "f1_wallx_0_0_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_head",
+      "b": "f1_wallx_0_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_head",
+      "b": "f1_wallx_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_left",
+      "b": "f1_col_0_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_0_right",
+      "b": "f1_col_1_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_glass",
+      "b": "f1_wallx_1_0_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_left",
+      "b": "f1_wallx_1_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_left",
+      "b": "f1_wallx_1_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_glass",
+      "b": "f1_wallx_1_0_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_right",
+      "b": "f1_wallx_1_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_glass",
+      "b": "f1_wallx_1_0_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_glass",
+      "b": "f1_wallx_1_0_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_head",
+      "b": "f1_wallx_1_0_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_head",
+      "b": "f1_wallx_1_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_head",
+      "b": "f1_wallx_1_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_left",
+      "b": "f1_col_1_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_0_right",
+      "b": "f1_col_2_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_glass",
+      "b": "f1_wallx_0_2_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_left",
+      "b": "f1_wallx_0_2_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_left",
+      "b": "f1_wallx_0_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_glass",
+      "b": "f1_wallx_0_2_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_right",
+      "b": "f1_wallx_0_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_glass",
+      "b": "f1_wallx_0_2_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_glass",
+      "b": "f1_wallx_0_2_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_head",
+      "b": "f1_wallx_0_2_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_head",
+      "b": "f1_wallx_0_2_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_head",
+      "b": "f1_wallx_0_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_left",
+      "b": "f1_col_0_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_0_2_right",
+      "b": "f1_col_1_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_glass",
+      "b": "f1_wallx_1_2_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_left",
+      "b": "f1_wallx_1_2_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_left",
+      "b": "f1_wallx_1_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_glass",
+      "b": "f1_wallx_1_2_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_right",
+      "b": "f1_wallx_1_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_glass",
+      "b": "f1_wallx_1_2_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_glass",
+      "b": "f1_wallx_1_2_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_head",
+      "b": "f1_wallx_1_2_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_head",
+      "b": "f1_wallx_1_2_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_head",
+      "b": "f1_wallx_1_2_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_left",
+      "b": "f1_col_1_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallx_1_2_right",
+      "b": "f1_col_2_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_glass",
+      "b": "f1_wallz_0_0_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_left",
+      "b": "f1_wallz_0_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_left",
+      "b": "f1_wallz_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_glass",
+      "b": "f1_wallz_0_0_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_right",
+      "b": "f1_wallz_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_glass",
+      "b": "f1_wallz_0_0_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_glass",
+      "b": "f1_wallz_0_0_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_head",
+      "b": "f1_wallz_0_0_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_head",
+      "b": "f1_wallz_0_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_head",
+      "b": "f1_wallz_0_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_left",
+      "b": "f1_col_0_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_0_right",
+      "b": "f1_col_0_1",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_glass",
+      "b": "f1_wallz_0_1_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_left",
+      "b": "f1_wallz_0_1_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_left",
+      "b": "f1_wallz_0_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_glass",
+      "b": "f1_wallz_0_1_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_right",
+      "b": "f1_wallz_0_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_glass",
+      "b": "f1_wallz_0_1_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_glass",
+      "b": "f1_wallz_0_1_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_head",
+      "b": "f1_wallz_0_1_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_head",
+      "b": "f1_wallz_0_1_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_head",
+      "b": "f1_wallz_0_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_left",
+      "b": "f1_col_0_1",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_0_1_right",
+      "b": "f1_col_0_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_glass",
+      "b": "f1_wallz_2_0_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_left",
+      "b": "f1_wallz_2_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_left",
+      "b": "f1_wallz_2_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_glass",
+      "b": "f1_wallz_2_0_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_right",
+      "b": "f1_wallz_2_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_glass",
+      "b": "f1_wallz_2_0_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_glass",
+      "b": "f1_wallz_2_0_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_head",
+      "b": "f1_wallz_2_0_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_head",
+      "b": "f1_wallz_2_0_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_head",
+      "b": "f1_wallz_2_0_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_left",
+      "b": "f1_col_2_0",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_0_right",
+      "b": "f1_col_2_1",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_glass",
+      "b": "f1_wallz_2_1_left",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_left",
+      "b": "f1_wallz_2_1_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_left",
+      "b": "f1_wallz_2_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_glass",
+      "b": "f1_wallz_2_1_right",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_right",
+      "b": "f1_wallz_2_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_glass",
+      "b": "f1_wallz_2_1_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_glass",
+      "b": "f1_wallz_2_1_head",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_head",
+      "b": "f1_wallz_2_1_left",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_head",
+      "b": "f1_wallz_2_1_right",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_head",
+      "b": "f1_wallz_2_1_sill",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_left",
+      "b": "f1_col_2_1",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_wallz_2_1_right",
+      "b": "f1_col_2_2",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "f1_partition_0_1",
+      "b": "f1_col_0_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_partition_0_1",
+      "b": "f1_col_1_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_partition_1_1",
+      "b": "f1_col_1_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "f1_partition_1_1",
+      "b": "f1_col_2_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "parapet_w",
+      "b": "parapet_s",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "parapet_w",
+      "b": "parapet_n",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "parapet_e",
+      "b": "parapet_s",
+      "kind": "mortar_joint",
+      "interface_material": null
+    },
+    {
+      "a": "parapet_e",
+      "b": "parapet_n",
+      "kind": "mortar_joint",
+      "interface_material": null
+    }
+  ],
+  "ground_height": 0.0
+}

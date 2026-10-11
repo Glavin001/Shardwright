@@ -1,0 +1,17 @@
+[package]
+name = "frac-geom"
+description = "Exact predicates, convex polyhedra, polygon and polyhedral integrals, BVH, winding numbers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+glam.workspace = true
+serde.workspace = true
+smallvec.workspace = true
+libm.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true

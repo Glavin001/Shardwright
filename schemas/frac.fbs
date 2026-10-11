@@ -1,0 +1,160 @@
+// Shardwright physics payload (.fracphys), spec §6.2 / §12.
+//
+// All positions are in the asset frame (meters, right-handed, +Y up), f32.
+// Fragments are sorted by (level, id) with fragments[i].id == i; bonds are
+// sorted by (level, a, b). Ranges (`*_begin`/`*_count`) index into the
+// corresponding top-level Asset vectors:
+//   Fragment.child_begin/count  -> Asset.fragments (children are contiguous)
+//   Fragment.hull_begin/count   -> Asset.hulls / Asset.hull_faces (parallel)
+//   Fragment.cell_begin/count   -> the hierarchy cell order (contiguous cells)
+//   Bond.child_begin/count      -> Asset.bond_children (bond ids; bonds sorted
+//                                  by (level, a, b) cannot keep each parent's
+//                                  children contiguous)
+//   Bond.loop_begin/count       -> Asset.loops
+//   Bond.spawn_begin/count      -> Asset.spawn
+//
+// Deviation from the design sketch: flatc does not allow fixed-size arrays
+// as table fields, so `Bond.extent_half` (sketched as `[float:2]`) is the
+// struct `Vec2`. Fields added beyond the sketch are appended at the END of
+// their tables (schema-evolution safe): Hull.fragment, Bond.interface_count,
+// Asset.bond_children.
+
+namespace frac;
+
+file_identifier "FRAC";
+file_extension "fracphys";
+
+struct Vec2 { x: float; y: float; }
+struct Vec3 { x: float; y: float; z: float; }
+/// Row-major 3x3 matrix: m[3*row + col].
+struct Mat3 { m: [float:9]; }
+
+/// Convex hull vertices (asset frame).
+table Hull {
+  vertices: [Vec3];
+  /// Owning fragment id (appended field).
+  fragment: uint32;
+}
+
+/// Polygon faces of the parallel `Hull` (CCW outward). `indices` is the
+/// concatenation of all faces; `face_sizes[k]` is the vertex count of face k.
+table HullFaces {
+  indices: [uint32];
+  face_sizes: [uint8];
+}
+
+table Fragment {
+  id: uint32;
+  level: uint8;
+  /// Parent fragment id, -1 for level-0 roots.
+  parent: int32 = -1;
+  child_begin: uint32;
+  child_count: uint32;
+  mass: float;
+  /// Center of mass (asset frame).
+  com: Vec3;
+  /// Inertia tensor about the center of mass, asset-frame axes.
+  inertia: Mat3;
+  /// Material mix: parallel arrays of material ids and mass fractions.
+  material_ids: [uint16];
+  material_fracs: [float];
+  hull_begin: uint32;
+  hull_count: uint16;
+  particle_candidate: bool;
+  /// ComponentRole (0 generic, 1 column, 2 beam, 3 slab, 4 wall,
+  /// 5 connection, 6 cosmetic, 7 prop, 8 glazing).
+  role: uint8;
+  /// glTF node index of this fragment in the render payload, -1 if none.
+  gltf_node: int32 = -1;
+  volume: float;
+  interior_area: float;
+  component: uint32;
+  cell_begin: uint32;
+  cell_count: uint32;
+}
+
+table BondComposition {
+  /// InterfaceKind (0 monolithic, 1 mortar_joint, 2 weld, 3 bolted,
+  /// 4 cold_joint, 5 grain_boundary, 6 adhesive, 7 component_connection,
+  /// 8 anchor, 9 bearing).
+  kind: uint8;
+  /// Interface material id, -1 if none.
+  interface_material: int32 = -1;
+  /// Area fraction of the bond with this composition.
+  fraction: float;
+}
+
+table Bond {
+  id: uint32;
+  level: uint8;
+  a: uint32;
+  /// Fragment B, or -1 for a world anchor.
+  b: int32;
+  area: float;
+  centroid: Vec3;
+  /// Unit normal oriented from A to B.
+  normal: Vec3;
+  planarity: float;
+  frame_u: Vec3;
+  frame_v: Vec3;
+  /// Second moments of area about the centroid in the (u, v) frame, and the
+  /// polar moment j = i_uu + i_vv.
+  i_uu: float;
+  i_vv: float;
+  i_uv: float;
+  j: float;
+  /// In-plane oriented extent rectangle (center + half sizes along frame
+  /// axes).
+  extent_center: Vec3;
+  extent_half: Vec2;
+  dist_a: float;
+  dist_b: float;
+  composition: [BondComposition];
+  rebar_count: uint16;
+  rebar_area: float;
+  /// Unit rebar direction (zero when no rebar).
+  rebar_dir: Vec3;
+  strength_scale: float;
+  /// Parent bond id at the coarser level, -1 if none.
+  parent_bond: int32 = -1;
+  child_begin: uint32;
+  child_count: uint32;
+  loop_begin: uint32;
+  loop_count: uint16;
+  spawn_begin: uint32;
+  spawn_count: uint32;
+  anchor: bool;
+  /// Number of fine cell interfaces aggregated into this bond (appended).
+  interface_count: uint32;
+}
+
+/// Closed boundary loop of a bond interface (asset frame).
+table Loop {
+  points: [Vec3];
+}
+
+struct SpawnPoint { p: Vec3; n: Vec3; }
+
+table Asset {
+  schema_version: uint16;
+  tool_version: string;
+  settings_hash: string;
+  seed: uint64;
+  material_library_id: string;
+  material_library_version: string;
+  fragments: [Fragment];
+  bonds: [Bond];
+  hulls: [Hull];
+  hull_faces: [HullFaces];
+  loops: [Loop];
+  levels: uint8;
+  spawn: [SpawnPoint];
+  name: string;
+  variant: uint32;
+  level_fragment_begin: [uint32];
+  level_fragment_count: [uint32];
+  /// Child bond ids; Bond.child_begin/child_count index into this (appended).
+  bond_children: [uint32];
+}
+
+root_type Asset;

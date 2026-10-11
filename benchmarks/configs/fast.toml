@@ -1,0 +1,4 @@
+# Fast iteration config: fracture modes disabled (agglomeration fallback).
+seed = 1337
+[modes]
+enabled = false
