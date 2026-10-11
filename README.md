@@ -61,7 +61,18 @@ three levels (components, structural fragments, chunks), one fine cell per
 analysis cell so every chunk is an exact convex Voronoi cell (one hull,
 planar bonds), plus `[debris] pieces` cosmetic convex pieces per chunk with
 no bonds (`prefracture preview --debris`). On the two-storey building:
-11,270 chunks at 1.01 hulls each and 90,193 debris pieces, 64 s, 1.2 GB. `ablation_geometric.toml` and
+11,270 chunks at 1.01 hulls each and 90,193 debris pieces, 64 s, 1.2 GB.
+`support_clusters.toml` is the recommended support-graph layout: four
+levels, with L2 as the stress solver's chunks and bonds. L2 clusters each
+Level-1 fragment's 0.3 m convex cells into chunks about 0.5 m across
+(`[hierarchy] level2_extent`), so small fragments stay one chunk, floors are
+split by footprint and masonry forms brick clusters; the L3 cells under each
+chunk are its convex debris. Chunk bonds on Level-1 cuts and component
+joints are weakened by the Weibull size effect (`[bonds] size_effect`) and a
+configurable bias (`boundary_factors = [L0 joints, L1 cuts]`, default
+`[0.5, 0.4]`) so the solver breaks along the predefined boundaries first;
+`prefracture preview --bonds weakening` shows the result. On the two-storey
+building: 48 → 618 → 1,182 chunks (3.1 hulls each) → 6,860 cells, 44 s. `ablation_geometric.toml` and
 `ablation_fallback.toml` are the M3 ablations.
 
 ## Performance
