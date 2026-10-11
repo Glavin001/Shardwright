@@ -416,6 +416,14 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
         write_asset(dir, "rc_viaduct", from_building(parts), conns, Some(0.0))?;
         let (parts, conns) = Tree::default().build();
         write_asset(dir, "tree", from_building(parts), conns, Some(0.0))?;
+        let (parts, conns) = Tree {
+            family: TreeFamily::Conifer,
+            seed: 7,
+        }
+        .build();
+        write_asset(dir, "conifer", from_building(parts), conns, Some(0.0))?;
+        let (parts, conns) = SteelOffice::default().build();
+        write_asset(dir, "steel_office", from_building(parts), conns, Some(-0.4))?;
     }
     // held-out set (never tuned on)
     let held = dir.join("held_out");

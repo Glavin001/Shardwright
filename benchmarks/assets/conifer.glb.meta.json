@@ -1,0 +1,1432 @@
+{
+  "parts": {
+    "b10_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.376509666986654,
+        0.17890048826574678,
+        -0.9089747444037577
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b10_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.26872199378253675,
+        0.07882438234499392,
+        -0.9599870867909989
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b11_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.9089747444037576,
+        0.17890048826574673,
+        0.37650966698665367
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b11_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.9431677595525809,
+        0.07960477171818875,
+        0.3226416861787393
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b12_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.37650966698665367,
+        0.17890048826574673,
+        0.9089747444037576
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b12_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.2887524938034899,
+        0.07603562834708573,
+        0.9543796836396559
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b20_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.9089747444037576,
+        0.17890048826574675,
+        0.3765096669866539
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b20_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.8722512295923998,
+        0.08250628305098556,
+        0.48204824004621954
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b21_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.9089747444037576,
+        0.17890048826574673,
+        0.37650966698665417
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b21_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.9414760829010826,
+        0.07305264346378215,
+        0.32906852874163955
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b22_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.3765096669866542,
+        0.17890048826574673,
+        -0.9089747444037576
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b22_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.33345594315010596,
+        0.0748252264408128,
+        -0.939791636197064
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b30_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.9089747444037576,
+        0.17890048826574678,
+        0.3765096669866541
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b30_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.8516718306331899,
+        0.0847960099895485,
+        0.5171699233286517
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b31_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.37650966698665406,
+        0.17890048826574678,
+        -0.9089747444037576
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b31_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.5115347192571051,
+        0.08334043466257385,
+        -0.8552114375666452
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b32_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.9089747444037576,
+        0.17890048826574675,
+        0.3765096669866537
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b32_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.9073842286541985,
+        0.07159556628263382,
+        0.41415931291991265
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b40_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.3765096669866539,
+        0.17890048826574675,
+        -0.9089747444037578
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b40_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.4188862147091527,
+        0.0778262977285412,
+        -0.9046974115738955
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b41_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.37650966698665406,
+        0.17890048826574675,
+        0.9089747444037576
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b41_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.3061045701932331,
+        0.08656049319618085,
+        0.9480544673827819
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b42_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.9089747444037575,
+        0.17890048826574675,
+        0.37650966698665417
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b42_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.885706397062561,
+        0.07568699231428165,
+        0.4580345591730767
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b50_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.376509666986654,
+        0.17890048826574675,
+        0.9089747444037576
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b50_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.2767361463515795,
+        0.07350679441140691,
+        0.9581303963855006
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b51_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.9089747444037576,
+        0.17890048826574673,
+        -0.37650966698665395
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b51_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.9472844595508003,
+        0.08649881074294971,
+        -0.3084965290462821
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b52_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.37650966698665395,
+        0.17890048826574675,
+        -0.9089747444037577
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b52_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.5219046493882885,
+        0.08470982084526106,
+        -0.848787242599258
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b60_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.9089747444037577,
+        0.17890048826574678,
+        -0.376509666986654
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b60_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.9539558499992125,
+        0.07575579622080626,
+        -0.29022283781817015
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b61_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.9089747444037576,
+        0.17890048826574675,
+        -0.3765096669866541
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b61_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.9134733487457732,
+        0.08723626114090689,
+        -0.39743713449215945
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b62_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.3765096669866541,
+        0.17890048826574675,
+        0.9089747444037576
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b62_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.38536811232755586,
+        0.08634568009551667,
+        0.9187142327894671
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b70_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.9089747444037577,
+        0.17890048826574678,
+        -0.3765096669866541
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b70_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.948432531825976,
+        0.09238432485987136,
+        -0.3032175276832708
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b71_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.3765096669866539,
+        0.17890048826574678,
+        0.9089747444037577
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b71_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.3575985739956899,
+        0.0848217330502703,
+        0.9300153404533701
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b72_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.9089747444037577,
+        0.17890048826574678,
+        -0.376509666986654
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "b72_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.9596738932715233,
+        0.08069808907334035,
+        -0.26928393378177684
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "leader_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "leader_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.09060326005904067,
+        0.9955748357251888,
+        0.02493583239912726
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "root": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "trunk_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "trunk_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "trunk_2": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "trunk_3": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "trunk_4": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "trunk_5": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "trunk_6": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "trunk_7": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    }
+  },
+  "connections": [
+    {
+      "a": "root",
+      "b": "trunk_0",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_0",
+      "b": "trunk_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_1",
+      "b": "b10_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b10_0",
+      "b": "b10_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_1",
+      "b": "b11_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b11_0",
+      "b": "b11_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_1",
+      "b": "b12_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b12_0",
+      "b": "b12_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_1",
+      "b": "trunk_2",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_2",
+      "b": "b20_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b20_0",
+      "b": "b20_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_2",
+      "b": "b21_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b21_0",
+      "b": "b21_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_2",
+      "b": "b22_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b22_0",
+      "b": "b22_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_2",
+      "b": "trunk_3",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_3",
+      "b": "b30_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b30_0",
+      "b": "b30_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_3",
+      "b": "b31_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b31_0",
+      "b": "b31_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_3",
+      "b": "b32_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b32_0",
+      "b": "b32_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_3",
+      "b": "trunk_4",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_4",
+      "b": "b40_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b40_0",
+      "b": "b40_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_4",
+      "b": "b41_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b41_0",
+      "b": "b41_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_4",
+      "b": "b42_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b42_0",
+      "b": "b42_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_4",
+      "b": "trunk_5",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_5",
+      "b": "b50_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b50_0",
+      "b": "b50_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_5",
+      "b": "b51_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b51_0",
+      "b": "b51_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_5",
+      "b": "b52_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b52_0",
+      "b": "b52_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_5",
+      "b": "trunk_6",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_6",
+      "b": "b60_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b60_0",
+      "b": "b60_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_6",
+      "b": "b61_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b61_0",
+      "b": "b61_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_6",
+      "b": "b62_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b62_0",
+      "b": "b62_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_6",
+      "b": "trunk_7",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_7",
+      "b": "b70_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b70_0",
+      "b": "b70_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_7",
+      "b": "b71_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b71_0",
+      "b": "b71_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_7",
+      "b": "b72_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "b72_0",
+      "b": "b72_1",
+      "kind": "monolithic",
+      "interface_material": null
+    },
+    {
+      "a": "trunk_7",
+      "b": "leader_0",
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
+    },
+    {
+      "a": "leader_0",
+      "b": "leader_1",
+      "kind": "monolithic",
+      "interface_material": null
+    }
+  ],
+  "ground_height": 0.0
+}

@@ -29,8 +29,8 @@ Tier 0 exact-answer tests:
 * Structural gates on built structures (`crates/frac-cli/src/structures.rs`).
   A voussoir arch with no-tension lime joints must stand as a catenary at
   t/R = 0.1. The same voussoirs as a semicircle must fail `self_weight` by
-  overturning at the crown. The truss bridge, veneer house, viaduct and
-  tree must pass `structural_support` and `self_weight`.
+  overturning at the crown. The truss bridge, veneer house, steel office,
+  viaduct and both trees must pass `structural_support` and `self_weight`.
 * Pattern-library tests.
 
 Tier 0 differential tests: Voro++ (frozen outputs in

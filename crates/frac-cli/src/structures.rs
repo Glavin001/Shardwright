@@ -98,26 +98,34 @@ fn prism_zy(poly: &[[f64; 2]], x0: f64, x1: f64) -> TriMesh {
     reorient(&prism(poly, x0, x1), |p| DVec3::new(p.z, p.y, p.x), true)
 }
 
-/// Oblique frustum between two horizontal regular n-gons (same phase), so
-/// stacked segments share their end faces exactly.
-fn loft(c0: DVec3, r0: f64, c1: DVec3, r1: f64, n: usize) -> TriMesh {
-    let mut verts = Vec::with_capacity(2 * n);
-    for (c, r) in [(c0, r0), (c1, r1)] {
-        for i in 0..n {
-            let a = std::f64::consts::TAU * i as f64 / n as f64;
-            verts.push(c + DVec3::new(r * a.cos(), 0.0, r * a.sin()));
-        }
-    }
-    let n32 = n as u32;
+/// Regular polygon in the plane through `c` with normal `n`; `u` fixes the
+/// phase (it is projected into the plane).
+fn ring(c: DVec3, n: DVec3, r: f64, u: DVec3, sides: usize) -> Vec<DVec3> {
+    let n = n.normalize();
+    let u = (u - n * u.dot(n)).normalize();
+    let v = n.cross(u);
+    (0..sides)
+        .map(|i| {
+            let a = std::f64::consts::TAU * i as f64 / sides as f64;
+            c + (u * a.cos() + v * a.sin()) * r
+        })
+        .collect()
+}
+
+/// Closed solid between two planar rings with matching vertex order, so
+/// consecutive segments share their joint polygon exactly.
+fn frustum(a: &[DVec3], b: &[DVec3]) -> TriMesh {
+    let n = a.len() as u32;
+    let verts: Vec<DVec3> = a.iter().chain(b).copied().collect();
     let mut tris = Vec::new();
-    for i in 1..n32 - 1 {
+    for i in 1..n - 1 {
         tris.push([0, i + 1, i]);
-        tris.push([n32, n32 + i, n32 + i + 1]);
+        tris.push([n, n + i, n + i + 1]);
     }
-    for i in 0..n32 {
-        let (a, b) = (i, (i + 1) % n32);
-        tris.push([a, b, b + n32]);
-        tris.push([a, b + n32, a + n32]);
+    for i in 0..n {
+        let (a, b) = (i, (i + 1) % n);
+        tris.push([a, b, b + n]);
+        tris.push([a, b + n, a + n]);
     }
     let m = TriMesh { verts, tris };
     if m.signed_volume() < 0.0 {
@@ -736,6 +744,19 @@ impl VeneerHouse {
             "concrete_c30",
             "slab",
         )));
+        // roof geometry: joist depth, then the rafter line, which the gables
+        // follow
+        let jd = 0.19;
+        let th = self.pitch_deg.to_radians();
+        let (yj, z0, seat) = (h + jd, BRICK + SET_BACK, 0.15);
+        let ridge = 0.045;
+        let zr = 0.5 * lz - 0.5 * ridge;
+        let hv = 0.14 / th.cos(); // vertical depth of a 140 mm rafter
+        let h0 = hv - seat * th.tan();
+        let y_bot = |z: f64| yj + (z - z0 - seat) * th.tan();
+        let y_top = |z: f64| yj + h0 + (z - z0) * th.tan();
+        // roof line over the side walls (the underside of the sheathing)
+        let roof_line = |u: f64| y_top(u.min(lz - u).min(zr));
         // (name, along x, outward normal sign, wall plane offset)
         let walls = [
             ("front", true, 0.0, 1.0),
@@ -759,9 +780,22 @@ impl VeneerHouse {
             let ops = &self.openings[wi];
             // brick skin with lintel slots, and the precast lintels
             let (bu0, bu1) = (inset, span - inset);
+            let mut loops = wall_loops(bu0, bu1, h, ops, true);
+            if !along_x {
+                // gable: the side skins rise to the roof line under the
+                // sheathing (outer loop ends [.., (bu1, h), (bu0, h)])
+                let outer = &mut loops[0];
+                outer.truncate(outer.len() - 2);
+                outer.extend([
+                    [bu1, roof_line(bu1)],
+                    [lz - zr, roof_line(zr)],
+                    [zr, roof_line(zr)],
+                    [bu0, roof_line(bu0)],
+                ]);
+            }
             let mut skin = bpart(
                 format!("{wname}_brick"),
-                wf.panel(&wall_loops(bu0, bu1, h, ops, true), d_brick),
+                wf.panel(&loops, d_brick),
                 "brick_clay",
                 "wall",
             );
@@ -784,13 +818,29 @@ impl VeneerHouse {
                     "concrete_c30",
                     "wall",
                 ));
+                let mid = 0.5 * (d_frame[0] + d_frame[1]);
                 if o.sill > 0.0 {
-                    let mid = 0.5 * (d_frame[0] + d_frame[1]);
                     parts.push(bpart(
                         format!("{wname}_glass_{k}"),
                         wf.cuboid([o.a, o.b], [o.sill, o.head], [mid - 0.003, mid + 0.003]),
                         "glass_annealed",
                         "glazing",
+                    ));
+                } else {
+                    // door leaf hung on the hinge-side jack, clear of the
+                    // floor, head and latch jack
+                    parts.push(grain(
+                        bpart(
+                            format!("{wname}_door_{k}"),
+                            wf.cuboid(
+                                [o.a, o.b - 0.01],
+                                [0.01, o.head - 0.005],
+                                [mid - 0.02, mid + 0.02],
+                            ),
+                            "pine",
+                            "prop",
+                        ),
+                        DVec3::Y,
                     ));
                 }
             }
@@ -837,7 +887,6 @@ impl VeneerHouse {
         }
         // ceiling joists across the short span, bearing on the front and
         // back top plates
-        let jd = 0.19;
         let mut xs = Vec::new();
         let mut x = 0.3;
         while x + STUD <= lx - 0.3 + 1e-9 {
@@ -862,14 +911,6 @@ impl VeneerHouse {
             ));
         }
         // rafters seated on the joists, plumb-cut against the ridge board
-        let th = self.pitch_deg.to_radians();
-        let (yj, z0, seat) = (h + jd, BRICK + SET_BACK, 0.15);
-        let ridge = 0.045;
-        let zr = 0.5 * lz - 0.5 * ridge;
-        let hv = 0.14 / th.cos(); // vertical depth of a 140 mm rafter
-        let h0 = hv - seat * th.tan();
-        let y_bot = |z: f64| yj + (z - z0 - seat) * th.tan();
-        let y_top = |z: f64| yj + h0 + (z - z0) * th.tan();
         let rafter = [
             [z0, yj],
             [z0 + seat, yj],
@@ -915,16 +956,36 @@ impl VeneerHouse {
         ));
         // roof sheathing on the rafter backs
         let tv = 0.018 / th.cos();
+        // with eaves past the walls and verges past the gables
+        let (eave, verge) = (-0.35, 0.3);
         let sheet = [
-            [z0, y_top(z0)],
+            [eave, y_top(eave)],
             [zr, y_top(zr)],
             [zr, y_top(zr) + tv],
-            [z0, y_top(z0) + tv],
+            [eave, y_top(eave) + tv],
         ];
         for (name, poly) in [("roof_f", sheet.to_vec()), ("roof_b", mirror(&sheet))] {
             parts.push(grain(
-                bpart(name, prism_zy(&poly, 0.0, lx), "pine", "slab"),
+                bpart(name, prism_zy(&poly, -verge, lx + verge), "pine", "slab"),
                 DVec3::X,
+            ));
+        }
+        // plasterboard ceiling screwed to the joists, sheets jointed on the
+        // joist centre lines (a sheet edge on a joist is also what lets
+        // ingest find the contact: see the joist ends above)
+        let c0 = BRICK + FRAME + LINING;
+        let mut edges = vec![c0];
+        edges.extend(xs.iter().map(|x| x + 0.5 * STUD));
+        edges.push(lx - c0);
+        for (k, e) in edges.windows(2).enumerate() {
+            parts.push(bpart(
+                format!("ceiling_{k}"),
+                box_at(
+                    DVec3::new(e[0], h - LINING, c0),
+                    DVec3::new(e[1], h, lz - c0),
+                ),
+                "drywall",
+                "cosmetic",
             ));
         }
         let conns = auto_conns(&parts, |a, b| {
@@ -1108,122 +1169,495 @@ impl RcViaduct {
 }
 
 // ---------------------------------------------------------------------------
-// 5. Tree
+// 5. Trees
 
-/// Fracturable tree: a buried root flare, a tapered octagonal trunk in
-/// segments, and limbs (a branch collar plus oblique segments) seated on
-/// the trunk top. All pine with the grain along each segment, so a trunk
-/// cut releases the whole crown.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TreeFamily {
+    /// Short trunk, a forking leader and forking limbs from its upper
+    /// segments.
+    Broadleaf,
+    /// Tall tapering trunk with whorls of short drooping branches that
+    /// shorten towards the top.
+    Conifer,
+}
+
+/// Fracturable tree. The trunk is a stack of tapered octagonal segments;
+/// branches grow out of the trunk's flat side faces (the joint polygon lies
+/// in the face), curve, and fork on their end faces, every segment pine
+/// with the grain along it. Where a limb meets its parent the bond is a
+/// branch union, well below clear wood, so a crown sheds at its forks and
+/// a trunk cut drops everything above.
 #[derive(Clone, Debug)]
 pub struct Tree {
+    pub family: TreeFamily,
     pub seed: u64,
-    pub trunk_segments: usize,
-    pub trunk_height: f64,
-    pub trunk_radius: [f64; 2],
-    pub limbs: usize,
-    pub limb_segments: usize,
 }
 
 impl Default for Tree {
     fn default() -> Self {
         Tree {
+            family: TreeFamily::Broadleaf,
             seed: 7,
-            trunk_segments: 4,
-            trunk_height: 4.0,
-            trunk_radius: [0.32, 0.27],
-            limbs: 3,
-            limb_segments: 3,
+        }
+    }
+}
+
+const SIDES: usize = 8;
+const MIN_TWIG: f64 = 0.015;
+
+struct Lcg(u64);
+
+impl Lcg {
+    fn next(&mut self) -> f64 {
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        (self.0 >> 11) as f64 / (1u64 << 53) as f64
+    }
+    /// Uniform in [-1, 1).
+    fn signed(&mut self) -> f64 {
+        2.0 * self.next() - 1.0
+    }
+}
+
+/// How a branch grows from its base ring.
+#[derive(Clone, Copy)]
+struct Growth {
+    length: f64,
+    segments: usize,
+    /// Upward bend per segment (negative droops).
+    bend: f64,
+    taper: f64,
+    /// Fork generations left.
+    forks: usize,
+    /// Sideways splay of the two fork children.
+    splay: f64,
+}
+
+struct TreeBuilder {
+    parts: Vec<BuildingPart>,
+    conns: Vec<ConnectionSpec>,
+    rng: Lcg,
+}
+
+impl TreeBuilder {
+    fn wood(&mut self, name: String, a: &[DVec3], b: &[DVec3], axis: DVec3) {
+        self.parts
+            .push(grain(bpart(name, frustum(a, b), "pine", "generic"), axis));
+    }
+
+    fn union(&mut self, parent: &str, child: &str) {
+        self.conns
+            .push(conn(parent, child, "grain_boundary", Some("branch_union")));
+    }
+
+    fn solid(&mut self, a: &str, b: &str) {
+        self.conns.push(conn(a, b, "monolithic", None));
+    }
+
+    /// Grow a branch from `base` (a ring in its parent's face, centre `c`,
+    /// face normal `n`, radius `r`) along `dir`, then fork.
+    #[allow(clippy::too_many_arguments)]
+    fn branch(
+        &mut self,
+        name: &str,
+        parent: &str,
+        base: Vec<DVec3>,
+        mut c: DVec3,
+        n: DVec3,
+        mut r: f64,
+        mut dir: DVec3,
+        g: Growth,
+    ) {
+        let seg_len = g.length / g.segments as f64;
+        let mut ring_a = base;
+        let mut prev = parent.to_string();
+        let mut plane = n;
+        for s in 0..g.segments {
+            let jitter = DVec3::new(self.rng.signed(), 0.0, self.rng.signed()) * 0.12;
+            let next = (dir + DVec3::Y * g.bend + jitter).normalize();
+            let c1 = c + dir * seg_len;
+            let last = s + 1 == g.segments;
+            // joint plane bisects the two segment axes; the tip is square
+            let n1 = if last { dir } else { (dir + next).normalize() };
+            // tips no finer than 15 mm: thinner slivers make degenerate cells
+            let r1 = (r * g.taper).max(MIN_TWIG.min(r));
+            let ring_b = ring(c1, n1, r1, ring_a[0] - c, SIDES);
+            let part = format!("{name}_{s}");
+            self.wood(part.clone(), &ring_a, &ring_b, dir);
+            if s == 0 {
+                self.union(&prev, &part);
+            } else {
+                self.solid(&prev, &part);
+            }
+            prev = part;
+            ring_a = ring_b;
+            c = c1;
+            r = r1;
+            plane = n1;
+            if !last {
+                dir = next;
+            }
+        }
+        // fork on the tip face: two children side by side inside it
+        let rc = 0.42 * r;
+        if g.forks == 0 || rc < 0.02 {
+            return;
+        }
+        let spin = self.rng.next() * std::f64::consts::TAU;
+        let (u, v) = {
+            let u = (DVec3::Y - plane * plane.y).normalize_or(DVec3::X);
+            (u, plane.cross(u))
+        };
+        let w = u * spin.cos() + v * spin.sin();
+        let child = Growth {
+            length: g.length * 0.7,
+            segments: g.segments.max(2) - usize::from(g.segments > 2),
+            forks: g.forks - 1,
+            ..g
+        };
+        for (k, side) in [1.0, -1.0].into_iter().enumerate() {
+            let cc = c + w * side * 0.48 * r;
+            let base = ring(cc, plane, rc, ring_a[0] - c, SIDES);
+            let d = (dir + w * side * g.splay).normalize();
+            self.branch(
+                &format!("{name}{}", ["a", "b"][k]),
+                &prev,
+                base,
+                cc,
+                plane,
+                rc,
+                d,
+                child,
+            );
         }
     }
 }
 
 impl Tree {
     pub fn build(&self) -> (Vec<BuildingPart>, Vec<ConnectionSpec>) {
-        let sides = 8;
-        let mut rng = self
-            .seed
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        let mut rand = move || {
-            rng = rng
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
-            (rng >> 11) as f64 / (1u64 << 53) as f64
+        let mut t = TreeBuilder {
+            parts: Vec::new(),
+            conns: Vec::new(),
+            rng: Lcg(self.seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1),
         };
-        let wood =
-            |name: String, m: TriMesh, axis: DVec3| grain(bpart(name, m, "pine", "generic"), axis);
-        let mut parts = Vec::new();
-        let [r0, r1] = self.trunk_radius;
+        let conifer = self.family == TreeFamily::Conifer;
+        // (segments, segment height, base radius, top radius)
+        let (ns, sh, r0, r1) = if conifer {
+            (8, 0.8, 0.3, 0.08)
+        } else {
+            (3, 1.0, 0.34, 0.26)
+        };
+        let rad = |i: usize| r0 + (r1 - r0) * i as f64 / ns as f64;
         let root_h = 0.4;
-        parts.push(anchored(wood(
-            "root".into(),
-            loft(
-                DVec3::ZERO,
-                1.5 * r0,
-                DVec3::new(0.0, root_h, 0.0),
-                r0,
-                sides,
+        let hring = |y: f64, r: f64| ring(DVec3::new(0.0, y, 0.0), DVec3::Y, r, DVec3::X, SIDES);
+        let root = anchored(grain(
+            bpart(
+                "root",
+                frustum(&hring(0.0, 1.5 * r0), &hring(root_h, r0)),
+                "pine",
+                "generic",
             ),
             DVec3::Y,
-        )));
-        let seg = self.trunk_height / self.trunk_segments as f64;
-        for i in 0..self.trunk_segments {
-            let f = |k: usize| k as f64 / self.trunk_segments as f64;
-            let (ya, yb) = (root_h + i as f64 * seg, root_h + (i + 1) as f64 * seg);
-            parts.push(wood(
-                format!("trunk_{i}"),
-                loft(
-                    DVec3::new(0.0, ya, 0.0),
-                    r0 + (r1 - r0) * f(i),
-                    DVec3::new(0.0, yb, 0.0),
-                    r0 + (r1 - r0) * f(i + 1),
-                    sides,
-                ),
-                DVec3::Y,
-            ));
-        }
-        // limbs seated side by side on the trunk top: centres at 0.475 r1,
-        // collar radius 0.4 r1 keeps them disjoint and inside the octagon
-        let y_top = root_h + self.trunk_height;
-        let phase = rand() * std::f64::consts::TAU;
-        for l in 0..self.limbs {
-            let az = phase + std::f64::consts::TAU * l as f64 / self.limbs as f64;
-            let dir = DVec3::new(az.cos(), 0.0, az.sin());
-            let mut c = DVec3::new(0.0, y_top, 0.0) + dir * 0.475 * r1;
-            let mut r = 0.4 * r1;
-            let collar = c + DVec3::new(0.0, 0.15, 0.0) + dir * 0.03;
-            let rc = 0.9 * r;
-            parts.push(wood(
-                format!("limb_{l}_collar"),
-                loft(c, r, collar, rc, sides),
-                collar - c,
-            ));
-            c = collar;
-            r = rc;
-            let spread = 0.35 + 0.25 * rand();
-            for s in 0..self.limb_segments {
-                let rise = 0.8 + 0.3 * rand();
-                let next = c + DVec3::new(0.0, rise, 0.0) + dir * spread * (1.0 + s as f64 * 0.6);
-                let rn = r * 0.85;
-                parts.push(wood(
-                    format!("limb_{l}_{s}"),
-                    loft(c, r, next, rn, sides),
-                    next - c,
-                ));
-                c = next;
-                r = rn;
+        ));
+        t.parts.push(root);
+        let mut below = "root".to_string();
+        let phase = t.rng.next();
+        for i in 0..ns {
+            let (ya, yb) = (root_h + i as f64 * sh, root_h + (i + 1) as f64 * sh);
+            let (ra, rb) = (hring(ya, rad(i)), hring(yb, rad(i + 1)));
+            let name = format!("trunk_{i}");
+            t.wood(name.clone(), &ra, &rb, DVec3::Y);
+            t.solid(&below, &name);
+            below = name.clone();
+            // side branches from the trunk faces, in a spiral
+            let faces: &[usize] = if conifer {
+                if i == 0 { &[] } else { &[0, 3, 5] }
+            } else if i == 0 {
+                &[]
+            } else {
+                &[0, 3, 5]
+            };
+            for (j, &f0) in faces.iter().enumerate() {
+                let k = (f0 + 3 * i + (phase * 8.0) as usize) % SIDES;
+                let (p, q) = (ra[k], ra[(k + 1) % SIDES]);
+                let (p2, q2) = (rb[k], rb[(k + 1) % SIDES]);
+                let fc = (p + q + p2 + q2) * 0.25;
+                let mut fnrm = (q - p).cross(p2 - p).normalize();
+                if fnrm.dot(DVec3::new(fc.x, 0.0, fc.z)) < 0.0 {
+                    fnrm = -fnrm;
+                }
+                let rb_ = 0.4 * (q2 - p2).length();
+                if rb_ < 0.02 {
+                    continue;
+                }
+                let base = ring(fc, fnrm, rb_, DVec3::Y, SIDES);
+                let height = i as f64 / ns as f64;
+                let g = if conifer {
+                    Growth {
+                        length: 0.5 + 2.2 * (1.0 - height),
+                        segments: 2,
+                        bend: -0.1,
+                        taper: 0.65,
+                        forks: 0,
+                        splay: 0.0,
+                    }
+                } else {
+                    Growth {
+                        length: 1.6,
+                        segments: 2,
+                        bend: 0.45,
+                        taper: 0.85,
+                        forks: 1,
+                        splay: 0.6,
+                    }
+                };
+                let up = if conifer { 0.15 } else { 0.5 };
+                let dir = (fnrm + DVec3::Y * up).normalize();
+                t.branch(&format!("b{i}{j}"), &name, base, fc, fnrm, rb_, dir, g);
             }
         }
-        // the trunk is one piece of wood cut into segments; limbs are
-        // weaker at their union with the trunk, so the crown sheds there
+        // leader from the trunk top
+        let y_top = root_h + ns as f64 * sh;
+        let rl = 0.75 * r1;
+        let c = DVec3::new(0.0, y_top, 0.0);
+        let base = ring(c, DVec3::Y, rl, DVec3::X, SIDES);
+        let g = if conifer {
+            Growth {
+                length: 1.2,
+                segments: 2,
+                bend: 0.0,
+                taper: 0.5,
+                forks: 0,
+                splay: 0.0,
+            }
+        } else {
+            Growth {
+                length: 1.6,
+                segments: 2,
+                bend: 0.3,
+                taper: 0.85,
+                forks: 2,
+                splay: 0.7,
+            }
+        };
+        t.branch("leader", &below, base, c, DVec3::Y, rl, DVec3::Y, g);
+        (t.parts, t.conns)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 6. Steel-frame office
+
+/// Three-storey steel-frame office: rolled H columns, I beams nested into
+/// them (along one axis onto the column flanges, along the other between
+/// the flanges onto the web), continuous concrete floor slabs on the beams,
+/// a ground slab, and a glass curtain wall hung on mullions off the slab
+/// edges all round. Steel sections are slightly stocky (thicker plates than
+/// rolled tables) so their cells stay well shaped.
+#[derive(Clone, Debug)]
+pub struct SteelOffice {
+    pub bays_x: usize,
+    pub bays_z: usize,
+    pub storeys: usize,
+    pub span: f64,
+    pub storey: f64,
+    pub slab: f64,
+    /// Glass panes per bay along the facade.
+    pub panes_per_bay: usize,
+}
+
+impl Default for SteelOffice {
+    fn default() -> Self {
+        SteelOffice {
+            bays_x: 2,
+            bays_z: 2,
+            storeys: 3,
+            span: 6.0,
+            storey: 3.6,
+            slab: 0.2,
+            panes_per_bay: 3,
+        }
+    }
+}
+
+/// I/H section outline in (s, t): depth s in [0, d], width t in
+/// [-b/2, b/2], flanges tf, web tw.
+fn i_section(d: f64, b: f64, tf: f64, tw: f64) -> Vec<[f64; 2]> {
+    let (hb, hw) = (0.5 * b, 0.5 * tw);
+    vec![
+        [0.0, -hb],
+        [tf, -hb],
+        [tf, -hw],
+        [d - tf, -hw],
+        [d - tf, -hb],
+        [d, -hb],
+        [d, hb],
+        [d - tf, hb],
+        [d - tf, hw],
+        [tf, hw],
+        [tf, hb],
+        [0.0, hb],
+    ]
+}
+
+/// Simple polygon in (x, z) extruded along y.
+fn prism_xz(poly: &[[f64; 2]], y0: f64, y1: f64) -> TriMesh {
+    reorient(&prism(poly, y0, y1), |p| DVec3::new(p.x, p.z, p.y), true)
+}
+
+impl SteelOffice {
+    pub fn build(&self) -> (Vec<BuildingPart>, Vec<ConnectionSpec>) {
+        let (nx, nz, s, hs) = (self.bays_x, self.bays_z, self.span, self.storey);
+        // column H 300 (flanges normal to x), beam I 400 x 180
+        let (c, ctf, ctw) = (0.3, 0.03, 0.02);
+        let (bd, bb, btf, btw) = (0.4, 0.18, 0.025, 0.016);
+        let (lx, lz) = (nx as f64 * s + c, nz as f64 * s + c);
+        let steel = "steel_s355";
+        let mut parts = Vec::new();
+        let mut ground = anchored(bpart(
+            "ground_slab",
+            box_at(
+                DVec3::new(-0.6, -0.4, -0.6),
+                DVec3::new(lx + 0.6, 0.0, lz + 0.6),
+            ),
+            "concrete_c30",
+            "slab",
+        ));
+        ground.meta.analysis_cells_per_m3 = Some(5.0);
+        parts.push(ground);
+        let column = i_section(c, c, ctf, ctw);
+        let beam = i_section(bd, bb, btf, btw);
+        for f in 0..self.storeys {
+            let y0 = f as f64 * hs;
+            let yt = y0 + hs - self.slab; // column top, beam top, slab soffit
+            for i in 0..=nx {
+                for j in 0..=nz {
+                    let (x, z) = (i as f64 * s, j as f64 * s);
+                    let poly: Vec<[f64; 2]> = column
+                        .iter()
+                        .map(|p| [x + p[0], z + 0.5 * c + p[1]])
+                        .collect();
+                    parts.push(grain(
+                        bpart(
+                            format!("f{f}_col_{i}_{j}"),
+                            prism_xz(&poly, y0, yt),
+                            steel,
+                            "column",
+                        ),
+                        DVec3::Y,
+                    ));
+                }
+            }
+            // beams along x onto the column flanges
+            for j in 0..=nz {
+                let zc = j as f64 * s + 0.5 * c;
+                let poly: Vec<[f64; 2]> =
+                    beam.iter().map(|p| [zc + p[1], yt - bd + p[0]]).collect();
+                for i in 0..nx {
+                    let (x0, x1) = (i as f64 * s + c, (i + 1) as f64 * s);
+                    parts.push(grain(
+                        bpart(
+                            format!("f{f}_beam_x_{i}_{j}"),
+                            prism_zy(&poly, x0, x1),
+                            steel,
+                            "beam",
+                        ),
+                        DVec3::X,
+                    ));
+                }
+            }
+            // beams along z between the flanges onto the column webs
+            for i in 0..=nx {
+                let xc = i as f64 * s + 0.5 * c;
+                let poly: Vec<[f64; 2]> =
+                    beam.iter().map(|p| [xc + p[1], yt - bd + p[0]]).collect();
+                for j in 0..nz {
+                    let z0 = j as f64 * s + 0.5 * c + 0.5 * ctw;
+                    let z1 = (j + 1) as f64 * s + 0.5 * c - 0.5 * ctw;
+                    parts.push(grain(
+                        bpart(
+                            format!("f{f}_beam_z_{i}_{j}"),
+                            prism(&poly, z0, z1),
+                            steel,
+                            "beam",
+                        ),
+                        DVec3::Z,
+                    ));
+                }
+            }
+            // floor slab, continuous over the beams (a composite deck):
+            // panels jointed on the beam lines would each bear on half a
+            // flange, eccentrically
+            let mut p = bpart(
+                format!("f{f}_slab"),
+                box_at(DVec3::new(0.0, yt, 0.0), DVec3::new(lx, y0 + hs, lz)),
+                "concrete_c30",
+                "slab",
+            );
+            p.meta.analysis_cells_per_m3 = Some(40.0);
+            parts.push(p);
+        }
+        // curtain wall: mullions and panes per storey, outside the slab
+        // edges; front/back run through the corners, the sides between
+        let (md, mw, gt) = (0.15, 0.08, 0.016); // 8+8 laminated glass
+        let facades = [
+            ("south", true, 0.0, -1.0, nx),
+            ("north", true, lz, 1.0, nx),
+            ("west", false, 0.0, -1.0, nz),
+            ("east", false, lx, 1.0, nz),
+        ];
+        for &(name, along_x, base, out, bays) in &facades {
+            let wf = WallFrame { along_x };
+            let layer = |d0: f64, d1: f64| {
+                let (a, b) = (base + out * d0, base + out * d1);
+                [a.min(b), a.max(b)]
+            };
+            let (u0, u1) = if along_x { (-md, lx + md) } else { (0.0, lz) };
+            let n = bays * self.panes_per_bay;
+            let pitch = (u1 - u0 - mw) / n as f64;
+            let mid = 0.5 * md;
+            for f in 0..self.storeys {
+                let v = [f as f64 * hs, (f + 1) as f64 * hs];
+                for k in 0..=n {
+                    let a = u0 + k as f64 * pitch;
+                    parts.push(grain(
+                        bpart(
+                            format!("{name}_f{f}_mullion_{k}"),
+                            wf.cuboid([a, a + mw], v, layer(0.0, md)),
+                            steel,
+                            "wall",
+                        ),
+                        DVec3::Y,
+                    ));
+                    if k < n {
+                        parts.push(bpart(
+                            format!("{name}_f{f}_pane_{k}"),
+                            wf.cuboid(
+                                [a + mw, a + pitch],
+                                v,
+                                layer(mid - 0.5 * gt, mid + 0.5 * gt),
+                            ),
+                            "glass_annealed",
+                            "glazing",
+                        ));
+                    }
+                }
+            }
+        }
         let conns = auto_conns(&parts, |a, b| {
-            let union = [a, b].iter().any(|p| p.name.ends_with("_collar"))
-                && [a, b].iter().any(|p| p.name.starts_with("trunk"));
-            Some(if union {
-                ("grain_boundary", Some("branch_union"))
-            } else {
-                ("monolithic", None)
-            })
+            let mut m = [a.material.as_str(), b.material.as_str()];
+            m.sort();
+            match m {
+                ["steel_s355", "steel_s355"] | ["concrete_c30", "steel_s355"] => {
+                    Some(("bolted", None))
+                }
+                ["concrete_c30", "glass_annealed"]
+                | ["glass_annealed", "glass_annealed"]
+                | ["glass_annealed", "steel_s355"] => Some(("adhesive", None)),
+                _ => None,
+            }
         });
         (parts, conns)
     }
@@ -1327,6 +1761,11 @@ mod tests {
         s.render.chipping = false;
         let lib = frac_material::MaterialLibrary::builtin();
         let out = frac_pipeline::run(&input, &s, &lib).expect("pipeline");
+        if std::env::var_os("SHOW_WARNINGS").is_some() {
+            for w in &out.report.warnings {
+                println!("warning: {w}");
+            }
+        }
         let mut joints = frac_validate::structure::self_weight(&out.asset, &lib);
         joints.sort_by(|a, b| b.utilization.total_cmp(&a.utilization));
         let gates = out
@@ -1388,6 +1827,16 @@ mod tests {
             ("house", VeneerHouse::default().build(), -0.3),
             ("viaduct", RcViaduct::default().build(), 0.0),
             ("tree", Tree::default().build(), 0.0),
+            ("office", SteelOffice::default().build(), -0.4),
+            (
+                "conifer",
+                Tree {
+                    family: TreeFamily::Conifer,
+                    ..Default::default()
+                }
+                .build(),
+                0.0,
+            ),
         ] {
             let (g, _) = bake(p, c, ground);
             for gate in ["structural_support", "self_weight"] {
@@ -1416,6 +1865,28 @@ mod tests {
             }
             "viaduct" => {
                 let (p, c) = RcViaduct::default().build();
+                (p, c, 0.0)
+            }
+            "office" => {
+                let small = std::env::var_os("SMALL").is_some();
+                let (p, c) = SteelOffice {
+                    bays_x: if small { 1 } else { 2 },
+                    bays_z: if small { 1 } else { 2 },
+                    storeys: if small { 1 } else { 3 },
+                    ..Default::default()
+                }
+                .build();
+                (p, c, -0.4)
+            }
+            "conifer" => {
+                let (p, c) = Tree {
+                    family: TreeFamily::Conifer,
+                    seed: std::env::var("SEED")
+                        .ok()
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(7),
+                }
+                .build();
                 (p, c, 0.0)
             }
             "tree" => {
@@ -1462,6 +1933,12 @@ mod tests {
             VeneerHouse::default().build(),
             RcViaduct::default().build(),
             Tree::default().build(),
+            Tree {
+                family: TreeFamily::Conifer,
+                ..Default::default()
+            }
+            .build(),
+            SteelOffice::default().build(),
         ];
         for (parts, conns) in &all {
             check(parts, conns);

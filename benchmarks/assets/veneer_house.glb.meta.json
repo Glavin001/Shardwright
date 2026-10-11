@@ -742,6 +742,176 @@
       "analysis_cells_per_m3": null,
       "fine_per_analysis": null
     },
+    "ceiling_0": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "ceiling_1": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "ceiling_2": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "ceiling_3": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "ceiling_4": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "ceiling_5": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "ceiling_6": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "ceiling_7": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "ceiling_8": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "ceiling_9": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
     "east_brick": {
       "component_role": "wall",
       "material": "brick_clay",
@@ -1034,6 +1204,27 @@
         "half_split_fraction": 0.2,
         "mortar": 0.01
       },
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_door_0": {
+      "component_role": "prop",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
       "recipe": null,
       "group": null,
       "impact_center": null,
@@ -2962,6 +3153,18 @@
       "interface_material": null
     },
     {
+      "a": "front_door_0",
+      "b": "front_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_door_0",
+      "b": "front_o0_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
       "a": "front_lintel_1",
       "b": "front_stud_8",
       "kind": "bolted",
@@ -3840,6 +4043,66 @@
     {
       "a": "front_lining",
       "b": "joist_8",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "ceiling_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "ceiling_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "ceiling_2",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "ceiling_3",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "ceiling_4",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "ceiling_5",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "ceiling_6",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "ceiling_7",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "ceiling_8",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "ceiling_9",
       "kind": "adhesive",
       "interface_material": null
     },
@@ -4984,6 +5247,66 @@
       "interface_material": null
     },
     {
+      "a": "back_lining",
+      "b": "ceiling_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "ceiling_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "ceiling_2",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "ceiling_3",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "ceiling_4",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "ceiling_5",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "ceiling_6",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "ceiling_7",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "ceiling_8",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "ceiling_9",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
       "a": "west_brick",
       "b": "west_lintel_0",
       "kind": "mortar_joint",
@@ -5046,6 +5369,18 @@
     {
       "a": "west_brick",
       "b": "west_o0_cripple_bot_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_brick",
+      "b": "roof_f",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_brick",
+      "b": "roof_b",
       "kind": "component_connection",
       "interface_material": "wall_tie"
     },
@@ -5356,6 +5691,12 @@
       "interface_material": null
     },
     {
+      "a": "west_lining",
+      "b": "ceiling_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
       "a": "east_brick",
       "b": "east_stud_0",
       "kind": "component_connection",
@@ -5394,6 +5735,18 @@
     {
       "a": "east_brick",
       "b": "east_stud_6",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "east_brick",
+      "b": "roof_f",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "east_brick",
+      "b": "roof_b",
       "kind": "component_connection",
       "interface_material": "wall_tie"
     },
@@ -5548,6 +5901,12 @@
       "interface_material": null
     },
     {
+      "a": "east_lining",
+      "b": "ceiling_9",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
       "a": "joist_0",
       "b": "rafter_f_0",
       "kind": "bolted",
@@ -5557,6 +5916,30 @@
       "a": "joist_0",
       "b": "rafter_b_0",
       "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_0",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_0",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_0",
+      "b": "ceiling_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "joist_0",
+      "b": "ceiling_1",
+      "kind": "adhesive",
       "interface_material": null
     },
     {
@@ -5572,6 +5955,30 @@
       "interface_material": null
     },
     {
+      "a": "joist_1",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_1",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_1",
+      "b": "ceiling_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "joist_1",
+      "b": "ceiling_2",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
       "a": "joist_2",
       "b": "rafter_f_2",
       "kind": "bolted",
@@ -5581,6 +5988,30 @@
       "a": "joist_2",
       "b": "rafter_b_2",
       "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_2",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_2",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_2",
+      "b": "ceiling_2",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "joist_2",
+      "b": "ceiling_3",
+      "kind": "adhesive",
       "interface_material": null
     },
     {
@@ -5596,6 +6027,30 @@
       "interface_material": null
     },
     {
+      "a": "joist_3",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_3",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_3",
+      "b": "ceiling_3",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "joist_3",
+      "b": "ceiling_4",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
       "a": "joist_4",
       "b": "rafter_f_4",
       "kind": "bolted",
@@ -5605,6 +6060,30 @@
       "a": "joist_4",
       "b": "rafter_b_4",
       "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_4",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_4",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_4",
+      "b": "ceiling_4",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "joist_4",
+      "b": "ceiling_5",
+      "kind": "adhesive",
       "interface_material": null
     },
     {
@@ -5620,6 +6099,30 @@
       "interface_material": null
     },
     {
+      "a": "joist_5",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_5",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_5",
+      "b": "ceiling_5",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "joist_5",
+      "b": "ceiling_6",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
       "a": "joist_6",
       "b": "rafter_f_6",
       "kind": "bolted",
@@ -5629,6 +6132,30 @@
       "a": "joist_6",
       "b": "rafter_b_6",
       "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_6",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_6",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_6",
+      "b": "ceiling_6",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "joist_6",
+      "b": "ceiling_7",
+      "kind": "adhesive",
       "interface_material": null
     },
     {
@@ -5644,6 +6171,30 @@
       "interface_material": null
     },
     {
+      "a": "joist_7",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_7",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_7",
+      "b": "ceiling_7",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "joist_7",
+      "b": "ceiling_8",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
       "a": "joist_8",
       "b": "rafter_f_8",
       "kind": "bolted",
@@ -5656,6 +6207,30 @@
       "interface_material": null
     },
     {
+      "a": "joist_8",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_8",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_8",
+      "b": "ceiling_8",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "joist_8",
+      "b": "ceiling_9",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
       "a": "rafter_f_0",
       "b": "ridge",
       "kind": "bolted",
@@ -5881,6 +6456,60 @@
       "a": "ridge",
       "b": "roof_b",
       "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "ceiling_0",
+      "b": "ceiling_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "ceiling_1",
+      "b": "ceiling_2",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "ceiling_2",
+      "b": "ceiling_3",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "ceiling_3",
+      "b": "ceiling_4",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "ceiling_4",
+      "b": "ceiling_5",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "ceiling_5",
+      "b": "ceiling_6",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "ceiling_6",
+      "b": "ceiling_7",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "ceiling_7",
+      "b": "ceiling_8",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "ceiling_8",
+      "b": "ceiling_9",
+      "kind": "adhesive",
       "interface_material": null
     }
   ],
