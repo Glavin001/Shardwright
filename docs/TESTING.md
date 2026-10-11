@@ -26,6 +26,11 @@ Tier 0 exact-answer tests:
   a hole, material weights and forbidden zones (`crates/frac-modes/tests`).
 * Clipping property tests (volume conservation, watertightness,
   degeneracies).
+* Structural gates on built structures (`crates/frac-cli/src/structures.rs`).
+  A voussoir arch with no-tension lime joints must stand as a catenary at
+  t/R = 0.1. The same voussoirs as a semicircle must fail `self_weight` by
+  overturning at the crown. The truss bridge, veneer house, viaduct and
+  tree must pass `structural_support` and `self_weight`.
 * Pattern-library tests.
 
 Tier 0 differential tests: Voro++ (frozen outputs in

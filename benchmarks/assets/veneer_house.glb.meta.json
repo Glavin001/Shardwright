@@ -1,0 +1,5888 @@
+{
+  "parts": {
+    "back_brick": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": {
+        "bond": "stretcher",
+        "brick": [
+          0.215,
+          0.065,
+          0.1025
+        ],
+        "chip_fraction": 0.05,
+        "half_split_fraction": 0.2,
+        "mortar": 0.01
+      },
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_glass_0": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_glass_1": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_lining": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_lintel_0": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_lintel_1": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o0_cripple_bot_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o0_cripple_bot_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o0_cripple_top_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o0_cripple_top_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o0_header": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o0_jack_a": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o0_jack_b": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o0_king_a": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o0_king_b": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o0_sill": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o1_cripple_bot_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o1_cripple_bot_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o1_cripple_top_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o1_cripple_top_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o1_header": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o1_jack_a": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o1_jack_b": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o1_king_a": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o1_king_b": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_o1_sill": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_plate_bot_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_plate_top_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_plate_top_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_stud_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_stud_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_stud_10": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_stud_2": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_stud_5": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_stud_6": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "back_stud_9": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_brick": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": {
+        "bond": "stretcher",
+        "brick": [
+          0.215,
+          0.065,
+          0.1025
+        ],
+        "chip_fraction": 0.05,
+        "half_split_fraction": 0.2,
+        "mortar": 0.01
+      },
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_lining": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_plate_bot_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_plate_top_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_plate_top_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_stud_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_stud_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_stud_2": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_stud_3": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_stud_4": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_stud_5": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "east_stud_6": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "footing": {
+      "component_role": "slab",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": -0.3,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_brick": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": {
+        "bond": "stretcher",
+        "brick": [
+          0.215,
+          0.065,
+          0.1025
+        ],
+        "chip_fraction": 0.05,
+        "half_split_fraction": 0.2,
+        "mortar": 0.01
+      },
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_glass_1": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_lining": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_lintel_0": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_lintel_1": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o0_cripple_top_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o0_cripple_top_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o0_header": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o0_jack_a": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o0_jack_b": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o0_king_a": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o0_king_b": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o1_cripple_bot_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o1_cripple_bot_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o1_cripple_top_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o1_cripple_top_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o1_header": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o1_jack_a": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o1_jack_b": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o1_king_a": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o1_king_b": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_o1_sill": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_plate_bot_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_plate_bot_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_plate_top_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_plate_top_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_stud_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_stud_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_stud_10": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_stud_4": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_stud_5": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_stud_8": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "front_stud_9": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "joist_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "joist_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "joist_2": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "joist_3": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "joist_4": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "joist_5": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "joist_6": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "joist_7": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "joist_8": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_b_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        -0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_b_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        -0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_b_2": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        -0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_b_3": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        -0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_b_4": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        -0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_b_5": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        -0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_b_6": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        -0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_b_7": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        -0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_b_8": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        -0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_f_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_f_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_f_2": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_f_3": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_f_4": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_f_5": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_f_6": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_f_7": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "rafter_f_8": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.49999999999999994,
+        0.8660254037844387
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "ridge": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "roof_b": {
+      "component_role": "slab",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "roof_f": {
+      "component_role": "slab",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_brick": {
+      "component_role": "wall",
+      "material": "brick_clay",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": {
+        "bond": "stretcher",
+        "brick": [
+          0.215,
+          0.065,
+          0.1025
+        ],
+        "chip_fraction": 0.05,
+        "half_split_fraction": 0.2,
+        "mortar": 0.01
+      },
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_glass_0": {
+      "component_role": "glazing",
+      "material": "glass_annealed",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_lining": {
+      "component_role": "cosmetic",
+      "material": "drywall",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_lintel_0": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_o0_cripple_bot_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_o0_cripple_top_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_o0_header": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_o0_jack_a": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_o0_jack_b": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_o0_king_a": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_o0_king_b": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_o0_sill": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_plate_bot_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_plate_top_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_plate_top_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_stud_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_stud_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_stud_5": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "west_stud_6": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    }
+  },
+  "connections": [
+    {
+      "a": "footing",
+      "b": "front_brick",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "footing",
+      "b": "front_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "footing",
+      "b": "front_plate_bot_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "footing",
+      "b": "back_brick",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "footing",
+      "b": "back_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "footing",
+      "b": "west_brick",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "footing",
+      "b": "west_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "footing",
+      "b": "east_brick",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "footing",
+      "b": "east_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_brick",
+      "b": "front_lintel_0",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_lintel_1",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_stud_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_stud_1",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_stud_4",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_stud_5",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_stud_8",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_stud_9",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_stud_10",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o0_king_a",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o0_king_b",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o0_jack_a",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o0_jack_b",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o0_cripple_top_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o0_cripple_top_1",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o1_king_a",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o1_king_b",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o1_jack_a",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o1_jack_b",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o1_cripple_top_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o1_cripple_top_1",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o1_cripple_bot_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "front_o1_cripple_bot_1",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_brick",
+      "b": "west_brick",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "front_brick",
+      "b": "east_brick",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "front_lintel_0",
+      "b": "front_o0_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_0",
+      "b": "front_o0_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_0",
+      "b": "front_o0_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_0",
+      "b": "front_o0_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_0",
+      "b": "front_o0_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_0",
+      "b": "front_o0_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_1",
+      "b": "front_stud_8",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_1",
+      "b": "front_o1_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_1",
+      "b": "front_o1_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_1",
+      "b": "front_o1_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_1",
+      "b": "front_o1_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_1",
+      "b": "front_o1_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_lintel_1",
+      "b": "front_o1_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_glass_1",
+      "b": "front_o1_jack_a",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_glass_1",
+      "b": "front_o1_jack_b",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_glass_1",
+      "b": "front_o1_header",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_glass_1",
+      "b": "front_o1_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_0",
+      "b": "front_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_0",
+      "b": "front_stud_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_0",
+      "b": "front_o0_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_0",
+      "b": "front_o0_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_0",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_0",
+      "b": "west_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_plate_bot_0",
+      "b": "west_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_0",
+      "b": "west_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_stud_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_stud_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_stud_8",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_stud_9",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_stud_10",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_o0_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_o0_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_o1_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_o1_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_o1_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_o1_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_o1_cripple_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_o1_cripple_bot_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "east_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "east_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_bot_1",
+      "b": "east_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_stud_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_stud_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_stud_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_stud_8",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_stud_9",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_stud_10",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_o0_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_o0_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_o0_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_o0_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_o1_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_o1_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_o1_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_o1_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "west_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "west_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "west_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "west_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "east_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "east_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "east_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_0",
+      "b": "east_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "west_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "west_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "west_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "east_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "east_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "east_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "joist_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "joist_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "joist_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "joist_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "joist_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "joist_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "joist_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "joist_7",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_plate_top_1",
+      "b": "joist_8",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_0",
+      "b": "west_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_stud_0",
+      "b": "west_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_0",
+      "b": "west_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_0",
+      "b": "west_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_1",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_4",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_5",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_8",
+      "b": "front_o1_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_8",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_9",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_10",
+      "b": "east_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "front_stud_10",
+      "b": "east_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_10",
+      "b": "east_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_stud_10",
+      "b": "east_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_king_a",
+      "b": "front_o0_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_king_a",
+      "b": "front_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_king_a",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_king_b",
+      "b": "front_o0_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_king_b",
+      "b": "front_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_king_b",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_jack_a",
+      "b": "front_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_jack_a",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_jack_b",
+      "b": "front_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_jack_b",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_header",
+      "b": "front_o0_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_header",
+      "b": "front_o0_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_header",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_cripple_top_0",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o0_cripple_top_1",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_king_a",
+      "b": "front_o1_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_king_a",
+      "b": "front_o1_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_king_a",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_king_b",
+      "b": "front_o1_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_king_b",
+      "b": "front_o1_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_king_b",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_jack_a",
+      "b": "front_o1_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_jack_a",
+      "b": "front_o1_sill",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_jack_a",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_jack_b",
+      "b": "front_o1_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_jack_b",
+      "b": "front_o1_sill",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_jack_b",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_header",
+      "b": "front_o1_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_header",
+      "b": "front_o1_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_header",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_cripple_top_0",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_cripple_top_1",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_sill",
+      "b": "front_o1_cripple_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_sill",
+      "b": "front_o1_cripple_bot_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_sill",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_cripple_bot_0",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_o1_cripple_bot_1",
+      "b": "front_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "west_plate_bot_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "west_plate_top_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "west_plate_top_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "west_stud_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "east_plate_bot_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "east_plate_top_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "east_plate_top_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "east_stud_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "joist_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "joist_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "joist_2",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "joist_3",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "joist_4",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "joist_5",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "joist_6",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "joist_7",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "front_lining",
+      "b": "joist_8",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_brick",
+      "b": "back_lintel_0",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_lintel_1",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_stud_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_stud_1",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_stud_2",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_stud_5",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_stud_6",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_stud_9",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_stud_10",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o0_king_a",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o0_king_b",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o0_jack_a",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o0_jack_b",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o0_cripple_top_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o0_cripple_top_1",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o0_cripple_bot_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o0_cripple_bot_1",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o1_king_a",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o1_king_b",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o1_jack_a",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o1_jack_b",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o1_cripple_top_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o1_cripple_top_1",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o1_cripple_bot_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "back_o1_cripple_bot_1",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_brick",
+      "b": "west_brick",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "back_brick",
+      "b": "east_brick",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "back_lintel_0",
+      "b": "back_o0_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_lintel_0",
+      "b": "back_o0_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_lintel_0",
+      "b": "back_o0_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_lintel_0",
+      "b": "back_o0_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_lintel_0",
+      "b": "back_o0_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_lintel_0",
+      "b": "back_o0_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_glass_0",
+      "b": "back_o0_jack_a",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_glass_0",
+      "b": "back_o0_jack_b",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_glass_0",
+      "b": "back_o0_header",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_glass_0",
+      "b": "back_o0_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lintel_1",
+      "b": "back_o1_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_lintel_1",
+      "b": "back_o1_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_lintel_1",
+      "b": "back_o1_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_lintel_1",
+      "b": "back_o1_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_lintel_1",
+      "b": "back_o1_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_lintel_1",
+      "b": "back_o1_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_glass_1",
+      "b": "back_o1_jack_a",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_glass_1",
+      "b": "back_o1_jack_b",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_glass_1",
+      "b": "back_o1_header",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_glass_1",
+      "b": "back_o1_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_stud_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_stud_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_stud_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_stud_9",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_stud_10",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o0_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o0_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o0_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o0_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o0_cripple_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o0_cripple_bot_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o1_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o1_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o1_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o1_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o1_cripple_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_o1_cripple_bot_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "west_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "west_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "west_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "east_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "east_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_bot_0",
+      "b": "east_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_stud_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_stud_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_stud_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_stud_9",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_stud_10",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_o0_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_o0_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_o0_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_o0_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_o1_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_o1_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_o1_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_o1_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "west_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "west_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "west_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "west_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "east_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "east_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "east_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_0",
+      "b": "east_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "west_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "west_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "west_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "east_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "east_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "east_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "joist_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "joist_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "joist_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "joist_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "joist_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "joist_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "joist_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "joist_7",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_plate_top_1",
+      "b": "joist_8",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_stud_0",
+      "b": "west_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_stud_0",
+      "b": "west_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_stud_0",
+      "b": "west_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_stud_0",
+      "b": "west_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_stud_1",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_stud_2",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_stud_5",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_stud_6",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_stud_9",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_stud_10",
+      "b": "east_brick",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "back_stud_10",
+      "b": "east_plate_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_stud_10",
+      "b": "east_plate_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_stud_10",
+      "b": "east_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_king_a",
+      "b": "back_o0_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_king_a",
+      "b": "back_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_king_a",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_king_b",
+      "b": "back_o0_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_king_b",
+      "b": "back_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_king_b",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_jack_a",
+      "b": "back_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_jack_a",
+      "b": "back_o0_sill",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_jack_a",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_jack_b",
+      "b": "back_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_jack_b",
+      "b": "back_o0_sill",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_jack_b",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_header",
+      "b": "back_o0_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_header",
+      "b": "back_o0_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_header",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_cripple_top_0",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_cripple_top_1",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_sill",
+      "b": "back_o0_cripple_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_sill",
+      "b": "back_o0_cripple_bot_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_sill",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_cripple_bot_0",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o0_cripple_bot_1",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_king_a",
+      "b": "back_o1_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_king_a",
+      "b": "back_o1_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_king_a",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_king_b",
+      "b": "back_o1_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_king_b",
+      "b": "back_o1_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_king_b",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_jack_a",
+      "b": "back_o1_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_jack_a",
+      "b": "back_o1_sill",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_jack_a",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_jack_b",
+      "b": "back_o1_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_jack_b",
+      "b": "back_o1_sill",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_jack_b",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_header",
+      "b": "back_o1_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_header",
+      "b": "back_o1_cripple_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_header",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_cripple_top_0",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_cripple_top_1",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_sill",
+      "b": "back_o1_cripple_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_sill",
+      "b": "back_o1_cripple_bot_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_sill",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_cripple_bot_0",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_o1_cripple_bot_1",
+      "b": "back_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "west_plate_bot_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "west_plate_top_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "west_plate_top_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "west_stud_6",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "east_plate_bot_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "east_plate_top_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "east_plate_top_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "east_stud_6",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "joist_0",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "joist_1",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "joist_2",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "joist_3",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "joist_4",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "joist_5",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "joist_6",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "joist_7",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "back_lining",
+      "b": "joist_8",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_brick",
+      "b": "west_lintel_0",
+      "kind": "mortar_joint",
+      "interface_material": "mortar_type_n"
+    },
+    {
+      "a": "west_brick",
+      "b": "west_stud_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_brick",
+      "b": "west_stud_1",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_brick",
+      "b": "west_stud_5",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_brick",
+      "b": "west_stud_6",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_brick",
+      "b": "west_o0_king_a",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_brick",
+      "b": "west_o0_king_b",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_brick",
+      "b": "west_o0_jack_a",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_brick",
+      "b": "west_o0_jack_b",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_brick",
+      "b": "west_o0_cripple_top_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_brick",
+      "b": "west_o0_cripple_bot_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "west_lintel_0",
+      "b": "west_o0_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_lintel_0",
+      "b": "west_o0_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_lintel_0",
+      "b": "west_o0_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_lintel_0",
+      "b": "west_o0_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_lintel_0",
+      "b": "west_o0_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_glass_0",
+      "b": "west_o0_jack_a",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_glass_0",
+      "b": "west_o0_jack_b",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_glass_0",
+      "b": "west_o0_header",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_glass_0",
+      "b": "west_o0_sill",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_bot_0",
+      "b": "west_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_bot_0",
+      "b": "west_stud_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_bot_0",
+      "b": "west_stud_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_bot_0",
+      "b": "west_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_bot_0",
+      "b": "west_o0_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_bot_0",
+      "b": "west_o0_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_bot_0",
+      "b": "west_o0_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_bot_0",
+      "b": "west_o0_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_bot_0",
+      "b": "west_o0_cripple_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_bot_0",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_top_0",
+      "b": "west_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_top_0",
+      "b": "west_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_top_0",
+      "b": "west_stud_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_top_0",
+      "b": "west_stud_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_top_0",
+      "b": "west_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_top_0",
+      "b": "west_o0_king_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_top_0",
+      "b": "west_o0_king_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_top_0",
+      "b": "west_o0_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_top_0",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_plate_top_1",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_stud_0",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_stud_1",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_stud_5",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_stud_6",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_king_a",
+      "b": "west_o0_jack_a",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_king_a",
+      "b": "west_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_king_a",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_king_b",
+      "b": "west_o0_jack_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_king_b",
+      "b": "west_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_king_b",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_jack_a",
+      "b": "west_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_jack_a",
+      "b": "west_o0_sill",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_jack_a",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_jack_b",
+      "b": "west_o0_header",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_jack_b",
+      "b": "west_o0_sill",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_jack_b",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_header",
+      "b": "west_o0_cripple_top_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_header",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_cripple_top_0",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_sill",
+      "b": "west_o0_cripple_bot_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_sill",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "west_o0_cripple_bot_0",
+      "b": "west_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "east_brick",
+      "b": "east_stud_0",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "east_brick",
+      "b": "east_stud_1",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "east_brick",
+      "b": "east_stud_2",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "east_brick",
+      "b": "east_stud_3",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "east_brick",
+      "b": "east_stud_4",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "east_brick",
+      "b": "east_stud_5",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "east_brick",
+      "b": "east_stud_6",
+      "kind": "component_connection",
+      "interface_material": "wall_tie"
+    },
+    {
+      "a": "east_plate_bot_0",
+      "b": "east_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_bot_0",
+      "b": "east_stud_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_bot_0",
+      "b": "east_stud_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_bot_0",
+      "b": "east_stud_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_bot_0",
+      "b": "east_stud_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_bot_0",
+      "b": "east_stud_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_bot_0",
+      "b": "east_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_bot_0",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_top_0",
+      "b": "east_plate_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_top_0",
+      "b": "east_stud_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_top_0",
+      "b": "east_stud_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_top_0",
+      "b": "east_stud_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_top_0",
+      "b": "east_stud_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_top_0",
+      "b": "east_stud_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_top_0",
+      "b": "east_stud_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_top_0",
+      "b": "east_stud_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_top_0",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "east_plate_top_1",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "east_stud_0",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "east_stud_1",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "east_stud_2",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "east_stud_3",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "east_stud_4",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "east_stud_5",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "east_stud_6",
+      "b": "east_lining",
+      "kind": "adhesive",
+      "interface_material": null
+    },
+    {
+      "a": "joist_0",
+      "b": "rafter_f_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_0",
+      "b": "rafter_b_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_1",
+      "b": "rafter_f_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_1",
+      "b": "rafter_b_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_2",
+      "b": "rafter_f_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_2",
+      "b": "rafter_b_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_3",
+      "b": "rafter_f_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_3",
+      "b": "rafter_b_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_4",
+      "b": "rafter_f_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_4",
+      "b": "rafter_b_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_5",
+      "b": "rafter_f_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_5",
+      "b": "rafter_b_5",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_6",
+      "b": "rafter_f_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_6",
+      "b": "rafter_b_6",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_7",
+      "b": "rafter_f_7",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_7",
+      "b": "rafter_b_7",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_8",
+      "b": "rafter_f_8",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "joist_8",
+      "b": "rafter_b_8",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_0",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_0",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_0",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_0",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_1",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_1",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_1",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_1",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_2",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_2",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_2",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_2",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_3",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_3",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_3",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_3",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_4",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_4",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_4",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_4",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_5",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_5",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_5",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_5",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_6",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_6",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_6",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_6",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_7",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_7",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_7",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_7",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_8",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_f_8",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_8",
+      "b": "ridge",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "rafter_b_8",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "ridge",
+      "b": "roof_f",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "ridge",
+      "b": "roof_b",
+      "kind": "bolted",
+      "interface_material": null
+    }
+  ],
+  "ground_height": -0.3
+}

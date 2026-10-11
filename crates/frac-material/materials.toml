@@ -187,6 +187,29 @@ friction_angle_deg = 30.0
 fracture_energy = 0.0
 thickness = 0.0
 
+# Historic lime mortar: no reliable tension (Heyman's masonry assumptions),
+# so voussoir joints are compression-only with friction.
+[[interface_material]]
+id = "lime_mortar"
+youngs_modulus = 1.0e9
+tensile_strength = 0.0
+cohesion = 0.1e6
+friction_angle_deg = 35.0
+fracture_energy = 2.0
+thickness = 0.01
+weibull_modulus = 5.0
+
+# Brick-veneer wall ties (~0.9 kN per tie, ties every ~0.45 m up each stud)
+# smeared over the stud face the skin rests against.
+[[interface_material]]
+id = "wall_tie"
+youngs_modulus = 1.0e9
+tensile_strength = 0.045e6
+cohesion = 0.045e6
+friction_angle_deg = 30.0
+fracture_energy = 20.0
+thickness = 0.0
+
 [[noise_profile]]
 id = "concrete_rough"
 amplitude = 0.004

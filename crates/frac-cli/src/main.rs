@@ -4,6 +4,7 @@ mod bench;
 mod buildings;
 mod meshgen;
 mod preview;
+mod structures;
 
 use clap::{Parser, Subcommand};
 use frac_core::Settings;

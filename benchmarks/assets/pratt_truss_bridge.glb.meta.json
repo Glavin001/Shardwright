@@ -1,0 +1,1574 @@
+{
+  "parts": {
+    "abutment_e": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "abutment_w": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "deck_0": {
+      "component_role": "slab",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "deck_1": {
+      "component_role": "slab",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "deck_2": {
+      "component_role": "slab",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "deck_3": {
+      "component_role": "slab",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "floor_beam_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "floor_beam_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "floor_beam_2": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "floor_beam_3": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "floor_beam_4": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_bot_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_bot_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_bot_2": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_bot_3": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_diag_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.8070303256584301,
+        0.5905099943842171,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_diag_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.8070303256584302,
+        0.5905099943842171,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_diag_2": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.80703032565843,
+        0.5905099943842171,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_diag_3": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.80703032565843,
+        0.5905099943842171,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_top_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_top_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_top_2": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_top_3": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_vert_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_vert_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_vert_2": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_vert_3": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "n_vert_4": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_bot_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_bot_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_bot_2": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_bot_3": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_diag_0": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.8070303256584301,
+        0.5905099943842171,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_diag_1": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        -0.8070303256584302,
+        0.5905099943842171,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_diag_2": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.80703032565843,
+        0.5905099943842171,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_diag_3": {
+      "component_role": "generic",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.80703032565843,
+        0.5905099943842171,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_top_0": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_top_1": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_top_2": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_top_3": {
+      "component_role": "beam",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_vert_0": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_vert_1": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_vert_2": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_vert_3": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "s_vert_4": {
+      "component_role": "column",
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    }
+  },
+  "connections": [
+    {
+      "a": "n_bot_0",
+      "b": "n_diag_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_0",
+      "b": "n_bot_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_0",
+      "b": "n_vert_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_0",
+      "b": "n_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_0",
+      "b": "floor_beam_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_0",
+      "b": "floor_beam_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_0",
+      "b": "n_diag_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_0",
+      "b": "n_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_0",
+      "b": "n_vert_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_0",
+      "b": "n_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_diag_0",
+      "b": "n_vert_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_diag_0",
+      "b": "n_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_1",
+      "b": "n_diag_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_1",
+      "b": "n_bot_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_1",
+      "b": "n_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_1",
+      "b": "n_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_1",
+      "b": "floor_beam_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_1",
+      "b": "floor_beam_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_1",
+      "b": "n_diag_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_1",
+      "b": "n_top_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_1",
+      "b": "n_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_1",
+      "b": "n_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_diag_1",
+      "b": "n_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_diag_1",
+      "b": "n_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_2",
+      "b": "n_diag_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_2",
+      "b": "n_bot_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_2",
+      "b": "n_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_2",
+      "b": "n_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_2",
+      "b": "floor_beam_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_2",
+      "b": "floor_beam_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_2",
+      "b": "n_diag_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_2",
+      "b": "n_top_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_2",
+      "b": "n_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_2",
+      "b": "n_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_diag_2",
+      "b": "n_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_diag_2",
+      "b": "n_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_3",
+      "b": "n_diag_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_3",
+      "b": "n_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_3",
+      "b": "n_vert_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_3",
+      "b": "floor_beam_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_bot_3",
+      "b": "floor_beam_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_3",
+      "b": "n_diag_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_3",
+      "b": "n_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_top_3",
+      "b": "n_vert_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_diag_3",
+      "b": "n_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "n_diag_3",
+      "b": "n_vert_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_0",
+      "b": "s_diag_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_0",
+      "b": "s_bot_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_0",
+      "b": "s_vert_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_0",
+      "b": "s_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_0",
+      "b": "floor_beam_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_0",
+      "b": "floor_beam_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_0",
+      "b": "s_diag_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_0",
+      "b": "s_top_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_0",
+      "b": "s_vert_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_0",
+      "b": "s_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_diag_0",
+      "b": "s_vert_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_diag_0",
+      "b": "s_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_1",
+      "b": "s_diag_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_1",
+      "b": "s_bot_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_1",
+      "b": "s_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_1",
+      "b": "s_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_1",
+      "b": "floor_beam_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_1",
+      "b": "floor_beam_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_1",
+      "b": "s_diag_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_1",
+      "b": "s_top_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_1",
+      "b": "s_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_1",
+      "b": "s_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_diag_1",
+      "b": "s_vert_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_diag_1",
+      "b": "s_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_2",
+      "b": "s_diag_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_2",
+      "b": "s_bot_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_2",
+      "b": "s_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_2",
+      "b": "s_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_2",
+      "b": "floor_beam_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_2",
+      "b": "floor_beam_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_2",
+      "b": "s_diag_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_2",
+      "b": "s_top_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_2",
+      "b": "s_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_2",
+      "b": "s_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_diag_2",
+      "b": "s_vert_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_diag_2",
+      "b": "s_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_3",
+      "b": "s_diag_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_3",
+      "b": "s_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_3",
+      "b": "s_vert_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_3",
+      "b": "floor_beam_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_bot_3",
+      "b": "floor_beam_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_3",
+      "b": "s_diag_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_3",
+      "b": "s_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_top_3",
+      "b": "s_vert_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_diag_3",
+      "b": "s_vert_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "s_diag_3",
+      "b": "s_vert_4",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "floor_beam_0",
+      "b": "deck_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "floor_beam_0",
+      "b": "abutment_w",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "floor_beam_1",
+      "b": "deck_0",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "floor_beam_1",
+      "b": "deck_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "floor_beam_2",
+      "b": "deck_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "floor_beam_2",
+      "b": "deck_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "floor_beam_3",
+      "b": "deck_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "floor_beam_3",
+      "b": "deck_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "floor_beam_4",
+      "b": "deck_3",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "floor_beam_4",
+      "b": "abutment_e",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "deck_0",
+      "b": "deck_1",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "deck_1",
+      "b": "deck_2",
+      "kind": "bolted",
+      "interface_material": null
+    },
+    {
+      "a": "deck_2",
+      "b": "deck_3",
+      "kind": "bolted",
+      "interface_material": null
+    }
+  ],
+  "ground_height": 0.0
+}

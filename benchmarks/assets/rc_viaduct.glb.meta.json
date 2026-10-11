@@ -1,0 +1,1361 @@
+{
+  "parts": {
+    "abutment_e": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "abutment_w": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "column_1_0": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              5.720000000000001,
+              0.65,
+              0.52
+            ],
+            [
+              5.720000000000001,
+              4.95,
+              0.52
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              6.28,
+              0.65,
+              0.52
+            ],
+            [
+              6.28,
+              4.95,
+              0.52
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              6.28,
+              0.65,
+              1.08
+            ],
+            [
+              6.28,
+              4.95,
+              1.08
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              5.720000000000001,
+              0.65,
+              1.08
+            ],
+            [
+              5.720000000000001,
+              4.95,
+              1.08
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "column_1_1": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              5.720000000000001,
+              0.65,
+              2.92
+            ],
+            [
+              5.720000000000001,
+              4.95,
+              2.92
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              6.28,
+              0.65,
+              2.92
+            ],
+            [
+              6.28,
+              4.95,
+              2.92
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              6.28,
+              0.65,
+              3.48
+            ],
+            [
+              6.28,
+              4.95,
+              3.48
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              5.720000000000001,
+              0.65,
+              3.48
+            ],
+            [
+              5.720000000000001,
+              4.95,
+              3.48
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "column_2_0": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              11.72,
+              0.65,
+              0.52
+            ],
+            [
+              11.72,
+              4.95,
+              0.52
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              12.280000000000001,
+              0.65,
+              0.52
+            ],
+            [
+              12.280000000000001,
+              4.95,
+              0.52
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              12.280000000000001,
+              0.65,
+              1.08
+            ],
+            [
+              12.280000000000001,
+              4.95,
+              1.08
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              11.72,
+              0.65,
+              1.08
+            ],
+            [
+              11.72,
+              4.95,
+              1.08
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "column_2_1": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              11.72,
+              0.65,
+              2.92
+            ],
+            [
+              11.72,
+              4.95,
+              2.92
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              12.280000000000001,
+              0.65,
+              2.92
+            ],
+            [
+              12.280000000000001,
+              4.95,
+              2.92
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              12.280000000000001,
+              0.65,
+              3.48
+            ],
+            [
+              12.280000000000001,
+              4.95,
+              3.48
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              11.72,
+              0.65,
+              3.48
+            ],
+            [
+              11.72,
+              4.95,
+              3.48
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "column_3_0": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              17.72,
+              0.65,
+              0.52
+            ],
+            [
+              17.72,
+              4.95,
+              0.52
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              18.279999999999998,
+              0.65,
+              0.52
+            ],
+            [
+              18.279999999999998,
+              4.95,
+              0.52
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              18.279999999999998,
+              0.65,
+              1.08
+            ],
+            [
+              18.279999999999998,
+              4.95,
+              1.08
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              17.72,
+              0.65,
+              1.08
+            ],
+            [
+              17.72,
+              4.95,
+              1.08
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "column_3_1": {
+      "component_role": "column",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              17.72,
+              0.65,
+              2.92
+            ],
+            [
+              17.72,
+              4.95,
+              2.92
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              18.279999999999998,
+              0.65,
+              2.92
+            ],
+            [
+              18.279999999999998,
+              4.95,
+              2.92
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              18.279999999999998,
+              0.65,
+              3.48
+            ],
+            [
+              18.279999999999998,
+              4.95,
+              3.48
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              17.72,
+              0.65,
+              3.48
+            ],
+            [
+              17.72,
+              4.95,
+              3.48
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "crosshead_1": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              5.6,
+              5.06,
+              0.05
+            ],
+            [
+              5.6,
+              5.06,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              6.4,
+              5.06,
+              0.05
+            ],
+            [
+              6.4,
+              5.06,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              5.6,
+              5.54,
+              0.05
+            ],
+            [
+              5.6,
+              5.54,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              6.4,
+              5.54,
+              0.05
+            ],
+            [
+              6.4,
+              5.54,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "crosshead_2": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              11.6,
+              5.06,
+              0.05
+            ],
+            [
+              11.6,
+              5.06,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              12.4,
+              5.06,
+              0.05
+            ],
+            [
+              12.4,
+              5.06,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              11.6,
+              5.54,
+              0.05
+            ],
+            [
+              11.6,
+              5.54,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              12.4,
+              5.54,
+              0.05
+            ],
+            [
+              12.4,
+              5.54,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "crosshead_3": {
+      "component_role": "beam",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              17.6,
+              5.06,
+              0.05
+            ],
+            [
+              17.6,
+              5.06,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              18.4,
+              5.06,
+              0.05
+            ],
+            [
+              18.4,
+              5.06,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              17.6,
+              5.54,
+              0.05
+            ],
+            [
+              17.6,
+              5.54,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              18.4,
+              5.54,
+              0.05
+            ],
+            [
+              18.4,
+              5.54,
+              3.95
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "deck_0": {
+      "component_role": "slab",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              0.07,
+              5.6499999999999995,
+              0.3
+            ],
+            [
+              5.930000000000001,
+              5.6499999999999995,
+              0.3
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              0.07,
+              5.6499999999999995,
+              0.98
+            ],
+            [
+              5.930000000000001,
+              5.6499999999999995,
+              0.98
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              0.07,
+              5.6499999999999995,
+              1.66
+            ],
+            [
+              5.930000000000001,
+              5.6499999999999995,
+              1.66
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              0.07,
+              5.6499999999999995,
+              2.34
+            ],
+            [
+              5.930000000000001,
+              5.6499999999999995,
+              2.34
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              0.07,
+              5.6499999999999995,
+              3.0199999999999996
+            ],
+            [
+              5.930000000000001,
+              5.6499999999999995,
+              3.0199999999999996
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              0.07,
+              5.6499999999999995,
+              3.6999999999999997
+            ],
+            [
+              5.930000000000001,
+              5.6499999999999995,
+              3.6999999999999997
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "deck_1": {
+      "component_role": "slab",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              6.069999999999999,
+              5.6499999999999995,
+              0.3
+            ],
+            [
+              11.93,
+              5.6499999999999995,
+              0.3
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              6.069999999999999,
+              5.6499999999999995,
+              0.98
+            ],
+            [
+              11.93,
+              5.6499999999999995,
+              0.98
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              6.069999999999999,
+              5.6499999999999995,
+              1.66
+            ],
+            [
+              11.93,
+              5.6499999999999995,
+              1.66
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              6.069999999999999,
+              5.6499999999999995,
+              2.34
+            ],
+            [
+              11.93,
+              5.6499999999999995,
+              2.34
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              6.069999999999999,
+              5.6499999999999995,
+              3.0199999999999996
+            ],
+            [
+              11.93,
+              5.6499999999999995,
+              3.0199999999999996
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              6.069999999999999,
+              5.6499999999999995,
+              3.6999999999999997
+            ],
+            [
+              11.93,
+              5.6499999999999995,
+              3.6999999999999997
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "deck_2": {
+      "component_role": "slab",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              12.07,
+              5.6499999999999995,
+              0.3
+            ],
+            [
+              17.93,
+              5.6499999999999995,
+              0.3
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              12.07,
+              5.6499999999999995,
+              0.98
+            ],
+            [
+              17.93,
+              5.6499999999999995,
+              0.98
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              12.07,
+              5.6499999999999995,
+              1.66
+            ],
+            [
+              17.93,
+              5.6499999999999995,
+              1.66
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              12.07,
+              5.6499999999999995,
+              2.34
+            ],
+            [
+              17.93,
+              5.6499999999999995,
+              2.34
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              12.07,
+              5.6499999999999995,
+              3.0199999999999996
+            ],
+            [
+              17.93,
+              5.6499999999999995,
+              3.0199999999999996
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              12.07,
+              5.6499999999999995,
+              3.6999999999999997
+            ],
+            [
+              17.93,
+              5.6499999999999995,
+              3.6999999999999997
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "deck_3": {
+      "component_role": "slab",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [
+        {
+          "points": [
+            [
+              18.07,
+              5.6499999999999995,
+              0.3
+            ],
+            [
+              23.93,
+              5.6499999999999995,
+              0.3
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              18.07,
+              5.6499999999999995,
+              0.98
+            ],
+            [
+              23.93,
+              5.6499999999999995,
+              0.98
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              18.07,
+              5.6499999999999995,
+              1.66
+            ],
+            [
+              23.93,
+              5.6499999999999995,
+              1.66
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              18.07,
+              5.6499999999999995,
+              2.34
+            ],
+            [
+              23.93,
+              5.6499999999999995,
+              2.34
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              18.07,
+              5.6499999999999995,
+              3.0199999999999996
+            ],
+            [
+              23.93,
+              5.6499999999999995,
+              3.0199999999999996
+            ]
+          ],
+          "diameter": 0.025
+        },
+        {
+          "points": [
+            [
+              18.07,
+              5.6499999999999995,
+              3.6999999999999997
+            ],
+            [
+              23.93,
+              5.6499999999999995,
+              3.6999999999999997
+            ]
+          ],
+          "diameter": 0.025
+        }
+      ],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "parapet_n_0": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "parapet_n_1": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "parapet_n_2": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "parapet_n_3": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "parapet_s_0": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "parapet_s_1": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "parapet_s_2": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "parapet_s_3": {
+      "component_role": "wall",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "pile_cap_1": {
+      "component_role": "generic",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "pile_cap_2": {
+      "component_role": "generic",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    },
+    "pile_cap_3": {
+      "component_role": "generic",
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": 0.0,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null,
+      "analysis_cells_per_m3": null,
+      "fine_per_analysis": null
+    }
+  },
+  "connections": [],
+  "ground_height": 0.0
+}

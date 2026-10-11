@@ -13,7 +13,7 @@ reproduces PL/EA to 0.2%.
 
 | Oracle / check | Result |
 |---|---|
-| Hard gates (§13.1) | all pass on all 14 benchmark assets incl. held-out and both buildings (`tools/ci/suite.sh`) |
+| Hard gates (§13.1) | all pass on all 19 benchmark assets incl. held-out and both buildings (`tools/ci/suite.sh`). This includes the five built structures: masonry_arch, pratt_truss_bridge, veneer_house, rc_viaduct and tree. With `building_lite.toml`, rc_viaduct fails `collision_shapes` because one abutment fragment gets no hull. |
 | Voro++ (§13.2) | cell volumes and vertices match (frozen differential test) |
 | Upstream CoACD 1.0.14 (§13.2) | at equal hull budget (bake budget 128, median 64 hulls per rc_column L1 fragment): coverage 0.974 (target 0.95) vs 1.000, outside volume 0.0009 vs 0.0645, concavity 0.136 vs 0.137 (median); see below and `crates/frac-collision/README.md` |
 | Collision quality (§13.6) | hull overshoot (Σ hull volume / V − 1) median ≤ 0.10 and hull fit ≤ 0.03 at every level of every benchmark asset; see below |

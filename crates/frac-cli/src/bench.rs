@@ -27,6 +27,18 @@ fn part(name: &str, mesh: TriMesh, material: &str) -> Part {
     }
 }
 
+fn from_building(parts: Vec<crate::buildings::BuildingPart>) -> Vec<Part> {
+    parts
+        .into_iter()
+        .map(|p| Part {
+            name: p.name,
+            mesh: p.mesh,
+            material: p.material,
+            meta: p.meta,
+        })
+        .collect()
+}
+
 thread_local! {
     static ONLY: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
@@ -143,16 +155,7 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
     // primitive (cuboid) frame building, structurally sound by construction
     {
         let (parts, conns) = crate::buildings::FrameBuilding::default().build();
-        let parts = parts
-            .into_iter()
-            .map(|p| Part {
-                name: p.name,
-                mesh: p.mesh,
-                material: p.material,
-                meta: p.meta,
-            })
-            .collect();
-        write_asset(dir, "building_v0", parts, conns, Some(0.0))?;
+        write_asset(dir, "building_v0", from_building(parts), conns, Some(0.0))?;
     }
     // larger multi-storey frame building (5 storeys, 3 x 2 bays)
     {
@@ -163,16 +166,7 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
             ..Default::default()
         };
         let (parts, conns) = b.build();
-        let parts = parts
-            .into_iter()
-            .map(|p| Part {
-                name: p.name,
-                mesh: p.mesh,
-                material: p.material,
-                meta: p.meta,
-            })
-            .collect();
-        write_asset(dir, "building_v1", parts, conns, Some(0.0))?;
+        write_asset(dir, "building_v1", from_building(parts), conns, Some(0.0))?;
     }
     // 1. ceramic bowl (thin curved shell)
     {
@@ -401,6 +395,27 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
             vec![],
             None,
         )?;
+    }
+    // structures whose failure modes come from how they are built
+    // (ported from vibe-land's town kit and calibration scenarios)
+    {
+        use crate::structures::*;
+        let (parts, conns) = MasonryArch::default().build();
+        write_asset(dir, "masonry_arch", from_building(parts), conns, Some(0.0))?;
+        let (parts, conns) = PrattTruss::default().build();
+        write_asset(
+            dir,
+            "pratt_truss_bridge",
+            from_building(parts),
+            conns,
+            Some(0.0),
+        )?;
+        let (parts, conns) = VeneerHouse::default().build();
+        write_asset(dir, "veneer_house", from_building(parts), conns, Some(-0.3))?;
+        let (parts, conns) = RcViaduct::default().build();
+        write_asset(dir, "rc_viaduct", from_building(parts), conns, Some(0.0))?;
+        let (parts, conns) = Tree::default().build();
+        write_asset(dir, "tree", from_building(parts), conns, Some(0.0))?;
     }
     // held-out set (never tuned on)
     let held = dir.join("held_out");
