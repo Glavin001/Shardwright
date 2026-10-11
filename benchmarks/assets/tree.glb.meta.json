@@ -7,9 +7,9 @@
       "anchor": false,
       "anchor_below": null,
       "grain": [
-        0.4224339433067263,
-        0.8983034599503603,
-        -0.1208323523876832
+        0.5261909613329918,
+        0.8369405931100977,
+        -0.15051084949590854
       ],
       "density_boxes": [],
       "forbidden_zones": [],
@@ -28,9 +28,9 @@
       "anchor": false,
       "anchor_below": null,
       "grain": [
-        0.5933310896224304,
-        0.7868639427603917,
-        -0.16971550804516988
+        0.6957573368596385,
+        0.6901560789571005,
+        -0.1990133535332344
       ],
       "density_boxes": [],
       "forbidden_zones": [],
@@ -49,9 +49,9 @@
       "anchor": false,
       "anchor_below": null,
       "grain": [
-        0.7193180704693414,
-        0.6635113932739161,
-        -0.20575262936830346
+        0.8011951366956559,
+        0.552780484183422,
+        -0.229172618873134
       ],
       "density_boxes": [],
       "forbidden_zones": [],
@@ -72,7 +72,7 @@
       "grain": [
         0.18855420617239657,
         0.9805806756909202,
-        -0.05393375377475287
+        -0.053933753774752846
       ],
       "density_boxes": [],
       "forbidden_zones": [],
@@ -91,9 +91,9 @@
       "anchor": false,
       "anchor_below": null,
       "grain": [
-        -0.08390742456555074,
-        0.9382601664559096,
-        0.33560006577011414
+        -0.10894048805810853,
+        0.8934634966176891,
+        0.4357234791394123
       ],
       "density_boxes": [],
       "forbidden_zones": [],
@@ -112,9 +112,9 @@
       "anchor": false,
       "anchor_below": null,
       "grain": [
-        -0.1055470222680205,
-        0.9003602145738161,
-        0.4221508144051672
+        -0.13346200190837612,
+        0.835011688736285,
+        0.533800874596873
       ],
       "density_boxes": [],
       "forbidden_zones": [],
@@ -133,9 +133,9 @@
       "anchor": false,
       "anchor_below": null,
       "grain": [
-        -0.1414692321413991,
-        0.8122969278277317,
-        0.565826967719772
+        -0.16968094626311372,
+        0.7145794148933884,
+        0.6786638610430625
       ],
       "density_boxes": [],
       "forbidden_zones": [],
@@ -154,7 +154,7 @@
       "anchor": false,
       "anchor_below": null,
       "grain": [
-        -0.047569102195807456,
+        -0.04756910219580748,
         0.9805806756909201,
         0.19025960942308034
       ],
@@ -175,9 +175,9 @@
       "anchor": false,
       "anchor_below": null,
       "grain": [
-        -0.2346037787647627,
-        0.9452512124982879,
-        -0.22685063865859173
+        -0.3059494659892477,
+        0.9049168479799642,
+        -0.29583850747139145
       ],
       "density_boxes": [],
       "forbidden_zones": [],
@@ -196,9 +196,9 @@
       "anchor": false,
       "anchor_below": null,
       "grain": [
-        -0.3800928187043968,
-        0.8487932511194167,
-        -0.36753158506919803
+        -0.4651259474070728,
+        0.7624819295549272,
+        -0.44975455545315857
       ],
       "density_boxes": [],
       "forbidden_zones": [],
@@ -217,9 +217,9 @@
       "anchor": false,
       "anchor_below": null,
       "grain": [
-        -0.4283606762035148,
-        0.8030827681075958,
-        -0.41420429579026447
+        -0.5110387393471996,
+        0.7033172501633654,
+        -0.4941500303643289
       ],
       "density_boxes": [],
       "forbidden_zones": [],
@@ -386,20 +386,20 @@
     {
       "a": "trunk_3",
       "b": "limb_0_collar",
-      "kind": "monolithic",
-      "interface_material": null
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
     },
     {
       "a": "trunk_3",
       "b": "limb_1_collar",
-      "kind": "monolithic",
-      "interface_material": null
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
     },
     {
       "a": "trunk_3",
       "b": "limb_2_collar",
-      "kind": "monolithic",
-      "interface_material": null
+      "kind": "grain_boundary",
+      "interface_material": "branch_union"
     },
     {
       "a": "limb_0_collar",

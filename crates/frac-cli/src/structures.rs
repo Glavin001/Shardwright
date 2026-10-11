@@ -492,6 +492,7 @@ const PLATE: f64 = 0.045;
 const BRICK: f64 = 0.09;
 const LINING: f64 = 0.0125;
 const HEADER: f64 = 0.15;
+const LINING_GAP: f64 = 0.01;
 const SET_BACK: f64 = 0.005; // horizontal frame members behind the cavity face
 const LINTEL: [f64; 2] = [0.15, 0.15]; // bearing length each side, depth
 
@@ -820,9 +821,16 @@ impl VeneerHouse {
             } else {
                 (BRICK + FRAME + LINING, span - BRICK - FRAME - LINING)
             };
+            // hung on the frame 10 mm clear of the footing, as drywall is
+            let mut loops = wall_loops(lu0, lu1, h, ops, false);
+            for p in loops.iter_mut().flatten() {
+                if p[1] == 0.0 {
+                    p[1] = LINING_GAP;
+                }
+            }
             parts.push(bpart(
                 format!("{wname}_lining"),
-                wf.panel(&wall_loops(lu0, lu1, h, ops, false), d_lining),
+                wf.panel(&loops, d_lining),
                 "drywall",
                 "cosmetic",
             ));
@@ -1088,6 +1096,13 @@ impl RcViaduct {
                 ));
             }
         }
+        // the solid abutments and pile caps are most of the volume but fail
+        // least: coarse cells there, finer in the deck, crossheads and
+        // columns (the suite default would give over a million bonds)
+        for p in &mut parts {
+            let massive = p.name.starts_with("abutment") || p.name.starts_with("pile_cap");
+            p.meta.analysis_cells_per_m3 = Some(if massive { 8.0 } else { 40.0 });
+        }
         (parts, Vec::new())
     }
 }
@@ -1115,7 +1130,7 @@ impl Default for Tree {
             seed: 7,
             trunk_segments: 4,
             trunk_height: 4.0,
-            trunk_radius: [0.3, 0.2],
+            trunk_radius: [0.32, 0.27],
             limbs: 3,
             limb_segments: 3,
         }
@@ -1185,11 +1200,11 @@ impl Tree {
             ));
             c = collar;
             r = rc;
-            let spread = 0.25 + 0.2 * rand();
+            let spread = 0.35 + 0.25 * rand();
             for s in 0..self.limb_segments {
                 let rise = 0.8 + 0.3 * rand();
                 let next = c + DVec3::new(0.0, rise, 0.0) + dir * spread * (1.0 + s as f64 * 0.6);
-                let rn = r * 0.8;
+                let rn = r * 0.85;
                 parts.push(wood(
                     format!("limb_{l}_{s}"),
                     loft(c, r, next, rn, sides),
@@ -1199,7 +1214,17 @@ impl Tree {
                 r = rn;
             }
         }
-        let conns = auto_conns(&parts, |_, _| Some(("monolithic", None)));
+        // the trunk is one piece of wood cut into segments; limbs are
+        // weaker at their union with the trunk, so the crown sheds there
+        let conns = auto_conns(&parts, |a, b| {
+            let union = [a, b].iter().any(|p| p.name.ends_with("_collar"))
+                && [a, b].iter().any(|p| p.name.starts_with("trunk"));
+            Some(if union {
+                ("grain_boundary", Some("branch_union"))
+            } else {
+                ("monolithic", None)
+            })
+        });
         (parts, conns)
     }
 }

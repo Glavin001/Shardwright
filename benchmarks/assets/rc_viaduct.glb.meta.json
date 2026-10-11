@@ -14,7 +14,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 8.0,
       "fine_per_analysis": null
     },
     "abutment_w": {
@@ -31,7 +31,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 8.0,
       "fine_per_analysis": null
     },
     "column_1_0": {
@@ -109,7 +109,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "column_1_1": {
@@ -187,7 +187,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "column_2_0": {
@@ -265,7 +265,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "column_2_1": {
@@ -343,7 +343,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "column_3_0": {
@@ -421,7 +421,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "column_3_1": {
@@ -499,7 +499,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "crosshead_1": {
@@ -577,7 +577,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "crosshead_2": {
@@ -655,7 +655,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "crosshead_3": {
@@ -733,7 +733,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "deck_0": {
@@ -841,7 +841,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "deck_1": {
@@ -949,7 +949,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "deck_2": {
@@ -1057,7 +1057,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "deck_3": {
@@ -1165,7 +1165,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "parapet_n_0": {
@@ -1182,7 +1182,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "parapet_n_1": {
@@ -1199,7 +1199,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "parapet_n_2": {
@@ -1216,7 +1216,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "parapet_n_3": {
@@ -1233,7 +1233,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "parapet_s_0": {
@@ -1250,7 +1250,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "parapet_s_1": {
@@ -1267,7 +1267,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "parapet_s_2": {
@@ -1284,7 +1284,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "parapet_s_3": {
@@ -1301,7 +1301,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 40.0,
       "fine_per_analysis": null
     },
     "pile_cap_1": {
@@ -1318,7 +1318,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 8.0,
       "fine_per_analysis": null
     },
     "pile_cap_2": {
@@ -1335,7 +1335,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 8.0,
       "fine_per_analysis": null
     },
     "pile_cap_3": {
@@ -1352,7 +1352,7 @@
       "recipe": null,
       "group": null,
       "impact_center": null,
-      "analysis_cells_per_m3": null,
+      "analysis_cells_per_m3": 8.0,
       "fine_per_analysis": null
     }
   },

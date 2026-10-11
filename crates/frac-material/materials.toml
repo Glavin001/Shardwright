@@ -199,6 +199,17 @@ fracture_energy = 2.0
 thickness = 0.01
 weibull_modulus = 5.0
 
+# Branch union: the limb's grain turns into the trunk's, with included
+# bark, so it fails well below clear wood.
+[[interface_material]]
+id = "branch_union"
+youngs_modulus = 2.0e9
+tensile_strength = 6.0e6
+cohesion = 4.0e6
+friction_angle_deg = 30.0
+fracture_energy = 1500.0
+thickness = 0.0
+
 # Brick-veneer wall ties (~0.9 kN per tie, ties every ~0.45 m up each stud)
 # smeared over the stud face the skin rests against.
 [[interface_material]]
