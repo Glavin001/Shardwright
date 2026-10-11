@@ -30,3 +30,13 @@ for v in load removed; do
 done
 rm -rf $R/support_graph && mkdir -p $R/support_graph
 python3 tools/explainer/ghost.py $G/l0_solid_0000.png $G/l0_graph.png $G/empty.png $R/support_graph/000.png 0.35
+
+# every ground-floor column removed in turn (README: support-graph section)
+rm -rf $R/support_columns && mkdir -p $R/support_columns
+for c in f0_col_00 f0_col_01 f0_col_02 f0_col_10 f0_col_11 f0_col_12 f0_col_20 f0_col_21 f0_col_22; do
+    $SIM $A /dev/null --level 2 --analyze out/why/data/bonds_L2_$c.json --remove $c
+    python3 tools/explainer/bond_graph.py $A out/why/data/bonds_L2_$c.json $G/col_$c > /dev/null
+    $P --sim $G/col_${c}_removed.json --out $R/support_columns/$c.png
+done
+# labelled README figures and the column GIF
+python3 tools/explainer/support_figs.py

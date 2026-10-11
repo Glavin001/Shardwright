@@ -448,6 +448,34 @@ across (`[hierarchy] level2_extent`):
 
 The L3 cells under each chunk are its convex debris.
 
+What the graph looks like, and what a solver gets from it, on the two-storey
+building:
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/readme/support_graph.png" alt="Level-0 support graph of the two-storey building over a ghost of its parts: joints between parts in orange, bearings in purple, anchors to the ground in black"></td>
+    <td width="50%"><img src="docs/readme/support_load.png" alt="Load path under self-weight: Level-2 chunks coloured by the force through them; the ground-floor columns carry the most"></td>
+  </tr>
+  <tr>
+    <td><b>Connectivity.</b> Every part is a node, every bond an edge through the contact it stands for. Every piece reaches the ground (black anchors) through some path.</td>
+    <td><b>Load path.</b> An exact stress solve of all 3,657 chunk bonds under self-weight. The ground-floor columns carry the building; the slabs carry little.</td>
+  </tr>
+</table>
+
+**What fails if a column goes?** Remove each ground-floor column in turn and
+re-solve: the red chunks have bonds over capacity and break first. The
+three columns along the brick infill wall overload only 2 to 10 bonds (the
+wall can take over their load); the centre column overloads 886. The last
+frame is the column the wrecking ball hits in the
+[simulation](#at-runtime-break-only-where-it-breaks), and its 188 overloaded
+bonds are where that collapse starts:
+
+<p align="center"><img src="docs/readme/support_columns.gif" width="640" alt="Each of the nine ground-floor columns removed in turn, with the chunks whose bonds go over capacity in red and a plan inset marking the removed column"></p>
+
+`tools/explainer/support.sh` reproduces these views (loads from
+`frac-sim --analyze` in [tools/sim](tools/sim/README.md), drawn with
+`prefracture preview --graph` and `--sim`).
+
 The important part is **where the solver should break**. A chunk bond on a
 predefined boundary is weaker than one inside a fragment. The boundaries are
 cuts between structural fragments (L1) and joints between authored parts
@@ -464,10 +492,6 @@ On the two-storey building, L1-cut bonds end up at **×0.37** and part joints at
 **×0.13** of the interior median capacity:
 
 ![Bond weakening on the two-storey building](docs/readme/weakening_two_storey.png)
-
-What a solver can read from these bonds (connectivity, the self-weight load
-path, and what a missing column overloads) is shown in
-[the evidence](#why-should-the-same-tool-output-the-bonds).
 
 Bonds also carry their joint kind, so the solver can treat mortar, cold
 joints, bearings (compression only) and ground anchors differently:

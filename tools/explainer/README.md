@@ -10,7 +10,7 @@ README's [evidence section](../../README.md#the-evidence):
 | Random Voronoi fractures of the same cells | `random_voronoi.py` | `out/why/models/random/` |
 | Measurements | `metrics.py` | `out/why/data/evidence.json` |
 | Rapier collapse (hierarchy scene, README hero and runtime section) | `../sim/make.sh` | `out/sim/`, `docs/readme/hero_collapse.gif`, `collapse_closeup.gif`, `collapse_two_storey.mp4` |
-| Support-graph views (bonds scene) | `support.sh` → `frac-sim --analyze`, `bond_graph.py`, `ghost.py` | `out/why/graph/`, `out/why/render/support_*/` |
+| Support-graph views (bonds scene, README support-graph section) | `support.sh` → `frac-sim --analyze`, `bond_graph.py`, `ghost.py`, `support_figs.py` | `out/why/graph/`, `out/why/render/support_*/`, `docs/readme/support_*` |
 | Renders | `render.py`, `render_zoom.py` | `out/why/render/` |
 | Video frames and README stills | `compose.py` | `out/why/frames/`, `docs/readme/why_*.png` |
 | MP4 and GIF | `make.sh` (ffmpeg) | `docs/readme/why_shardwright.{mp4,gif}` |
@@ -43,3 +43,7 @@ The **support-graph views** (`support.sh`):
    * one-frame "sims" coloured per chunk by force or utilization, for
      `prefracture preview --sim`, which uses the same camera.
 3. `ghost.py` lays the graph over a faded render of the parts.
+4. The same analysis runs once per ground-floor column. `support_figs.py`
+   then labels the README figures: `support_graph.png`, `support_load.png`
+   and `support_columns.gif`, which has a plan inset marking the removed
+   column.
