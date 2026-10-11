@@ -740,13 +740,17 @@ pub fn greedy_subset(poly: &ConvexPolytope, max_v: usize, eps: f64) -> ConvexPol
     cur.map(|c| c.poly).unwrap_or_else(|| poly.clone())
 }
 
-/// Convexity of a stored hull (vertices, polygon faces) as checked by the
-/// `collision_shapes` validation gate: every vertex on or behind every face
-/// plane (Newell normal through the face centroid), relative 1e-9.
+/// A stored hull (vertices, polygon faces) is a closed convex polyhedron, as
+/// checked by the `collision_shapes` validation gate: the faces bound a
+/// closed surface ([`frac_geom::polygon::closed_surface`]; consumers take the
+/// faces as given, and overlapping coplanar faces would count their region
+/// twice), and every vertex is on or behind every face plane (Newell normal
+/// through the face centroid), relative 1e-9.
 pub fn stored_hull_is_convex(verts: &[DVec3], faces: &[Vec<u32>]) -> bool {
     let scale = Aabb::from_points(verts.iter()).diagonal().max(1e-300);
     let tol = 1e-9 * scale;
     !faces.is_empty()
+        && frac_geom::polygon::closed_surface(faces)
         && faces.iter().all(|f| {
             let pts: Vec<DVec3> = f.iter().map(|&i| verts[i as usize]).collect();
             let n = frac_geom::polygon::newell(&pts).normalize_or_zero();
