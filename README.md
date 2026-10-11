@@ -72,7 +72,7 @@ joints are weakened by the Weibull size effect (`[bonds] size_effect`) and a
 configurable bias (`boundary_factors = [L0 joints, L1 cuts]`, default
 `[0.5, 0.4]`) so the solver breaks along the predefined boundaries first;
 `prefracture preview --bonds weakening` shows the result. On the two-storey
-building: 48 → 618 → 1,182 chunks (3.1 hulls each) → 6,860 cells, 44 s. `ablation_geometric.toml` and
+building: 48 → 618 → 1,182 chunks (3.1 hulls each) → 6,860 cells, 28 s (building_v1: 419 → 4,957 → 7,579 → 19,405, 94 s). `ablation_geometric.toml` and
 `ablation_fallback.toml` are the M3 ablations.
 
 ## Performance
