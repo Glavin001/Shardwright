@@ -49,6 +49,11 @@ pub struct PreviewOptions {
     /// Draw an arbitrary grouping of the cells instead of a level: one group
     /// id per cell (e.g. a random Voronoi fracture for comparison).
     pub cell_groups: Option<Vec<u32>>,
+    /// Optional fixed colours (RGB in 0..1) for some groups of `cell_groups`.
+    pub group_colors: std::collections::HashMap<u32, [f32; 3]>,
+    /// Draw the level's collision hulls (one colour per hull) instead of
+    /// the fragments' exact boundaries.
+    pub hulls: bool,
 }
 
 struct Tri {
@@ -575,6 +580,8 @@ enum Legend {
     Parts,
     /// One arbitrary colour per cosmetic debris piece.
     Debris,
+    /// One arbitrary colour per convex collision hull.
+    Hulls,
     /// Joint kinds present, with bond counts.
     Kind(Vec<(InterfaceKind, usize)>),
     /// Bond classes with (count, median capacity Pa, median ratio to the
@@ -596,7 +603,7 @@ enum Legend {
 impl Legend {
     fn height(&self, w: u32) -> u32 {
         match self {
-            Legend::Fragments | Legend::Parts | Legend::Debris => 44,
+            Legend::Fragments | Legend::Parts | Legend::Debris | Legend::Hulls => 44,
             Legend::Kind(k) => {
                 let (cols, _) = kind_columns(k, w);
                 52 + 30 * k.len().div_ceil(cols) as u32
@@ -652,6 +659,15 @@ fn draw_legend(c: &mut Canvas, y0: i64, lg: &Legend) {
                 y0 + 14,
                 2,
                 "Colour = fragment identity (arbitrary, no scale)",
+                INK,
+            );
+        }
+        Legend::Hulls => {
+            c.text(
+                x0,
+                y0 + 14,
+                2,
+                "Convex collision hulls (<= 64 vertices). Colour = hull (arbitrary)",
                 INK,
             );
         }
@@ -1083,6 +1099,54 @@ pub fn preview(
             };
             (panels, legend)
         }
+        None if o.hulls => {
+            let l = levels[levels.len() - 1];
+            let frs: Vec<&frac_core::Fragment> = asset
+                .level_fragments(l)
+                .iter()
+                .filter(|f| o.clip_z.is_none_or(|z| f.mass.com.z <= z))
+                .collect();
+            let (mut s, mut m) = (DVec3::ZERO, 0.0);
+            for f in &frs {
+                s += f.mass.com * f.mass.volume;
+                m += f.mass.volume;
+            }
+            let centre = s / m.max(1e-300);
+            let mut tris = Vec::new();
+            let mut nh = 0usize;
+            for f in &frs {
+                let off = (f.mass.com - centre) * o.explode;
+                for hi in f.hulls.clone() {
+                    let h = &asset.hulls[hi as usize];
+                    nh += 1;
+                    for face in &h.faces {
+                        for t in 1..face.len().saturating_sub(1) {
+                            let p = [face[0], face[t], face[t + 1]]
+                                .map(|k| h.vertices[k as usize] + off);
+                            let n = (p[1] - p[0]).cross(p[2] - p[0]);
+                            if n.length_squared() == 0.0 {
+                                continue;
+                            }
+                            let lam = n.normalize().dot(light).max(0.0);
+                            tris.push(Tri {
+                                p,
+                                frag: hi,
+                                shade: (0.35 + 0.65 * lam) as f32,
+                                rgb: None,
+                            });
+                        }
+                    }
+                }
+            }
+            titles.push(format!(
+                "L{l}: {nh} convex hulls for {} fragments",
+                frs.len()
+            ));
+            (
+                vec![render_panel(&tris, o.width, o.height, view, DVec3::Y)],
+                Legend::Hulls,
+            )
+        }
         None if o.cell_groups.is_some() => {
             let groups = o.cell_groups.as_ref().unwrap();
             if groups.len() != asset.cells.len() {
@@ -1118,6 +1182,7 @@ pub fn preview(
                     let off = (s / m.max(1e-300) - centre) * o.explode;
                     let mesh = frac_collision::cells_boundary_mesh(asset, cells);
                     let id = *g;
+                    let rgb = o.group_colors.get(g).copied();
                     (0..mesh.tris.len())
                         .filter_map(move |t| {
                             let p = mesh.tri_points(t).map(|x| x + off);
@@ -1130,7 +1195,7 @@ pub fn preview(
                                 p,
                                 frag: id,
                                 shade: (0.35 + 0.65 * lam) as f32,
-                                rgb: None,
+                                rgb,
                             })
                         })
                         .collect::<Vec<_>>()

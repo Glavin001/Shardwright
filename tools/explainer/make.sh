@@ -49,6 +49,29 @@ for spec in "bracket 2 3 5" "bone 2 3 5" "creature 9 9 9" "chair 6 6 6"; do
     done
 done
 
+# inputs steer the result: the same pane with other materials or impact point,
+# the same beam with its grain rotated
+mkdir -p out/why/inputs
+python3 - <<'PY'
+import json
+pane = lambda **kw: {"parts": {"pane": dict({"material": "glass_annealed", "impact_center": [0.45, 0.65, 0.003]}, **kw)}, "connections": [], "ground_height": None}
+for name, meta in (("pane_tempered", pane(material="glass_tempered")), ("pane_concrete", pane(material="concrete_c30")),
+                   ("pane_corner", pane(impact_center=[0.2, 0.25, 0.003]))):
+    json.dump(meta, open(f"out/why/inputs/{name}.meta.json", "w"))
+json.dump({"parts": {"beam": {"material": "pine", "grain": [0.0, 1.0, 0.0]}}, "connections": [], "ground_height": None},
+          open("out/why/inputs/beam_grain_y.meta.json", "w"))
+PY
+for v in pane_tempered pane_concrete pane_corner; do
+    cp benchmarks/assets/glass_annealed_pane.glb out/why/inputs/$v.glb
+    $B bake --input out/why/inputs/$v.glb --meta out/why/inputs/$v.meta.json --config benchmarks/configs/bake.toml --out out/why/inputs
+done
+cp benchmarks/assets/timber_beam.glb out/why/inputs/beam_grain_y.glb
+$B bake --input out/why/inputs/beam_grain_y.glb --meta out/why/inputs/beam_grain_y.meta.json --config benchmarks/configs/bake.toml --out out/why/inputs
+
+# problem slide: a random Voronoi shatter of the whole building, ignoring parts
+mkdir -p out/why/data
+"$PY" tools/explainer/random_voronoi.py out/support_clusters/two_storey_building.asset.json out/why/data/building_random.json 120 3 --highlight-spanning
+
 "$PY" tools/explainer/metrics.py
 python3 tools/explainer/render.py
 python3 tools/explainer/render_zoom.py

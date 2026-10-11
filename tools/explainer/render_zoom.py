@@ -7,6 +7,14 @@ D = B + "/out/why/render"
 R, U = B + "/out/why/shardwright", B + "/out/why/uniform"
 W, H = 560, 380
 jobs = []
+I = B + "/out/why/inputs"
+# grain direction: along the beam (default) vs rotated across it
+for nm, path in (("x", f"{R}/timber_beam"), ("y", f"{I}/beam_grain_y")):
+    d = f"{D}/in_beam_{nm}_z"; os.makedirs(d, exist_ok=True)
+    for f in os.listdir(d): os.remove(f"{d}/{f}")
+    jobs.append(([BIN, "preview", "--input", f"{path}.asset.json", "--out", f"{d}/000.png", "--level", "3",
+                  "--width", str(int(W * 2.6)), "--height", str(int(H * 2.6)), "--explode", "0.03",
+                  "--azimuth", "22", "--elevation", "32"], f"{d}/000.png"))
 for m, az, el, z in (("glass_tempered_pane", 30, 18, 2.4), ("timber_beam", 22, 32, 2.6), ("brick_wall_window", 35, 22, 1.7)):
     for v, root in (("sw", R), ("un", U)):
         d = f"{D}/{m}_{v}_z"; os.makedirs(d, exist_ok=True)

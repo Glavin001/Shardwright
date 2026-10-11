@@ -5,7 +5,10 @@ region split into separate pieces (as clipping Voronoi cells to the mesh
 does). Writes one JSON array of group ids per cell for `prefracture preview
 --cell-groups`.
 
-Usage: random_voronoi.py ASSET.json OUT.json PIECES SEED"""
+With --highlight-spanning, pieces that span more than one authored part are
+coloured red and the rest grey (the file then holds {"groups", "colors"}).
+
+Usage: random_voronoi.py ASSET.json OUT.json PIECES SEED [--highlight-spanning]"""
 import json, sys
 import numpy as np
 
@@ -33,5 +36,13 @@ for s in range(len(P)):
             if group[v] < 0 and lab[v] == lab[u]:
                 group[v] = g; stack.append(v)
     g += 1
-json.dump(group.tolist(), open(out, "w"))
-print(out, n, "seeds ->", g, "pieces")
+if "--highlight-spanning" in sys.argv:
+    comp = np.array([c["component"] for c in a["cells"]])
+    span = [len(set(comp[group == k])) > 1 for k in range(g)]
+    shades = [[0.86, 0.22, 0.25], [0.95, 0.42, 0.30], [0.78, 0.15, 0.35], [0.98, 0.55, 0.45]]
+    colors = {str(k): (shades[k % 4] if span[k] else [0.80, 0.80, 0.83]) for k in range(g)}
+    json.dump({"groups": group.tolist(), "colors": colors}, open(out, "w"))
+    print(out, n, "seeds ->", g, "pieces,", sum(span), "span more than one part")
+else:
+    json.dump(group.tolist(), open(out, "w"))
+    print(out, n, "seeds ->", g, "pieces")

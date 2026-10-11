@@ -88,4 +88,6 @@ cfg = open(ROOT + "/benchmarks/configs/bake.toml").read()
 for name, density, pieces in (("bracket", 15000, 2), ("bone", 60000, 2), ("creature", 12000, 9), ("chair", 40000, 6)):
     open(f"{D}/{name}.toml", "w").write(cfg.replace("target_analysis_cells_per_m3 = 200", f"target_analysis_cells_per_m3 = {density}")
                                         .replace("fine_per_analysis = 8", "fine_per_analysis = 4")
-                                        .replace("target_level1_fragments = 12", f"target_level1_fragments = {pieces}"))
+                                        .replace("target_level1_fragments = 12", f"target_level1_fragments = {pieces}")
+                                        # a few clean hulls per piece, to show the decomposition
+                                        .replace("max_hulls_per_fragment = 128", "max_hulls_per_fragment = 12"))

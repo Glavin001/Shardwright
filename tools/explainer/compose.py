@@ -58,8 +58,17 @@ def frame(name, i, box=None):
 def nframes(name): return len(os.listdir(f"{R}/{name}"))
 
 # ---------------------------------------------------------------- drawing
-def text(d, xy, s, size=24, bold=False, color=INK, a=1.0, anchor="la", mono=False):
-    d.text(xy, s, font=F(size, bold, mono), fill=fade(color, a), anchor=anchor)
+OVERFLOW = []   # (scene, text) of anything drawn past the canvas or its box
+CUR = {"scene": ""}
+def check(d, xy, s, font, anchor="la", maxw=None):
+    x0, y0, x1, y1 = d.textbbox(xy, s, font=font, anchor=anchor)
+    if x0 < 6 or x1 > W - 6 or y1 > H - 2 or (maxw is not None and x1 - x0 > maxw):
+        OVERFLOW.append((CUR["scene"], s[:60]))
+
+def text(d, xy, s, size=24, bold=False, color=INK, a=1.0, anchor="la", mono=False, maxw=None):
+    f = F(size, bold, mono)
+    if a > 0.05: check(d, xy, s, f, anchor, maxw)
+    d.text(xy, s, font=f, fill=fade(color, a), anchor=anchor)
 
 def wrap(s, size, maxw, bold=False):
     f = F(size, bold); words = s.split(); lines = []; cur = ""
@@ -79,6 +88,7 @@ def para(d, xy, s, size, maxw, color=INK, a=1.0, bold=False, gap=1.3):
 def pill(d, xy, s, color, a=1.0, size=22, anchor="l"):
     f = F(size, True); tw = f.getlength(s); x, y = xy
     if anchor == "c": x -= (tw + 28) / 2
+    if a > 0.05 and (x < 6 or x + tw + 28 > W - 6): OVERFLOW.append((CUR["scene"], "pill: " + s))
     d.rounded_rectangle([x, y, x + tw + 28, y + size + 16], radius=(size + 16) // 2, fill=fade(color, a))
     d.text((x + 14, y + 7), s, font=f, fill=mix(fade(color, a), WHITE, clamp(a)))
 
@@ -134,71 +144,98 @@ def new(): img = Image.new("RGB", (W, H), BG); return img, ImageDraw.Draw(img)
 
 # ---------------------------------------------------------------- scenes
 def s_title():
-    T = 40
+    T = 44
     for i in range(T):
         t = i / FPS; img, d = new()
         paste(img, frame("title", i, (540, 430)), (720, 140), a=ease(t / 0.8), border=False)
         a = ease(t / 0.6)
-        text(d, (70, 210 + 12 * (1 - a)), "Why Shardwright?", 60, True, INK, a)
+        text(d, (70, 200 + 12 * (1 - a)), "Why Shardwright?", 60, True, INK, a)
         a2 = ease((t - 0.5) / 0.6)
-        text(d, (72, 300), "Destruction that breaks", 38, False, INK, a2)
-        text(d, (72, 348), "like the real thing.", 38, False, INK, a2)
+        text(d, (72, 290), "Destruction that breaks", 38, False, INK, a2)
+        text(d, (72, 338), "like the real thing.", 38, False, INK, a2)
         a3 = ease((t - 1.1) / 0.6)
-        para(d, (72, 430), "A pre-fracture library: fragments, bond graphs and colliders baked from your mesh, validated against physics.", 23, 560, GREY, a3)
+        para(d, (72, 420), "Author a structure and its materials. Get fragments, colliders and bonds for your stress solver, validated against physics.", 23, 580, GREY, a3)
+        a4 = ease((t - 1.8) / 0.6)
+        text(d, (72, 540), "For games, simulation and film.", 24, True, BLUE, a4)
         yield img
 
 def s_problem():
-    T = 100; n = nframes("problem")
-    items = [("Cracks ignore the shape", "seeds land anywhere: not at notches, joints, supports"),
-             ("Every material breaks the same", "glass, wood, brick and concrete look alike"),
-             ("No idea what holds what", "no bonds: the solver guesses strength and support"),
-             ("One flat level of pieces", "thousands of bodies at once, or no detail")]
+    T = 116
+    span = ev.get("problem_spanning", [80, 129])
+    cells = [("model_bracket_r1", "Cracks ignore the shape", "Random seeds miss the bracket's obvious weak neck."),
+             ("materials", "Every material breaks the same", "Glass, wood and brick all become the same blobs."),
+             ("problem_random", "Nothing knows what holds what", f"{span[0]} of {span[1]} random pieces (red) fuse columns, slabs and walls, and there are no bonds."),
+             ("problem_leaf", "One flat level of pieces", f"Every piece is a body from the start: {ev['rigid_bodies_partial_break']['flat_leaf']:,} for this building.")]
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "THE PROBLEM", "Most pre-fractured destruction is random", RED, ease(t / 0.4))
-        paste(img, frame("problem", min(i, n - 1), (560, 460)), (40, 135))
-        pill(d, (60, 112), "Typical: random Voronoi shatter, no physics", RED, ease(t / 0.4), size=19)
-        for k, (a_, b_) in enumerate(items):
-            ak = ease((t - 0.7 - 1.0 * k) / 0.45)
-            y = 150 + k * 108
-            tick(d, (662, y + 18), 17, RED, ak, cross=True)
-            text(d, (692, y + 2), a_, 27, True, INK, ak)
-            text(d, (692, y + 40), b_, 20, False, GREY, ak)
-        ab = ease((t - 5.2) / 0.5)
+        header(d, "THE PROBLEM", "Random pre-fracture looks fake and breaks wrong", RED, ease(t / 0.4))
+        for k, (nm, ttl, sub) in enumerate(cells):
+            a = ease((t - 0.4 - 1.1 * k) / 0.45)
+            if a <= 0: continue
+            x = 30 + (k % 2) * 620; y = 100 + (k // 2) * 258
+            bw, bh = 300, 238
+            if nm == "materials":
+                im = Image.new("RGB", (bw, bh), BG)
+                dd = ImageDraw.Draw(im)
+                for j, (sq, lab) in enumerate((("glass_tempered_pane_un_z", "glass"), ("timber_beam_un_z", "wood"), ("brick_wall_window_un_z", "brick"))):
+                    tile = frame(sq, 11)
+                    cx, cy = int(tile.width * (0.3 if lab == "brick" else 0.5)), tile.height // 2
+                    im.paste(tile.crop((cx - 48, cy - 105, cx + 48, cy + 105)), (j * 102, 0))
+                    dd.text((j * 102 + 48, 224), lab, font=F(17, True), fill=INK, anchor="mm")
+            else:
+                im = frame(nm, 0, (bw, bh))
+            paste(img, im, (x, y), a=a)
+            if nm == "model_bracket_r1":
+                ring(d, (x + bw // 2, y + int(bh * 0.57)), 14, BLUE, 3, a)
+            tick(d, (x + bw + 30, y + 30), 15, RED, a, cross=True)
+            yy = para(d, (x + bw + 54, y + 14), ttl, 23, 252, INK, a, bold=True)
+            para(d, (x + bw + 54, yy + 6), sub, 18, 252, GREY, a)
+        ab = ease((t - 5.4) / 0.5)
         if ab > 0:
-            d.rectangle([0, 622, W, 700], fill=mix(BG, INK, ab))
-            text(d, (40, 661), "TL;DR", 28, True, YELLOW, ab, anchor="lm")
-            d.text((150, 661), "Pre-fractured destruction looks fake, and the physics can't tell what should break.",
+            d.rectangle([0, 630, W, 706], fill=mix(BG, INK, ab))
+            text(d, (40, 668), "TL;DR", 28, True, YELLOW, ab, anchor="lm")
+            d.text((150, 668), "Random pre-fracture looks fake, and the physics can't tell what should break.",
                    font=F(25), fill=mix(mix(BG, INK, ab), WHITE, ab), anchor="lm")
         yield (img, "why_problem") if i == T - 1 else img
 
+def card(d, x, y, w, h, color, title, items, t0, t, mark=True):
+    a = ease((t - t0) / 0.5)
+    if a <= 0: return
+    d.rounded_rectangle([x, y, x + w, y + h], radius=16, fill=mix(BG, WHITE, a), outline=fade(LIGHT, a), width=2)
+    d.rounded_rectangle([x, y, x + w, y + 10], radius=5, fill=fade(color, a))
+    text(d, (x + 24, y + 30), title, 27, True, INK, a)
+    yy = y + 84
+    for k, it in enumerate(items):
+        ak = ease((t - t0 - 0.3 - 0.25 * k) / 0.4)
+        if mark: tick(d, (x + 34, yy + 12), 11, color, ak)
+        yy = para(d, (x + 56, yy), it, 20, w - 80, INK, ak) + 10
+
 def s_pitch():
-    T = 96
-    cards = [(BLUE, "1", "Where it breaks", "Fracture modes find the cuts that need the least energy. Material recipes break glass, wood, brick and concrete their own way."),
-             (GREEN, "2", "What holds it together", "An exact bond graph: contact area, normal, moments, rebar, joint type, Weibull strength, ground anchors."),
-             (ORANGE, "3", "Ready for the runtime", "Four nested levels, non-overlapping convex colliders, watertight render meshes, glTF + FlatBuffers.")]
+    T = 100
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "THE PITCH", "Bake a mesh into everything destruction needs", GREEN, ease(t / 0.4))
-        for k, (col, num, ttl, body) in enumerate(cards):
-            a = ease((t - 0.3 - 0.5 * k) / 0.5)
-            x = 50 + k * 400; y = 140 + 40 * (1 - a)
-            if a <= 0: continue
-            d.rounded_rectangle([x, y, x + 370, y + 330], radius=16, fill=mix(BG, WHITE, a), outline=fade(LIGHT, a), width=2)
-            d.rounded_rectangle([x, y, x + 370, y + 10], radius=5, fill=fade(col, a))
-            d.ellipse([x + 24, y + 34, x + 72, y + 82], fill=fade(col, a))
-            text(d, (x + 48, y + 58), num, 26, True, WHITE if a > 0.5 else BG, a, anchor="mm")
-            text(d, (x + 86, y + 46), ttl, 23, True, INK, a)
-            para(d, (x + 26, y + 112), body, 21, 320, GREY, a)
-        a = ease((t - 2.8) / 0.5)
-        text(d, (W // 2, 530), "All cut from one exact cell complex, so fragments, bonds and colliders always agree.", 25, True, INK, a, anchor="mm")
+        header(d, "THE PITCH", "You author the structure. Shardwright does the rest.", GREEN, ease(t / 0.4))
+        card(d, 40, 120, 440, 400, BLUE, "You author", ["Meshes of the parts (glTF, OBJ, PLY, STL)",
+             "A material per part: concrete, brick, glass, wood, steel…",
+             "Optional: joints, ground anchors, rebar, wood grain, impact points"], 0.3, t)
+        a = ease((t - 1.4) / 0.4)
+        arrow(d, (500, 320), (790, 320), INK, 5, 18, a)
+        f = F(19, mono=True); s_ = "prefracture bake"; tw = f.getlength(s_)
+        if a > 0:
+            d.rounded_rectangle([645 - tw / 2 - 14, 268, 645 + tw / 2 + 14, 302], radius=8, fill=mix(BG, INK, a))
+            d.text((645, 285), s_, font=f, fill=mix(mix(BG, INK, a), (230, 230, 240), a), anchor="mm")
+        text(d, (645, 350), "seconds to minutes", 18, False, GREY, a, anchor="mm")
+        card(d, 810, 120, 430, 400, GREEN, "You get", ["Fragments at 4 nested levels",
+             "Convex colliders that never overlap",
+             "A bond graph with strengths, weaker along joints and cuts",
+             "Render meshes with interiors and LODs",
+             "A report: 14 hard gates passed"], 1.8, t)
         a = ease((t - 3.6) / 0.5)
-        text(d, (W // 2, 574), "Checked against FEM (Kratos), Voro++, upstream CoACD and the fracture-modes reference code.", 21, False, GREY, a, anchor="mm")
-        a = ease((t - 4.6) / 0.5)
-        text(d, (W // 2, 650), "Here is why each part matters  →", 24, True, BLUE, a, anchor="mm")
+        text(d, (W // 2, 580), "Ready for game engines, stress solvers, simulation and film VFX.", 25, True, INK, a, anchor="mm")
+        a = ease((t - 4.4) / 0.5)
+        text(d, (W // 2, 634), "Here is each capability, and why it matters  →", 23, True, BLUE, a, anchor="mm")
         yield (img, "beat_pitch") if i == T - 1 else img
 
-# fracture-modes demo models: (name, layout, headline, detail, weakness label)
 MODELS = [("bracket", "row", "A clear weakness: the bracket snaps at its neck.",
            "Random Voronoi cuts wherever its seeds land, never where the part is weak.", "clear weakness"),
           ("bone", "row", "A long bone breaks across its shaft.",
@@ -210,7 +247,7 @@ MODELS = [("bracket", "row", "A clear weakness: the bracket snaps at its neck.",
 
 def s_modes():
     for m, layout, line, sub, weak in MODELS:
-        T = 54
+        T = 50
         for i in range(T):
             t = i / FPS; img, d = new()
             header(d, "1 · FRACTURE MODES", "It breaks where the object is weak", BLUE, 1.0,
@@ -272,7 +309,7 @@ def mini_glass(d, x, y, w, h, t):
 def s_materials():
     PX, PY, PW, PH = 40, 130, 560, 344
     for k, (m, recipe, line, sub) in enumerate(MATS):
-        T = 52
+        T = 48
         base = m.replace("_z", "")
         un = f"{base}_un" + ("_z" if m.endswith("_z") else ""); sw = f"{base}_sw" + ("_z" if m.endswith("_z") else "")
         for i in range(T):
@@ -317,13 +354,14 @@ KINDS = [((0.70, 0.70, 0.72), "monolithic"), ((0.65, 0.25, 0.20), "mortar joint"
          ((0.20, 0.65, 0.70), "part connection"), ((0.95, 0.55, 0.10), "bearing"), ((0.05, 0.05, 0.05), "ground anchor")]
 
 def s_bonds():
+    yield from s_bond_schematic()
     n = nframes("bonds")
     fields = ["exact area, centroid and normal", "second moments: bending + torsion", "material mix and rebar crossings",
               "joint type: mortar, cold joint, bearing…", "Weibull strength (size effect)", "anchors to the ground"]
     T = 64
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "3 · BONDS", "It knows what holds it together", GREEN, 1.0, "Every contact between two pieces becomes a bond (two-storey building, 3,657 chunk bonds)")
+        header(d, "6 · BONDS", "It knows what holds it together", GREEN, 1.0, "Every contact between two pieces becomes a bond (two-storey building, 3,657 chunk bonds)")
         im = frame("bonds", min(i, n - 1))
         im = im.crop((0, 0, im.width, min(im.height, 560 - 36)))
         s = min(700 / im.width, 520 / im.height); im = im.resize((int(im.width * s), int(im.height * s)), Image.LANCZOS)
@@ -344,7 +382,7 @@ def s_bonds():
     ex, cl, ad = [sum(pt[k]) / 2 * 100 for k in ("exact", "centre_line_normals", "adjacency_only")]
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "3 · BONDS", "Why the bonds must come from the same exact cells", GREEN, 1.0,
+        header(d, "6 · BONDS", "Why the bonds must come from the same exact cells", GREEN, 1.0,
                "Stress error in a uniform-stress patch test: p95, same solver, same 1,537 pieces (lower is better)")
         bars(d, 60, 170, 1160, [("Exact bonds (Shardwright)", ex, GREEN, f"{ex:.1f}%"),
                                 ("Normals from centre lines", cl, ORANGE, f"{cl:.1f}%"),
@@ -360,7 +398,7 @@ def s_bonds():
     s = 760 / wk.width; wk = wk.resize((int(wk.width * s), int(wk.height * s)), Image.LANCZOS)
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "3 · BONDS", "Predefined cuts are deliberately weaker", GREEN, 1.0, "Weibull weakest-link size effect plus a configurable bias")
+        header(d, "6 · BONDS", "Predefined cuts are deliberately weaker", GREEN, 1.0, "Weibull weakest-link size effect plus a configurable bias")
         paste(img, wk, (30, 120), a=ease(t / 0.5))
         text(d, (820, 150), "Chunk bond capacity", 24, True, INK, ease(t / 0.4))
         text(d, (820, 182), "relative to the interior median", 19, False, GREY, ease(t / 0.4))
@@ -371,11 +409,11 @@ def s_bonds():
         yield img
 
 def s_hierarchy():
-    n = nframes("partial"); T = 108
+    n = nframes("partial"); T = 100
     flat = ev["rigid_bodies_partial_break"]["flat_leaf"]
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "4 · HIERARCHY", "Detail only where it breaks", ORANGE, 1.0, "Four nested levels: a fragment is swapped for its children only where it breaks")
+        header(d, "5 · HIERARCHY", "Detail only where it breaks", ORANGE, 1.0, "Four nested levels: a fragment is swapped for its children only where it breaks")
         j = min(i, n - 1)
         paste(img, frame("partial", j, (700, 520)), (30, 115), border=False)
         c = counts[j]; tot = sum(c)
@@ -420,7 +458,7 @@ def s_colliders():
         return lo[:-1] + up[:-1]
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "5 · COLLIDERS", "Colliders that don't fight each other", TEAL, 1.0, "Convex hulls (≤ 64 vertices) that never overlap their neighbours")
+        header(d, "4 · COLLIDERS", "Colliders that don't fight each other", TEAL, 1.0, "Convex hulls (≤ 64 vertices) that never overlap their neighbours")
         for col, (ox, title, good) in enumerate(((70, "Naive hulls", False), (400, "Shardwright hulls", True))):
             a = ease((t - 0.3 - 0.8 * col) / 0.5)
             oy = 220
@@ -459,8 +497,184 @@ def s_colliders():
         para(d, (770, 460), "Built in pure Rust from a CoACD port, with a tighter fit at the same hull count.", 20, 470, GREY, ease((tc - 1.6) / 0.5))
         yield (img, "why_colliders") if i == T - 1 else img
 
+
+INPUT_BEATS = [
+    ("material", [("in_pane_annealed", '"material": "glass_annealed"'), ("in_pane_tempered", '"material": "glass_tempered"'),
+                  ("in_pane_concrete", '"material": "concrete_c30"')],
+     "Same pane, one line changed: the material picks the fracture pattern."),
+    ("impact", [("in_pane_annealed", '"impact_center": [0.45, 0.65, 0]'), ("in_pane_corner", '"impact_center": [0.2, 0.25, 0]')],
+     "Move the impact point and the radial cracks move with it."),
+    ("grain", [("in_beam_x_z", '"grain": [1, 0, 0]'), ("in_beam_y_z", '"grain": [0, 1, 0]')],
+     "Rotate the wood grain and the splinters follow it."),
+]
+PROPS = [("recipe, grain, impact point", "the cell pattern: how it shatters"),
+         ("Young's modulus, Poisson's ratio", "fracture modes (FEM) and bond stiffness"),
+         ("fracture energy (grain, joints)", "where cuts are cheap, so where it splits"),
+         ("tensile and compressive strength, cohesion", "bond capacity for the stress solver"),
+         ("Weibull modulus", "size-effect weakening of large cut surfaces"),
+         ("density", "mass and inertia of every piece"),
+         ("noise, chipping, interior colours", "the render meshes")]
+
+def s_inputs():
+    for key, panels, line in INPUT_BEATS:
+        T = 46
+        n = len(panels); pw = 380 if n == 3 else 540; gap = (W - 60 - n * pw) // max(1, n - 1)
+        for i in range(T):
+            t = i / FPS; img, d = new()
+            header(d, "3 · YOUR INPUTS", "Your inputs steer the result", ORANGE, 1.0,
+                   "Edit one line of the part's metadata and re-bake")
+            for k, (nm, code) in enumerate(panels):
+                x = 30 + k * (pw + gap)
+                a = ease((t - 0.2 - 0.5 * k) / 0.4)
+                if a <= 0: continue
+                paste(img, frame(nm, 0, (pw, 380)), (x, 160), a=a)
+                f = F(17, mono=True); tw = f.getlength(code)
+                d.rounded_rectangle([x, 116, x + tw + 24, 146], radius=8, fill=mix(BG, INK, a))
+                d.text((x + 12, 131), code, font=f, fill=mix(mix(BG, INK, a), (240, 220, 140), a), anchor="lm")
+            a = ease((t - 1.4) / 0.5)
+            text(d, (W // 2, 600), line, 28, True, INK, a, anchor="mm")
+            yield (img, f"beat_input_{key}") if i == T - 1 else img
+    T = 66
+    for i in range(T):
+        t = i / FPS; img, d = new()
+        header(d, "3 · YOUR INPUTS", "Material properties, and what each one drives", ORANGE, 1.0,
+               "Built-in library in materials.toml, or pass your own with --materials")
+        text(d, (60, 128), "Property", 21, True, GREY, ease(t / 0.4))
+        text(d, (640, 128), "Drives", 21, True, GREY, ease(t / 0.4))
+        for k, (p_, e_) in enumerate(PROPS):
+            a = ease((t - 0.3 - 0.35 * k) / 0.4)
+            y = 170 + k * 62
+            d.line([(60, y - 12), (1220, y - 12)], fill=fade(LIGHT, a), width=1)
+            text(d, (60, y + 8), p_, 22, True, INK, a, anchor="lm", maxw=560)
+            text(d, (640, y + 8), e_, 22, False, INK, a, anchor="lm", maxw=580)
+        yield img
+
+def s_convex():
+    T = 60
+    for i in range(T):
+        t = i / FPS; img, d = new()
+        header(d, "4 · COLLIDERS", "Physics engines need convex shapes", TEAL, 1.0,
+               "Fracture-mode pieces follow the shape, so they are non-convex")
+        paste(img, frame("hull_pieces", 0, (560, 400)), (30, 140))
+        pill(d, (46, 122), "Fracture-mode pieces (non-convex)", BLUE, 1.0, size=19)
+        a = ease((t - 1.0) / 0.5)
+        arrow(d, (605, 340), (675, 340), INK, 5, 16, a)
+        paste(img, frame("hull_hulls", 0, (560, 400)), (690, 140), a=a)
+        pill(d, (706, 122), "Convex hulls, ≤ 64 vertices each", GREEN, a, size=19)
+        a = ease((t - 2.0) / 0.5)
+        text(d, (W // 2, 590), "Each piece is decomposed into convex hulls: 9 pieces → 105 hulls.", 27, True, INK, a, anchor="mm")
+        text(d, (W // 2, 632), "Convex cells skip this step; hulls of neighbouring pieces never overlap.", 21, False, GREY, ease((t - 2.6) / 0.5), anchor="mm")
+        yield (img, "why_convex") if i == T - 1 else img
+    yield from s_colliders()
+
+def s_bond_schematic():
+    T = 56
+    A = [(0, 0), (140, 0), (200, 230), (0, 230)]          # left piece; shared face (140,0)-(200,230)
+    B_ = [(140, 0), (330, 0), (330, 230), (200, 230)]
+    def cen(P): return (sum(p[0] for p in P) / len(P), sum(p[1] for p in P) / len(P))
+    for i in range(T):
+        t = i / FPS; img, d = new()
+        header(d, "6 · BONDS", "Bonds come from the exact contact surfaces", GREEN, 1.0,
+               "A stress solver decides what breaks from each bond's area, orientation and strength")
+        for col, (ox, good, ttl) in enumerate(((90, False, "Guessed from adjacency"), (720, True, "Shardwright: exact contact"))):
+            a = ease((t - 0.3 - 1.0 * col) / 0.5)
+            if a <= 0: continue
+            oy = 200
+            tr = lambda P: [(ox + x, oy + y) for x, y in P]
+            d.polygon(tr(A), fill=fade((190, 210, 240), a), outline=fade(BLUE, a), width=3)
+            d.polygon(tr(B_), fill=fade((200, 230, 205), a), outline=fade(GREEN, a), width=3)
+            ca, cb = cen(A), cen(B_)
+            d.ellipse([ox + ca[0] - 5, oy + ca[1] - 5, ox + ca[0] + 5, oy + ca[1] + 5], fill=fade(INK, a))
+            d.ellipse([ox + cb[0] - 5, oy + cb[1] - 5, ox + cb[0] + 5, oy + cb[1] + 5], fill=fade(INK, a))
+            text(d, (ox + 165, oy - 52), ttl, 24, True, RED if not good else GREEN, a, anchor="mm")
+            if not good:
+                d.line(tr([ca, cb]), fill=fade(GREY, a), width=2)
+                m = ((ca[0] + cb[0]) / 2, (ca[1] + cb[1]) / 2)
+                d.line(tr([(m[0], m[1] - 60), (m[0], m[1] + 60)]), fill=fade(RED, a), width=7)
+                arrow(d, (ox + m[0], oy + m[1]), (ox + m[0] + 70, oy + m[1]), RED, 4, 12, a)
+                para(d, (ox - 10, oy + 260), "Normal from the line between centres, one average area: the wrong angle and size.", 19, 360, RED, a)
+            else:
+                d.line(tr([(140, 0), (200, 230)]), fill=fade(GREEN, a), width=8)
+                mx, my = 170, 115
+                nx, ny = 230, -60
+                L = (nx * nx + ny * ny) ** 0.5
+                arrow(d, (ox + mx, oy + my), (ox + mx + nx / L * 70, oy + my + ny / L * 70), GREEN, 4, 12, a)
+                d.ellipse([ox + mx - 6, oy + my - 6, ox + mx + 6, oy + my + 6], fill=fade(GREEN, a))
+                para(d, (ox - 10, oy + 260), "Exact polygon: true area, centroid, normal, second moments, rebar crossings.", 19, 360, GREEN, a)
+        a = ease((t - 2.6) / 0.5)
+        text(d, (W // 2, 640), "Wrong contact geometry means wrong stresses. How wrong? →", 24, True, INK, a, anchor="mm")
+        yield (img, "why_bond_contact") if i == T - 1 else img
+
+CHAIN = [("chain_input", "Input", "48 authored parts + materials"),
+         ("chain_cells", "Cells", "6,860 exact cells from recipes"),
+         ("chain_l1", "Fracture modes (L1)", "618 pieces, weakest cuts first"),
+         ("chain_l2", "Solver chunks (L2)", "1,182 chunks about 0.5 m across"),
+         ("chain_hulls", "Convex hulls", "3,655 hulls, never overlapping"),
+         ("chain_bonds", "Bonds", "3,657 bonds; joints, cuts weaker"),
+         (None, "Export", ".glb + .fracphys + report, in 28 s")]
+
+def s_chain():
+    T = 112
+    for i in range(T):
+        t = i / FPS; img, d = new()
+        header(d, "END TO END", "Drop in a mesh. Get chunks, colliders and bonds.", BLUE, 1.0,
+               "The whole pipeline on the two-storey building, in one bake")
+        for k, (nm, ttl, sub) in enumerate(CHAIN):
+            a = ease((t - 0.3 - 0.55 * k) / 0.4)
+            if a <= 0: continue
+            row, colk = (0, k) if k < 4 else (1, k - 4)
+            x = 30 + colk * 310 + (155 if row else 0); y = 140 + row * 268
+            if nm:
+                im = frame(nm, 0, (280, 180)) if nm != "chain_bonds" else None
+                if nm == "chain_bonds":
+                    raw = Image.open(f"{R}/chain_bonds/000.png").convert("RGB")
+                    raw = raw.crop((0, 36, raw.width // 2, 36 + 420))
+                    s_ = min(280 / raw.width, 180 / raw.height)
+                    raw = raw.resize((int(raw.width * s_), int(raw.height * s_)), Image.LANCZOS)
+                    im = Image.new("RGB", (280, 180), BG); im.paste(raw, ((280 - raw.width) // 2, (180 - raw.height) // 2))
+                paste(img, im, (x, y), a=a)
+            else:
+                d.rounded_rectangle([x, y, x + 280, y + 180], radius=12, fill=mix(BG, INK, a))
+                for j, f_ in enumerate(("building.glb", "building.fracphys", "building.report.md")):
+                    d.text((x + 140, y + 50 + j * 40), f_, font=F(20, mono=True), fill=mix(mix(BG, INK, a), (230, 230, 240), a), anchor="mm")
+            d.ellipse([x, y - 36, x + 28, y - 8], fill=fade(BLUE, a))
+            text(d, (x + 14, y - 22), str(k + 1), 17, True, WHITE if a > 0.5 else BG, a, anchor="mm")
+            text(d, (x + 38, y - 22), ttl, 20, True, INK, a, anchor="lm", maxw=240)
+            text(d, (x, y + 192), sub, 17, False, GREY, a, maxw=290)
+            if k not in (3, 6):
+                nx = x + 290 if k != 3 else None
+                if nx: arrow(d, (x + 284, y + 90), (x + 304, y + 90), GREY, 3, 9, a)
+        a = ease((t - 4.6) / 0.5)
+        text(d, (W // 2, 668), "Every level nests inside the one above, and every level gets hulls and bonds.", 22, True, INK, a, anchor="mm")
+        yield (img, "why_chain") if i == T - 1 else img
+
+BUILT = [("Voronoi fracture", "classic", "material recipes (radial glass, dicing, grain, masonry), exact clipping"),
+         ("Fracture modes", "Sellán et al. 2023", "weakest cuts first, material-aware, open-source solver, building scale"),
+         ("Convex decomposition", "CoACD, Wei et al. 2022", "pure Rust; neighbours never overlap; tighter fit (6% vs 21%)"),
+         ("Stress-solver bonds", "support graphs, e.g. Blast", "exact geometry (~10× lower stress error); weaker joints and cuts"),
+         ("Hierarchy", "chunk hierarchies, e.g. Blast", "4 nested levels with consistent bonds; detail only where it breaks"),
+         ("Validation", "—", "14 hard gates; FEM, Voro++ and CoACD oracles; byte-identical builds")]
+
+def s_builton():
+    T = 92
+    for i in range(T):
+        t = i / FPS; img, d = new()
+        header(d, "BUILT ON PROVEN IDEAS", "Each step improved for destruction", PURPLE, 1.0)
+        for x_, lab in ((50, "Technique"), (310, "Builds on"), (600, "What Shardwright adds")):
+            text(d, (x_, 112), lab, 20, True, GREY, ease(t / 0.4))
+        for k, (a_, b_, c_) in enumerate(BUILT):
+            a = ease((t - 0.3 - 0.45 * k) / 0.4)
+            y = 150 + k * 78
+            d.line([(50, y - 8), (1230, y - 8)], fill=fade(LIGHT, a), width=1)
+            text(d, (50, y + 22), a_, 19, True, INK, a, anchor="lm", maxw=250)
+            text(d, (310, y + 22), b_, 19, False, GREY, a, anchor="lm", maxw=280)
+            para(d, (600, y + 6), c_, 19, 620, INK, a)
+        a = ease((t - 3.6) / 0.5)
+        text(d, (W // 2, 640), "Not one algorithm: the whole chain, consistent from one exact cell complex.", 23, True, PURPLE, a, anchor="mm")
+        yield img
+
 def s_trust():
-    T = 70
+    T = 62
     tiles = [("14 hard gates", "run on every bake"), ("Voro++", "cell complexes match"),
              ("Fracture-modes reference", "exact on 3 of 4 meshes"), ("Kratos FEM", "column bond targets met"),
              ("Khronos glTF validator", "0 errors, 0 warnings"), ("Deterministic", "byte-identical, Linux + macOS")]
@@ -485,6 +699,7 @@ def s_end():
         a = ease(t / 0.6)
         text(d, (W // 2, 230), "Shardwright", 76, True, INK, a, anchor="mm")
         text(d, (W // 2, 318), "One bake → fragments · bonds · colliders · render meshes", 30, False, INK, ease((t - 0.4) / 0.6), anchor="mm")
+        text(d, (W // 2, 356), "For games, simulation and film.", 22, False, GREY, ease((t - 0.7) / 0.6), anchor="mm")
         a = ease((t - 1.0) / 0.6)
         if a > 0:
             s = "prefracture bake --input building.glb --config support_clusters.toml --out out/"
@@ -494,7 +709,7 @@ def s_end():
         text(d, (W // 2, 500), "github.com/Glavin001/Shardwright", 24, True, BLUE, ease((t - 1.6) / 0.6), anchor="mm")
         yield img
 
-SCENES = [s_title, s_problem, s_pitch, s_modes, s_materials, s_bonds, s_hierarchy, s_colliders, s_trust, s_end]
+SCENES = [s_title, s_problem, s_pitch, s_modes, s_materials, s_inputs, s_convex, s_hierarchy, s_bonds, s_chain, s_builton, s_trust, s_end]
 XF = 6
 if __name__ == "__main__":
     if os.path.isdir(OUT): shutil.rmtree(OUT)
@@ -502,7 +717,7 @@ if __name__ == "__main__":
     DOCS = ROOT + "/docs/readme"
     n = 0; prev = None; marks = []; stills = {}
     for sc in SCENES:
-        marks.append((sc.__name__, n))
+        marks.append((sc.__name__, n)); CUR["scene"] = sc.__name__
         for k, im in enumerate(sc()):
             if isinstance(im, tuple):
                 im, name = im
@@ -513,6 +728,9 @@ if __name__ == "__main__":
             last = im
         prev = last
     json.dump(marks, open(DATA + "/marks.json", "w"))
+    over = sorted(set(OVERFLOW))
+    for o in over: print("TEXT OVERFLOW:", o)
+    print(len(over), "text overflows")
     # README stills: single beats, the three shapes stacked, the four materials
     for name, im in stills.items():
         if name.startswith("why_"): im.save(f"{DOCS}/{name}.png", optimize=True)
@@ -533,6 +751,10 @@ if __name__ == "__main__":
             im = frame(nm, nframes(nm) - 1, (CW - 10, CH - 10))
             fig.paste(im, (25 + k * CW, TOP + r * CH))
     fig.save(f"{DOCS}/why_modes_models.png", optimize=True)
+    rows = [stills[f"beat_input_{k}"] for k in ("material", "impact", "grain")]
+    fig = Image.new("RGB", (W, H + 2 * (H - 100)), BG)
+    fig.paste(rows[0], (0, 0)); fig.paste(rows[1].crop((0, 100, W, H)), (0, H)); fig.paste(rows[2].crop((0, 100, W, H)), (0, 2 * H - 100))
+    fig.resize((1024, fig.height * 1024 // W), Image.LANCZOS).save(f"{DOCS}/why_inputs.png", optimize=True)
     grid = Image.new("RGB", (W, H), BG)
     for k in range(4): grid.paste(stills[f"beat_material_{k}"].resize((W // 2, H // 2), Image.LANCZOS), ((k % 2) * W // 2, (k // 2) * H // 2))
     grid.save(f"{DOCS}/why_materials.png", optimize=True)

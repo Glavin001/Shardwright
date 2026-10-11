@@ -213,6 +213,9 @@ enum Cmd {
         /// with one group id per cell (e.g. a random Voronoi fracture).
         #[arg(long)]
         cell_groups: Option<PathBuf>,
+        /// Draw the level's convex collision hulls instead of the fragments.
+        #[arg(long)]
+        hulls: bool,
     },
     /// Generate the procedural benchmark suite (spec §13.8).
     GenBench {
@@ -1131,6 +1134,7 @@ fn main() -> ExitCode {
             impact,
             radius,
             cell_groups,
+            hulls,
         } => (|| -> Result<bool, String> {
             // never overwrite an earlier preview: number the new file instead
             let out = &free_path(out);
@@ -1141,6 +1145,33 @@ fn main() -> ExitCode {
                 Some("weakening") => Some(preview::BondColour::Weakening),
                 Some(x) => {
                     return Err(format!("--bonds {x}: expected kind, strength or weakening"));
+                }
+            };
+            // --cell-groups: a JSON array of group ids, or {"groups": [...],
+            // "colors": {"<id>": [r, g, b]}} with fixed colours for some groups
+            let (groups, colors) = match cell_groups {
+                None => (None, Default::default()),
+                Some(p) => {
+                    let text =
+                        std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()))?;
+                    let v: serde_json::Value =
+                        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", p.display()))?;
+                    let (g, c) = match v {
+                        serde_json::Value::Object(mut m) => (
+                            m.remove("groups").unwrap_or_default(),
+                            m.remove("colors").unwrap_or_default(),
+                        ),
+                        other => (other, serde_json::Value::Null),
+                    };
+                    let g: Vec<u32> = serde_json::from_value(g)
+                        .map_err(|e| format!("{}: groups: {e}", p.display()))?;
+                    let c: std::collections::HashMap<u32, [f32; 3]> = if c.is_null() {
+                        Default::default()
+                    } else {
+                        serde_json::from_value(c)
+                            .map_err(|e| format!("{}: colors: {e}", p.display()))?
+                    };
+                    (Some(g), c)
                 }
             };
             let o = preview::PreviewOptions {
@@ -1160,16 +1191,9 @@ fn main() -> ExitCode {
                     &[x, y, z] => Some((frac_geom::DVec3::new(x, y, z), *radius)),
                     _ => return Err("--impact: expected x,y,z".into()),
                 },
-                cell_groups: match cell_groups {
-                    None => None,
-                    Some(p) => Some(
-                        serde_json::from_str(
-                            &std::fs::read_to_string(p)
-                                .map_err(|e| format!("{}: {e}", p.display()))?,
-                        )
-                        .map_err(|e| format!("{}: {e}", p.display()))?,
-                    ),
-                },
+                hulls: *hulls,
+                cell_groups: groups,
+                group_colors: colors,
             };
             let is_asset = input
                 .extension()

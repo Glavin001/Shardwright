@@ -38,6 +38,29 @@ for i in range(n):
     jobs.append([BIN, "preview", "--input", f"{C}/two_storey_building.asset.json", "--out", f"{D}/partial/{i:03d}.png",
                  "--impact", "4.1,3.3,8.2", "--radius", f"{0.05 + 3.2 * t:.3f}", "--explode", f"{0.6 * min(1, 1.5 * t):.3f}",
                  "--azimuth", f"{25 + 30 * t:.2f}", "--width", "700", "--height", "540"])
+# problem: a random Voronoi shatter of the whole building (ignores parts and
+# joints) and the flat leaf level (every cell a body)
+W_ = B + "/out/why"
+seq("problem_random", f"{C}/two_storey_building.asset.json", 1, 640, 520, explode=(0.07, 0.07), az=(35, 35),
+    extra=("--cell-groups", f"{W_}/data/building_random.json"))
+seq("problem_leaf", f"{C}/two_storey_building.asset.json", 1, 640, 520, level=3, explode=(0.05, 0.05), az=(35, 35))
+# inputs steer the result: one pane, three materials and a moved impact point
+for nm, path in (("annealed", f"{R}/glass_annealed_pane"), ("tempered", f"{W_}/inputs/pane_tempered"),
+                 ("concrete", f"{W_}/inputs/pane_concrete"), ("corner", f"{W_}/inputs/pane_corner")):
+    seq(f"in_pane_{nm}", f"{path}.asset.json", 1, 480, 520, level=3, explode=(0.03, 0.03), az=(25, 25), el=18)
+# convex decomposition: non-convex fracture-mode pieces and their hulls
+M = B + "/out/why/models"
+seq("hull_pieces", f"{M}/modes/creature.asset.json", 1, 900, 700, level=1, explode=(0.12, 0.12), az=(30, 30), el=38)
+seq("hull_hulls", f"{M}/modes/creature.asset.json", 1, 900, 700, level=1, explode=(0.12, 0.12), az=(30, 30), el=38, extra=("--hulls",))
+# the end-to-end chain on the two-storey building
+seq("chain_cells", f"{C}/two_storey_building.asset.json", 1, 600, 500, level=3, az=(35, 35))
+seq("chain_l1", f"{C}/two_storey_building.asset.json", 1, 600, 500, level=1, explode=(0.06, 0.06), az=(35, 35))
+seq("chain_l2", f"{C}/two_storey_building.asset.json", 1, 600, 500, level=2, explode=(0.04, 0.04), az=(35, 35))
+seq("chain_hulls", f"{C}/two_storey_building.asset.json", 1, 600, 500, level=2, explode=(0.04, 0.04), az=(35, 35), extra=("--hulls",))
+seq("chain_bonds", f"{C}/two_storey_building.asset.json", 1, 600, 500, level=2, az=(35, 35), extra=("--bonds", "weakening"))
+os.makedirs(f"{D}/chain_input", exist_ok=True)
+jobs.append([BIN, "preview", "--input", B + "/benchmarks/assets/two_storey_building.glb", "--out", f"{D}/chain_input/000.png",
+             "--width", "600", "--height", "500", "--azimuth", "35", "--elevation", "25"])
 # title: Shardwright building L1, slow orbit
 seq("title", f"{C}/two_storey_building.asset.json", 36, 640, 520, level=1, explode=(0.0, 0.08), az=(30, 55))
 if os.path.isdir(D):

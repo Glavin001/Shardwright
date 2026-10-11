@@ -103,7 +103,11 @@ with ThreadPoolExecutor(4) as ex:
 json.dump(counts, open(f"{DATA}/partial_counts.json", "w"))
 ev["rigid_bodies_partial_break"] = {"hierarchical": sum(counts[-1]), "flat_leaf": len(load(f"{SC}/two_storey_building.asset.json")["cells"])}
 
-# 6. colliders vs upstream CoACD (docs/VALIDATION.md, rc_column L1, equal budget)
+# 6. problem slide: random Voronoi pieces of the building that span several parts
+br = load(f"{DATA}/building_random.json")
+ev["problem_spanning"] = [sum(1 for c in br["colors"].values() if c[1] < 0.6), len(br["colors"])]
+
+# 7. colliders vs upstream CoACD (docs/VALIDATION.md, rc_column L1, equal budget)
 ev["coacd_equal_budget"] = {"outside_volume_median": [0.060, 0.209], "overlap": ["no", "yes"]}
 
 json.dump(ev, open(f"{DATA}/evidence.json", "w"), indent=1)
