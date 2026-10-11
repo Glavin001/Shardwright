@@ -233,7 +233,7 @@ def s_pitch():
         text(d, (W // 2, 580), "Ready for game engines, stress solvers, simulation and film VFX.", 25, True, INK, a, anchor="mm")
         a = ease((t - 4.4) / 0.5)
         text(d, (W // 2, 634), "Here is each capability, and why it matters  →", 23, True, BLUE, a, anchor="mm")
-        yield (img, "beat_pitch") if i == T - 1 else img
+        yield (img, "why_pitch") if i == T - 1 else img
 
 MODELS = [("bracket", "row", "A clear weakness: the bracket snaps at its neck.",
            "Random Voronoi cuts wherever its seeds land, never where the part is weak.", "clear weakness"),
@@ -436,7 +436,7 @@ def s_hierarchy():
             text(d, (884, 435 + 32 * k), lab, 19, False, INK, 1.0, anchor="lm")
         para(d, (850, 512), "The ball breaks a column; the floor above loses its support and comes down. Only the chunks that are hit get finer.",
              20, 410, GREY, ease((t - 1.0) / 0.5))
-        yield (img, "why_hierarchy") if i == int(len(files) * 0.55 / step) else img
+        yield img
 
 def s_support():
     """What the bonds tell a solver: the support graph, the self-weight load
@@ -764,7 +764,7 @@ def s_trust():
             text(d, (x + 92, y + 100), b_, 19, False, GREY, a, anchor="lm")
         a = ease((t - 3.2) / 0.5)
         text(d, (W // 2, 610), "Results, bounds and the targets not yet met are all in docs/VALIDATION.md.", 21, False, GREY, a, anchor="mm")
-        yield img
+        yield (img, "why_trust") if i == T - 1 else img
 
 def s_end():
     T = 50

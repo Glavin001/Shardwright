@@ -9,11 +9,12 @@ README's [evidence section](../../README.md#the-evidence):
 | Fracture-modes models (bracket, bone, creature, chair; manifold3d) | `models.py` | `out/why/models/` |
 | Random Voronoi fractures of the same cells | `random_voronoi.py` | `out/why/models/random/` |
 | Measurements | `metrics.py` | `out/why/data/evidence.json` |
-| Rapier collapse (hierarchy scene) | `../sim/make.sh` | `out/sim/`, `docs/readme/collapse_two_storey.{gif,mp4}` |
+| Rapier collapse (hierarchy scene, README hero and runtime section) | `../sim/make.sh` | `out/sim/`, `docs/readme/hero_collapse.gif`, `collapse_closeup.gif`, `collapse_two_storey.mp4` |
 | Support-graph views (bonds scene) | `support.sh` → `frac-sim --analyze`, `bond_graph.py`, `ghost.py` | `out/why/graph/`, `out/why/render/support_*/` |
 | Renders | `render.py`, `render_zoom.py` | `out/why/render/` |
 | Video frames and README stills | `compose.py` | `out/why/frames/`, `docs/readme/why_*.png` |
 | MP4 and GIF | `make.sh` (ffmpeg) | `docs/readme/why_shardwright.{mp4,gif}` |
+| One scene as a README GIF | `snippet.py` | `docs/readme/why_hierarchy.gif` |
 
 The **uniform baseline** is the same pipeline and meshes with an isotropic
 Voronoi recipe on every part and geometry-only clustering

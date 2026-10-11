@@ -1,13 +1,18 @@
 """Caption the rendered frames of a destruction sim (tools/sim/make.sh):
 title, legend (level colours), a clock in sim time with the slow-motion
 factor, and live counters from the sim JSON (bonds broken, rigid bodies,
-chunks refined to the leaf level).
+chunks refined to the leaf level). With --minimal (the README hero), only a
+small legend and the speed; with --compact, one strip along the bottom with
+the legend and the counters (for close-ups, where the structure fills the
+frame).
 
-Usage: compose.py SIM.json RENDER_DIR OUT_DIR SLOWMO"""
+Usage: compose.py SIM.json RENDER_DIR OUT_DIR SLOWMO [--minimal | --compact]"""
 import json, os, sys
 from PIL import Image, ImageDraw, ImageFont
 
 sim, src, out, slow = sys.argv[1], sys.argv[2], sys.argv[3], float(sys.argv[4])
+minimal = "--minimal" in sys.argv
+compact = "--compact" in sys.argv
 os.makedirs(out, exist_ok=True)
 for f in os.listdir(out):
     if f.endswith(".png"): os.remove(os.path.join(out, f))
@@ -23,6 +28,26 @@ for k, (fn, fr) in enumerate(zip(files, frames)):
     im = Image.open(os.path.join(src, fn)).convert("RGB")
     W, H = im.size
     d = ImageDraw.Draw(im)
+    if compact:
+        d.rectangle((0, H - 44, W, H), fill=(236, 236, 240))
+        x = 18
+        for col, label in ((L2, "L2 chunk"), (L3, "L3, refined on impact")):
+            d.rectangle((x, H - 29, x + 14, H - 15), fill=col, outline=INK)
+            d.text((x + 22, H - 31), label, font=F(15), fill=INK)
+            x += 40 + int(F(15).getlength(label))
+        d.text((W - 18, H - 31), f"t {fr['t']:.2f} s ({slow:g}x slow) · {fr['broken']:,} bonds broken · "
+               f"{fr['islands']:,} bodies · {fr['refined']:,} refined", font=F(15), fill=GREY, anchor="ra")
+        im.save(os.path.join(out, f"{k:05d}.png"))
+        continue
+    if minimal:
+        x = 22
+        for col, label in ((L2, "chunk"), (L3, "refined where it breaks")):
+            d.rectangle((x, H - 36, x + 14, H - 22), fill=col, outline=INK)
+            d.text((x + 22, H - 38), label, font=F(15), fill=GREY)
+            x += 44 + int(F(15).getlength(label))
+        d.text((W - 22, H - 38), f"Rapier · {slow:g}x slow motion", font=F(15), fill=GREY, anchor="ra")
+        im.save(os.path.join(out, f"{k:05d}.png"))
+        continue
     d.text((24, 18), "A wrecking ball through a two-storey building", font=F(26, True), fill=INK)
     d.text((24, 52), "Rapier rigid bodies, broken by a stress solver on Shardwright's bonds", font=F(17), fill=GREY)
     # legend

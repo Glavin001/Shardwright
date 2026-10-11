@@ -2,8 +2,11 @@
 
 `frac-sim` runs a rigid-body destruction simulation on a baked prefracture
 asset. Shardwright's bonds feed a stress solver, and [Rapier](https://rapier.rs)
-moves the pieces. It produces the README's collapse animation
-(`docs/readme/collapse_two_storey.{gif,mp4}`).
+moves the pieces. It produces the README's collapse animations:
+* `docs/readme/hero_collapse.gif`, the hero: a wide shot with minimal captions;
+* `docs/readme/collapse_closeup.gif`: a low close-up of the impact with live
+  counters;
+* `docs/readme/collapse_two_storey.mp4`: the wide shot with full captions.
 
 It is a demo of what a runtime can do with the baked data. It is not part of
 the library, and it builds on its own: it is excluded from the main workspace,
@@ -12,14 +15,17 @@ so the main build and CI do not compile Rapier.
 ```sh
 tools/sim/make.sh                      # sim + render + captions + GIF/MP4
 tools/sim/make.sh --velocity -20,0,0   # extra arguments go to frac-sim
+REUSE_SIM=1 tools/sim/make.sh          # re-render out/sim/collapse.json only
 ```
 
 `make.sh` builds `prefracture` and `frac-sim`, runs the sim on
 `out/support_clusters/two_storey_building.asset.json` (baking it first if it
 is missing), then:
 
-1. renders every frame with `prefracture preview --sim`;
-2. captions the frames with `compose.py` (legend, clock and live counters);
+1. renders every frame with `prefracture preview --sim`, from two cameras
+   (the default wide view and a low close-up);
+2. captions the frames with `compose.py`: full captions, `--minimal` for the
+   hero, or `--compact` for the close-up;
 3. encodes the GIF and MP4 with ffmpeg.
 
 It needs Python 3 with Pillow, and ffmpeg. A run takes about 2 minutes.

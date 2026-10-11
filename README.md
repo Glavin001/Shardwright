@@ -13,9 +13,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/readme/hero_two_storey.gif" width="720" alt="A two-storey building splitting level by level: 48 parts, 618 structural fragments, 1,182 chunks, 6,860 cells">
+  <img src="docs/readme/hero_collapse.gif" width="720" alt="A wrecking ball breaks a column of a baked two-storey building; the floors above lose support and collapse, and chunks are refined into finer cells (orange) only where they are hit">
   <br>
-  <sub>A two-storey building, baked in 28 s: 48 authored parts → 618 structural fragments → 1,182 solver chunks → 6,860 convex cells. Every level is a complete partition of the solid, and every level has exact bonds.</sub>
+  <sub>A two-storey building baked in 28 s, then simulated in <a href="https://rapier.rs">Rapier</a>. A stress solver on Shardwright's bonds decides what breaks. Chunks are refined into finer cells (orange) only where they are hit. Half speed; <a href="#at-runtime-break-only-where-it-breaks">how it works</a>, <a href="docs/readme/collapse_two_storey.mp4">MP4 with counters</a>.</sub>
 </p>
 
 `prefracture` is an offline Rust library and CLI. It takes a glTF/OBJ/PLY/STL
@@ -43,6 +43,10 @@ what should break.
 
 **The pitch.** You author the structure and its materials. Shardwright bakes
 it into everything a destruction runtime needs:
+
+![You author meshes, materials and optional joints, anchors, rebar, grain and impact points; prefracture bake gives fragments at 4 nested levels, convex colliders that never overlap, a bond graph with strengths, render meshes and a report](docs/readme/why_pitch.png)
+
+What makes those outputs different:
 * pieces that break where the real object would, from fracture modes and
   material-specific fracture patterns;
 * convex colliders that never overlap;
@@ -220,7 +224,7 @@ In the [Rapier simulation](#at-runtime-break-only-where-it-breaks), the
 collapsing building is 1,295 bodies two seconds in. Only the 240 chunks that
 were hit have been refined into finer cells:
 
-![Rapier simulation: rigid bodies, flat vs hierarchical](docs/readme/why_hierarchy.png)
+<p align="center"><img src="docs/readme/why_hierarchy.gif" width="760" alt="Rapier simulation with a live count of rigid bodies: Shardwright's hierarchy against 6,860 for a flat shatter"></p>
 
 ### Why non-overlapping colliders?
 
@@ -238,6 +242,8 @@ the hulls also fit tighter:
 | Neighbouring hulls overlap | yes | **never** |
 
 ### How do we know it's right?
+
+![Checked against physics: 14 hard gates, Voro++, the fracture-modes reference, Kratos FEM, the Khronos glTF validator, byte-identical output](docs/readme/why_trust.png)
 
 Every bake runs [14 hard gates](#quality-and-validation). The pipeline is
 also checked against independent references:
@@ -314,11 +320,6 @@ individual bricks:
 
 ![Five-storey building, levels L0 to L3](docs/readme/levels_building_v1.png)
 
-**From authored parts to a support graph.** The 48 authored parts (L0) split
-into structural fragments (L1), then into solver chunks (L2):
-
-![Two-storey building: L0 parts, L1 structural fragments, L2 solver chunks](docs/readme/levels_two_storey.png)
-
 More previews are in [`docs/previews/`](docs/previews/).
 
 ## How it works
@@ -365,7 +366,11 @@ flowchart TB
    analysis on a coarser analysis mesh. Level 1 is segmented by
    energy-weighted jumps, so the weakest cuts come first (a column breaks at
    its anchored root).
-4. **Hierarchy.** Each level is a union of the next finer one:
+4. **Hierarchy.** Each level is a union of the next finer one. On the
+   two-storey building, 48 authored parts become 618 structural fragments,
+   then 1,182 solver chunks, then 6,860 convex cells:
+
+   <p align="center"><img src="docs/readme/levels_split_two_storey.gif" width="640" alt="A two-storey building splitting level by level: 48 parts, 618 structural fragments, 1,182 chunks, 6,860 cells"></p>
 
    ```mermaid
    flowchart TD
@@ -397,8 +402,9 @@ Every fragment at every level can be a rigid body with its own compound
 collider. A runtime starts coarse and swaps a broken fragment for its
 children only where it broke, so distant parts stay cheap.
 
-Below, a wrecking ball goes through the two-storey building in
-[Rapier](https://rapier.rs), at half speed. The demo is in
+The hero animation at the top is this in practice: a wrecking ball through
+the two-storey building in [Rapier](https://rapier.rs), at half speed.
+Below is the impact from a low camera. The demo is in
 [`tools/sim`](tools/sim/README.md); `tools/sim/make.sh` reproduces it.
 
 * It starts from the 1,182 Level-2 chunks. Chunks joined by intact bonds
@@ -409,8 +415,8 @@ Below, a wrecking ball goes through the two-storey building in
   and the roof follows it.
 * Chunks are refined to Level-3 cells (orange) only where they are hit.
 
-<p align="center"><img src="docs/readme/collapse_two_storey.gif" width="760" alt="Rapier simulation: a wrecking ball breaks a column, the first floor and then the roof collapse; chunks hit hard are refined into finer Level-3 cells (orange)"></p>
-<p align="center"><sub><a href="docs/readme/collapse_two_storey.mp4">MP4 version</a>. Grey: Level-2 chunks. Orange: Level-3 cells refined on impact. The counters show bonds broken, rigid bodies and refined chunks.</sub></p>
+<p align="center"><img src="docs/readme/collapse_closeup.gif" width="680" alt="Close-up of the Rapier simulation: the ball breaks a column into Level-3 cells (orange), and the floor above sags and collapses"></p>
+<p align="center"><sub>Grey: Level-2 chunks. Orange: Level-3 cells refined on impact. The strip shows bonds broken, rigid bodies and refined chunks. The wide shot with counters is the <a href="docs/readme/collapse_two_storey.mp4">MP4</a>.</sub></p>
 
 The `prefracture preview --impact` view shows the same idea without physics:
 fragments near an impact are replaced by progressively finer levels.
@@ -458,6 +464,10 @@ On the two-storey building, L1-cut bonds end up at **×0.37** and part joints at
 **×0.13** of the interior median capacity:
 
 ![Bond weakening on the two-storey building](docs/readme/weakening_two_storey.png)
+
+What a solver can read from these bonds (connectivity, the self-weight load
+path, and what a missing column overloads) is shown in
+[the evidence](#why-should-the-same-tool-output-the-bonds).
 
 Bonds also carry their joint kind, so the solver can treat mortar, cold
 joints, bearings (compression only) and ground anchors differently:

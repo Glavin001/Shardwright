@@ -86,4 +86,6 @@ ffmpeg -y -loglevel error -framerate 12 -i out/why/frames/%05d.png -c:v libx264 
 ffmpeg -y -loglevel error -framerate 12 -i out/why/frames/%05d.png -vf "fps=10,scale=960:-1:flags=lanczos,split[a][b];\
 [a]palettegen=max_colors=112:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
     docs/readme/why_shardwright.gif
-ls -la docs/readme/why_shardwright.*
+# per-section snippet for the README (the hierarchy evidence)
+python3 tools/explainer/snippet.py s_hierarchy docs/readme/why_hierarchy.gif 760 10
+ls -la docs/readme/why_shardwright.* docs/readme/why_hierarchy.gif
