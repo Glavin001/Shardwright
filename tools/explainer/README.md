@@ -9,6 +9,8 @@ README's [evidence section](../../README.md#the-evidence):
 | Fracture-modes models (bracket, bone, creature, chair; manifold3d) | `models.py` | `out/why/models/` |
 | Random Voronoi fractures of the same cells | `random_voronoi.py` | `out/why/models/random/` |
 | Measurements | `metrics.py` | `out/why/data/evidence.json` |
+| Rapier collapse (hierarchy scene) | `../sim/make.sh` | `out/sim/`, `docs/readme/collapse_two_storey.{gif,mp4}` |
+| Support-graph views (bonds scene) | `support.sh` → `frac-sim --analyze`, `bond_graph.py`, `ghost.py` | `out/why/graph/`, `out/why/render/support_*/` |
 | Renders | `render.py`, `render_zoom.py` | `out/why/render/` |
 | Video frames and README stills | `compose.py` | `out/why/frames/`, `docs/readme/why_*.png` |
 | MP4 and GIF | `make.sh` (ffmpeg) | `docs/readme/why_shardwright.{mp4,gif}` |
@@ -26,3 +28,17 @@ uniform-strain patch test on the same pieces with:
 
 The collider numbers come from `tools/harness/coacd_diff.py`
 ([`docs/VALIDATION.md`](../../docs/VALIDATION.md)).
+
+The **support-graph views** (`support.sh`):
+
+1. `frac-sim --analyze` solves the design-checked bond network of the
+   two-storey building under self-weight at Level 0 and Level 2. It then
+   solves again with the column the wrecking ball hits removed
+   (`--remove f0_col_22`), and records every bond's utilization and force
+   (`out/why/data/bonds_L*.json`).
+2. `bond_graph.py` turns those records into:
+   * the support graph, as spheres and cylinders for
+     `prefracture preview --graph`;
+   * one-frame "sims" coloured per chunk by force or utilization, for
+     `prefracture preview --sim`, which uses the same camera.
+3. `ghost.py` lays the graph over a faded render of the parts.

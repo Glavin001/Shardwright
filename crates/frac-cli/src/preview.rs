@@ -1348,8 +1348,148 @@ pub fn preview_input(scene: &InputScene, out: &Path, o: &PreviewOptions) -> Resu
     Ok(format!("wrote {} ({w}x{h}; {title})", out.display()))
 }
 
+/// Camera box of the sim and graph views: the asset's cell centres, padded
+/// by 20%, down to the ground.
+fn default_fit(asset: &Asset) -> (DVec3, DVec3) {
+    let (mut lo, mut hi) = (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY));
+    for c in &asset.cells {
+        lo = lo.min(c.mass.com);
+        hi = hi.max(c.mass.com);
+    }
+    let pad = (hi - lo) * 0.2;
+    (DVec3::new(lo.x - pad.x, 0.0, lo.z - pad.z), hi + pad)
+}
+
+/// Ground quad under the camera box.
+fn ground_tris(fit: (DVec3, DVec3)) -> Vec<Tri> {
+    let (a, b) = fit;
+    let g = [
+        DVec3::new(a.x - 50.0, -0.002, a.z - 50.0),
+        DVec3::new(b.x + 50.0, -0.002, a.z - 50.0),
+        DVec3::new(b.x + 50.0, -0.002, b.z + 50.0),
+        DVec3::new(a.x - 50.0, -0.002, b.z + 50.0),
+    ];
+    [[g[0], g[2], g[1]], [g[0], g[3], g[2]]]
+        .into_iter()
+        .map(|p| Tri {
+            p,
+            frag: u32::MAX - 2,
+            shade: 1.0,
+            rgb: Some([0.86, 0.86, 0.88]),
+        })
+        .collect()
+}
+
+/// A graph drawn in 3D (bond / support-graph views made by
+/// tools/explainer/bond_graph.py): `{"nodes": [[x, y, z, r, R, G, B], ..],
+/// "edges": [[x0, y0, z0, x1, y1, z1, r, R, G, B], ..]}` as spheres and
+/// cylinders (colours 0..1) over the ground, from the camera of the sim
+/// view, so the two line up. Writes one PNG.
+pub fn preview_graph(
+    asset: &Asset,
+    graph: &serde_json::Value,
+    out: &Path,
+    o: &PreviewOptions,
+    fit: Option<(DVec3, DVec3)>,
+) -> Result<String, String> {
+    let (view, light) = view_light(o);
+    let fit = fit.unwrap_or_else(|| default_fit(asset));
+    let nums = |v: &serde_json::Value| -> Vec<f64> {
+        v.as_array()
+            .into_iter()
+            .flatten()
+            .map(|x| x.as_f64().unwrap_or(0.0))
+            .collect()
+    };
+    let shade_of = |p: &[DVec3; 3]| {
+        let n = (p[1] - p[0]).cross(p[2] - p[0]);
+        if n.length_squared() == 0.0 {
+            None
+        } else {
+            Some((0.45 + 0.55 * n.normalize().dot(light).max(0.0)) as f32)
+        }
+    };
+    let mut tris = ground_tris(fit);
+    let mut id = 0u32;
+    let push = |tris: &mut Vec<Tri>, p: [DVec3; 3], rgb: [f32; 3], id: u32| {
+        if let Some(shade) = shade_of(&p) {
+            tris.push(Tri {
+                p,
+                frag: id,
+                shade,
+                rgb: Some(rgb),
+            });
+        }
+    };
+    let edges = graph["edges"].as_array().ok_or("--graph: no edges")?;
+    for e in edges {
+        let v = nums(e);
+        if v.len() < 10 {
+            continue;
+        }
+        let (a, b, r) = (
+            DVec3::new(v[0], v[1], v[2]),
+            DVec3::new(v[3], v[4], v[5]),
+            v[6],
+        );
+        let rgb = [v[7] as f32, v[8] as f32, v[9] as f32];
+        let d = b - a;
+        if d.length_squared() == 0.0 {
+            continue;
+        }
+        let ax = d.normalize();
+        let u = ax.any_orthonormal_vector();
+        let w = ax.cross(u);
+        let k = 8;
+        let ring = |c: DVec3, i: usize| {
+            let t = i as f64 / k as f64 * std::f64::consts::TAU;
+            c + (u * t.cos() + w * t.sin()) * r
+        };
+        id += 1;
+        for i in 0..k {
+            let (p0, p1, q0, q1) = (ring(a, i), ring(a, i + 1), ring(b, i), ring(b, i + 1));
+            push(&mut tris, [p0, p1, q1], rgb, id);
+            push(&mut tris, [p0, q1, q0], rgb, id);
+        }
+    }
+    for nd in graph["nodes"].as_array().into_iter().flatten() {
+        let v = nums(nd);
+        if v.len() < 7 {
+            continue;
+        }
+        let (c, r) = (DVec3::new(v[0], v[1], v[2]), v[3]);
+        let rgb = [v[4] as f32, v[5] as f32, v[6] as f32];
+        let (nu, nv) = (10, 6);
+        let pt = |i: usize, j: usize| {
+            let (a, b) = (
+                i as f64 / nu as f64 * std::f64::consts::TAU,
+                j as f64 / nv as f64 * std::f64::consts::PI,
+            );
+            c + DVec3::new(b.sin() * a.cos(), b.cos(), b.sin() * a.sin()) * r
+        };
+        id += 1;
+        for i in 0..nu {
+            for j in 0..nv {
+                let (p, q, s2, t) = (pt(i, j), pt(i + 1, j), pt(i + 1, j + 1), pt(i, j + 1));
+                push(&mut tris, [p, s2, q], rgb, id);
+                push(&mut tris, [p, t, s2], rgb, id);
+            }
+        }
+    }
+    let px = render_panel_fit(&tris, o.width, o.height, view, DVec3::Y, Some(fit));
+    let f = std::fs::File::create(out).map_err(|e| format!("{}: {e}", out.display()))?;
+    let mut enc = png::Encoder::new(std::io::BufWriter::new(f), o.width, o.height);
+    enc.set_color(png::ColorType::Rgb);
+    enc.set_depth(png::BitDepth::Eight);
+    let mut wr = enc.write_header().map_err(|e| e.to_string())?;
+    let flat: Vec<u8> = px.into_iter().flatten().collect();
+    wr.write_image_data(&flat).map_err(|e| e.to_string())?;
+    Ok(format!("wrote {} ({} edges)", out.display(), edges.len()))
+}
+
 /// Frames of a rigid-body simulation (`tools/sim`): one PNG per frame, with
-/// every active fragment drawn at its pose, the projectile and the ground,
+/// every active fragment drawn at its pose (coloured by level, or by the
+/// sim's optional `colors` map), the projectile and the ground,
 /// from a fixed camera framing `fit` (default: the asset, enlarged).
 pub fn preview_sim(
     asset: &Asset,
@@ -1361,15 +1501,7 @@ pub fn preview_sim(
     use std::collections::HashMap;
     let (view, light) = view_light(o);
     let frames = sim["frames"].as_array().ok_or("--sim: no frames")?;
-    let fit = fit.unwrap_or_else(|| {
-        let (mut lo, mut hi) = (DVec3::splat(f64::INFINITY), DVec3::splat(f64::NEG_INFINITY));
-        for c in &asset.cells {
-            lo = lo.min(c.mass.com);
-            hi = hi.max(c.mass.com);
-        }
-        let pad = (hi - lo) * 0.2;
-        (DVec3::new(lo.x - pad.x, 0.0, lo.z - pad.z), hi + pad)
-    });
+    let fit = fit.unwrap_or_else(|| default_fit(asset));
     // fragment surfaces in their rest frame, relative to the fragment COM
     let mut meshes: HashMap<u32, Vec<[DVec3; 3]>> = HashMap::new();
     let mut needed: Vec<u32> = frames
@@ -1429,22 +1561,7 @@ pub fn preview_sim(
                     Some((0.35 + 0.65 * n.normalize().dot(light).max(0.0)) as f32)
                 }
             };
-            // ground
-            let (a, b) = fit;
-            let g = [
-                DVec3::new(a.x - 50.0, -0.002, a.z - 50.0),
-                DVec3::new(b.x + 50.0, -0.002, a.z - 50.0),
-                DVec3::new(b.x + 50.0, -0.002, b.z + 50.0),
-                DVec3::new(a.x - 50.0, -0.002, b.z + 50.0),
-            ];
-            for p in [[g[0], g[2], g[1]], [g[0], g[3], g[2]]] {
-                tris.push(Tri {
-                    p,
-                    frag: u32::MAX - 2,
-                    shade: 1.0,
-                    rgb: Some([0.86, 0.86, 0.88]),
-                });
-            }
+            tris.extend(ground_tris(fit));
             for bd in fr["bodies"].as_array().into_iter().flatten() {
                 let v: Vec<f64> = bd
                     .as_array()
@@ -1466,7 +1583,13 @@ pub fn preview_sim(
                 };
                 let jit =
                     0.88 + 0.12 * (((f as u64).wrapping_mul(2654435761) % 1000) as f32 / 1000.0);
-                let rgb = base.map(|c| c * jit);
+                // or a colour given per fragment (`"colors": {"<id>": [r, g, b]}`)
+                let rgb = match sim["colors"].get(f.to_string()).and_then(|c| c.as_array()) {
+                    Some(c) if c.len() == 3 => {
+                        [0, 1, 2].map(|i| c[i].as_f64().unwrap_or(0.0) as f32 * (0.96 + 0.04 * jit))
+                    }
+                    _ => base.map(|c| c * jit),
+                };
                 if let Some(m) = meshes.get(&f) {
                     for p in m {
                         let p = p.map(|x| q * x + t);

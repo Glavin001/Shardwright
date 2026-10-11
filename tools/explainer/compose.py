@@ -28,7 +28,6 @@ def mix(c0, c1, a): return tuple(int(round(c0[i] + (c1[i] - c0[i]) * a)) for i i
 def fade(c, a): return mix(BG, c, clamp(a))
 
 ev = json.load(open(DATA + "/evidence.json"))
-counts = json.load(open(DATA + "/partial_counts.json"))
 
 _img = {}
 def frame(name, i, box=None):
@@ -361,7 +360,7 @@ def s_bonds():
     T = 64
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "6 · BONDS", "It knows what holds it together", GREEN, 1.0, "Every contact between two pieces becomes a bond (two-storey building, 3,657 chunk bonds)")
+        header(d, "5 · BONDS", "It knows what holds it together", GREEN, 1.0, "Every contact between two pieces becomes a bond (two-storey building, 3,657 chunk bonds)")
         im = frame("bonds", min(i, n - 1))
         im = im.crop((0, 0, im.width, min(im.height, 560 - 36)))
         s = min(700 / im.width, 520 / im.height); im = im.resize((int(im.width * s), int(im.height * s)), Image.LANCZOS)
@@ -382,7 +381,7 @@ def s_bonds():
     ex, cl, ad = [sum(pt[k]) / 2 * 100 for k in ("exact", "centre_line_normals", "adjacency_only")]
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "6 · BONDS", "Why the bonds must come from the same exact cells", GREEN, 1.0,
+        header(d, "5 · BONDS", "Why the bonds must come from the same exact cells", GREEN, 1.0,
                "Stress error in a uniform-stress patch test: p95, same solver, same 1,537 pieces (lower is better)")
         bars(d, 60, 170, 1160, [("Exact bonds (Shardwright)", ex, GREEN, f"{ex:.1f}%"),
                                 ("Normals from centre lines", cl, ORANGE, f"{cl:.1f}%"),
@@ -398,7 +397,7 @@ def s_bonds():
     s = 760 / wk.width; wk = wk.resize((int(wk.width * s), int(wk.height * s)), Image.LANCZOS)
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "6 · BONDS", "Predefined cuts are deliberately weaker", GREEN, 1.0, "Weibull weakest-link size effect plus a configurable bias")
+        header(d, "5 · BONDS", "Predefined cuts are deliberately weaker", GREEN, 1.0, "Weibull weakest-link size effect plus a configurable bias")
         paste(img, wk, (30, 120), a=ease(t / 0.5))
         text(d, (820, 150), "Chunk bond capacity", 24, True, INK, ease(t / 0.4))
         text(d, (820, 182), "relative to the interior median", 19, False, GREY, ease(t / 0.4))
@@ -409,22 +408,97 @@ def s_bonds():
         yield img
 
 def s_hierarchy():
-    n = nframes("partial"); T = 100
+    """The Rapier destruction sim (tools/sim/make.sh) at half speed, with the
+    number of rigid bodies it needs against a flat shatter."""
+    sim = json.load(open(ROOT + "/out/sim/collapse.json"))["frames"]
+    simdir = ROOT + "/out/sim/render"
+    files = sorted(f for f in os.listdir(simdir) if f.endswith(".png"))
     flat = ev["rigid_bodies_partial_break"]["flat_leaf"]
+    step = 60 / FPS / 2                     # sim frames per explainer frame at 1/2 speed
+    T = int(len(files) / step) + 14
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "5 · HIERARCHY", "Detail only where it breaks", ORANGE, 1.0, "Four nested levels: a fragment is swapped for its children only where it breaks")
-        j = min(i, n - 1)
-        paste(img, frame("partial", j, (700, 520)), (30, 115), border=False)
-        c = counts[j]; tot = sum(c)
-        text(d, (770, 140), "Rigid bodies for this damage", 25, True, INK, ease(t / 0.4))
-        bars(d, 770, 196, 490, [("flat shatter", flat, RED, f"{flat:,}"), ("Shardwright", tot, GREEN, f"{tot:,}")], 1.0 if t > 0.2 else t * 5, flat * 1.05,
-             row_h=58, label_w=150, size=21, bar_h=34)
-        text(d, (770, 330), "  +  ".join(f"{v} L{k}" for k, v in enumerate(c)), 19, False, GREY, 1.0)
-        a = ease((t - 4.0) / 0.5)
-        text(d, (770, 392), f"{flat / tot:.0f}× fewer bodies", 40, True, GREEN, a)
-        para(d, (770, 452), "Far from the impact, whole parts stay one body. Near it, pieces get finer level by level, down to convex cells.", 21, 480, GREY, ease((t - 4.6) / 0.5))
-        yield (img, "why_hierarchy") if i == T - 1 else img
+        header(d, "6 · HIERARCHY", "Detail only where it breaks", ORANGE, 1.0,
+               "A Rapier simulation on the baked chunks, bonds and hulls (tools/sim), at half speed")
+        j = min(int(i * step), len(files) - 1)
+        im = Image.open(f"{simdir}/{files[j]}").convert("RGB")
+        im = im.resize((800, 500), Image.LANCZOS)
+        paste(img, im, (20, 112), border=False)
+        fr = sim[j]
+        text(d, (850, 130), "Rigid bodies right now", 25, True, INK, ease(t / 0.4))
+        bars(d, 850, 186, 410, [("flat shatter", flat, RED, f"{flat:,}"), ("Shardwright", fr["islands"], GREEN, f"{fr['islands']:,}")],
+             1.0 if t > 0.2 else t * 5, flat * 1.05, row_h=58, label_w=150, size=21, bar_h=34)
+        text(d, (850, 320), f"t = {fr['t']:.2f} s", 22, True, INK, 1.0)
+        text(d, (850, 352), f"bonds broken  {fr['broken']:,}", 20, False, GREY, 1.0)
+        text(d, (850, 380), f"chunks refined to Level 3  {fr['refined']:,}", 20, False, GREY, 1.0)
+        for k, (col, lab) in enumerate((((204, 201, 194), "Level-2 chunk"), ((245, 143, 51), "Level-3 cell, refined on impact"))):
+            d.rectangle([850, 424 + 32 * k, 872, 446 + 32 * k], fill=col, outline=INK)
+            text(d, (884, 435 + 32 * k), lab, 19, False, INK, 1.0, anchor="lm")
+        para(d, (850, 512), "The ball breaks a column; the floor above loses its support and comes down. Only the chunks that are hit get finer.",
+             20, 410, GREY, ease((t - 1.0) / 0.5))
+        yield (img, "why_hierarchy") if i == int(len(files) * 0.55 / step) else img
+
+def s_support():
+    """What the bonds tell a solver: the support graph, the self-weight load
+    path, and what a missing column overloads (tools/explainer/support.sh)."""
+    st0 = json.load(open(ROOT + "/out/why/graph/l0_stats.json"))
+    st2 = json.load(open(ROOT + "/out/why/graph/l2_stats.json"))
+    ims = {k: Image.open(ROOT + f"/out/why/render/support_{k}/" + sorted(os.listdir(ROOT + f"/out/why/render/support_{k}"))[0]).convert("RGB")
+           for k in ("graph", "load", "removed")}
+    big = {k: v.resize((700, int(v.height * 700 / v.width)), Image.LANCZOS) for k, v in ims.items()}
+    beats = [
+        ("graph", "A support graph you can check",
+         [f"{st0['nodes']} parts are the nodes, {st0['bonds']} bonds the edges (Level 0; every level has its own)",
+          "Each edge runs through the contact it stands for",
+          "Every piece reaches the ground through some path: nothing floats"],
+         [((242, 140, 31), "joint between parts"), ((140, 77, 191), "bearing (compression only)"), ((20, 20, 26), "anchor to the ground")]),
+        ("load", "Where the weight goes",
+         [f"An exact stress solve of all {st2['bonds']:,} chunk bonds under self-weight",
+          "Colour = the force through each chunk",
+          "The ground-floor columns carry the building; the slabs carry little"],
+         [((230, 232, 237), "little force"), ((140, 173, 230), "more"), ((31, 41, 140), "most")]),
+        ("removed", "Take one column away",
+         ["The column the wrecking ball hits, removed (pink)",
+          f"{st2['over_capacity_bonds']} bonds go over capacity (red chunks)",
+          "Those break first: this is where the collapse starts"],
+         [((219, 26, 31), "over capacity"), ((247, 199, 199), "removed column"), ((140, 173, 230), "within capacity")]),
+    ]
+    T = 50
+    for key, title, lines, legend in beats:
+        for i in range(T):
+            t = i / FPS; img, d = new()
+            header(d, "5 · BONDS", "What the bonds tell your solver", GREEN, 1.0, "Two-storey building: connectivity, load path and failure, from the baked bonds alone")
+            paste(img, big[key], (20, 120), a=ease(t / 0.4), border=False)
+            text(d, (760, 140), title, 28, True, INK, ease(t / 0.4))
+            y = 196
+            for k, ln in enumerate(lines):
+                a = ease((t - 0.5 - 0.5 * k) / 0.4)
+                tick(d, (774, y + 13), 11, GREEN, a)
+                y = para(d, (796, y), ln, 21, 450, INK, a) + 14
+            a = ease((t - 2.2) / 0.4)
+            for k, (col, lab) in enumerate(legend):
+                d.rectangle([764, 520 + 34 * k, 786, 542 + 34 * k], fill=fade(col, a), outline=fade(INK, a))
+                text(d, (798, 531 + 34 * k), lab, 19, False, GREY, a, anchor="lm")
+            yield img
+    # the three side by side (README still)
+    T = 40
+    small = {k: v.resize((404, int(v.height * 404 / v.width)), Image.LANCZOS) for k, v in ims.items()}
+    caps = [("1. Support graph", "every part connected to the ground"), ("2. Load path", "self-weight flows down the columns"),
+            ("3. One column removed", f"{st2['over_capacity_bonds']} bonds over capacity break first")]
+    for i in range(T):
+        t = i / FPS; img, d = new()
+        header(d, "5 · BONDS", "What the bonds tell your solver", GREEN, 1.0, "Two-storey building: connectivity, load path and failure, from the baked bonds alone")
+        for k, key in enumerate(("graph", "load", "removed")):
+            x = 20 + k * 418
+            paste(img, small[key], (x, 140), a=ease((t - 0.2 * k) / 0.4), border=False)
+            text(d, (x + 202, 140 + small[key].height + 26), caps[k][0], 24, True, INK, ease((t - 0.2 * k) / 0.4), anchor="mm")
+            text(d, (x + 202, 140 + small[key].height + 58), caps[k][1], 19, False, GREY, ease((t - 0.2 * k) / 0.4), anchor="mm")
+            a = ease((t - 0.6 - 0.2 * k) / 0.4)
+            for r, (col, lab) in enumerate(beats[k][3]):
+                yy = 140 + small[key].height + 96 + 30 * r
+                d.rectangle([x + 110, yy, x + 128, yy + 18], fill=fade(col, a), outline=fade(INK, a))
+                text(d, (x + 140, yy + 9), lab, 17, False, GREY, a, anchor="lm")
+        yield (img, "why_support") if i == T - 1 else img
 
 def clip(P, x0, keep_left):
     """Sutherland-Hodgman clip of polygon P by the vertical line x = x0."""
@@ -574,7 +648,7 @@ def s_bond_schematic():
     def cen(P): return (sum(p[0] for p in P) / len(P), sum(p[1] for p in P) / len(P))
     for i in range(T):
         t = i / FPS; img, d = new()
-        header(d, "6 · BONDS", "Bonds come from the exact contact surfaces", GREEN, 1.0,
+        header(d, "5 · BONDS", "Bonds come from the exact contact surfaces", GREEN, 1.0,
                "A stress solver decides what breaks from each bond's area, orientation and strength")
         for col, (ox, good, ttl) in enumerate(((90, False, "Guessed from adjacency"), (720, True, "Shardwright: exact contact"))):
             a = ease((t - 0.3 - 1.0 * col) / 0.5)
@@ -709,7 +783,7 @@ def s_end():
         text(d, (W // 2, 500), "github.com/Glavin001/Shardwright", 24, True, BLUE, ease((t - 1.6) / 0.6), anchor="mm")
         yield img
 
-SCENES = [s_title, s_problem, s_pitch, s_modes, s_materials, s_inputs, s_convex, s_hierarchy, s_bonds, s_chain, s_builton, s_trust, s_end]
+SCENES = [s_title, s_problem, s_pitch, s_modes, s_materials, s_inputs, s_convex, s_bonds, s_support, s_hierarchy, s_chain, s_builton, s_trust, s_end]
 XF = 6
 if __name__ == "__main__":
     if os.path.isdir(OUT): shutil.rmtree(OUT)

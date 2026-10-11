@@ -89,7 +89,7 @@ for line in out.splitlines()[1:]:
     p95.setdefault(v.replace(" ", "_").replace("-", "_"), []).append(float(q95))
 ev["bond_patch_test_p95"] = {"exact": p95["exact"], "centre_line_normals": p95["centre_line_normals"], "adjacency_only": p95["adjacency_only"]}
 
-# 5. hierarchy: bodies during a partial break (same schedule as render.py)
+# 5. hierarchy: bodies during a partial break (`preview --impact`, growing radius)
 n = 44
 def count(i):
     t = i / (n - 1); t = 0.5 - 0.5 * math.cos(math.pi * t)

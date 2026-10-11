@@ -30,14 +30,6 @@ for m, az, el in (("glass_annealed_pane", 30, 18), ("glass_tempered_pane", 30, 1
         seq(f"{m}_{v}", f"{root}/{m}.asset.json", 12, 560, 380, level=3, explode=(0.0, 0.05), az=(az, az + 8), el=el)
 # bonds by kind (support graph L2), slow orbit
 seq("bonds", f"{C}/two_storey_building.asset.json", 48, 700, 560, level=2, az=(30, 50), extra=("--bonds", "kind"))
-# hierarchy: partial break
-n = 44
-os.makedirs(f"{D}/partial", exist_ok=True)
-for i in range(n):
-    t = i / (n - 1); t = 0.5 - 0.5 * math.cos(math.pi * t)
-    jobs.append([BIN, "preview", "--input", f"{C}/two_storey_building.asset.json", "--out", f"{D}/partial/{i:03d}.png",
-                 "--impact", "4.1,3.3,8.2", "--radius", f"{0.05 + 3.2 * t:.3f}", "--explode", f"{0.6 * min(1, 1.5 * t):.3f}",
-                 "--azimuth", f"{25 + 30 * t:.2f}", "--width", "700", "--height", "540"])
 # problem: a random Voronoi shatter of the whole building (ignores parts and
 # joints) and the flat leaf level (every cell a body)
 W_ = B + "/out/why"

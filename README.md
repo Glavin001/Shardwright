@@ -179,6 +179,25 @@ top of that, bonds on predefined cuts are deliberately weaker, so the solver
 breaks along them first ([support graph](#a-support-graph-for-stress-solvers)).
 You can reproduce the test with `cargo run --release -p frac-pipeline --example bond_geometry -- <asset.json>`.
 
+What a solver gets from the bonds, on the two-storey building:
+
+![Support graph, self-weight load path, and the bonds a missing column overloads](docs/readme/why_support.png)
+
+1. **Support graph.** Every part is a node and every bond an edge, drawn
+   through the contact it stands for. Each piece reaches the ground through
+   some path, so nothing floats.
+2. **Load path.** An exact stress solve of all 3,657 chunk bonds under
+   self-weight. The ground-floor columns carry the building; the slabs carry
+   little.
+3. **One column removed.** Take out the column the wrecking ball hits (see
+   [at runtime](#at-runtime-break-only-where-it-breaks)) and 188 bonds go
+   over capacity. Those break first, and that is where the simulated
+   collapse starts.
+
+`tools/explainer/support.sh` reproduces the three views. The loads come
+from `frac-sim --analyze` ([tools/sim](tools/sim/README.md)), and
+`prefracture preview --graph` draws the graph.
+
 ### Why decompose into convex hulls?
 
 Physics engines collide convex shapes, but fracture-mode pieces follow the
@@ -194,9 +213,14 @@ pieces never overlap (see [colliders](#why-non-overlapping-colliders)).
 A flat shatter forces a choice: thousands of rigid bodies at once, or no
 detail. Shardwright's four nested levels let a runtime swap a fragment for
 its children only where it breaks. For the same local damage to the
-two-storey building that takes **324 bodies instead of 6,860 (21× fewer)**:
+two-storey building that takes **324 bodies instead of 6,860 (21× fewer)**
+(the `preview --impact` partial break).
 
-![Partial break: rigid bodies, flat vs hierarchical](docs/readme/why_hierarchy.png)
+In the [Rapier simulation](#at-runtime-break-only-where-it-breaks), the
+collapsing building is 1,295 bodies two seconds in. Only the 240 chunks that
+were hit have been refined into finer cells:
+
+![Rapier simulation: rigid bodies, flat vs hierarchical](docs/readme/why_hierarchy.png)
 
 ### Why non-overlapping colliders?
 

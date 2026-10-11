@@ -73,6 +73,10 @@ mkdir -p out/why/data
 "$PY" tools/explainer/random_voronoi.py out/support_clusters/two_storey_building.asset.json out/why/data/building_random.json 120 3 --highlight-spanning
 
 "$PY" tools/explainer/metrics.py
+# the Rapier collapse (hierarchy scene; also docs/readme/collapse_two_storey.*)
+# and the support-graph views (bonds scene)
+tools/sim/make.sh
+tools/explainer/support.sh
 python3 tools/explainer/render.py
 python3 tools/explainer/render_zoom.py
 python3 tools/explainer/compose.py

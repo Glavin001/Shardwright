@@ -220,6 +220,10 @@ enum Cmd {
         /// to `<out stem>_NNNN.png`.
         #[arg(long)]
         sim: Option<PathBuf>,
+        /// Render a graph of spheres and cylinders (bond / support-graph
+        /// views from tools/explainer/bond_graph.py) with the `--sim` camera.
+        #[arg(long)]
+        graph: Option<PathBuf>,
         /// Fixed camera box for `--sim`: xmin,ymin,zmin,xmax,ymax,zmax.
         #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
         fit: Vec<f64>,
@@ -1143,6 +1147,7 @@ fn main() -> ExitCode {
             cell_groups,
             hulls,
             sim,
+            graph,
             fit,
         } => (|| -> Result<bool, String> {
             // never overwrite an earlier preview: number the new file instead
@@ -1212,24 +1217,26 @@ fn main() -> ExitCode {
                     .map_err(|e| format!("{}: {e}", input.display()))?;
                 let asset: frac_core::Asset =
                     serde_json::from_str(&text).map_err(|e| format!("{}: {e}", input.display()))?;
-                match sim {
-                    Some(sp) => {
-                        let v: serde_json::Value = serde_json::from_str(
-                            &std::fs::read_to_string(sp)
-                                .map_err(|e| format!("{}: {e}", sp.display()))?,
-                        )
-                        .map_err(|e| format!("{}: {e}", sp.display()))?;
-                        let fit = match fit.as_slice() {
-                            [] => None,
-                            &[a, b, c, d, e, f] => Some((
-                                frac_geom::DVec3::new(a, b, c),
-                                frac_geom::DVec3::new(d, e, f),
-                            )),
-                            _ => return Err("--fit: expected xmin,ymin,zmin,xmax,ymax,zmax".into()),
-                        };
-                        preview::preview_sim(&asset, &v, out, &o, fit)?
+                let fit = match fit.as_slice() {
+                    [] => None,
+                    &[a, b, c, d, e, f] => Some((
+                        frac_geom::DVec3::new(a, b, c),
+                        frac_geom::DVec3::new(d, e, f),
+                    )),
+                    _ => return Err("--fit: expected xmin,ymin,zmin,xmax,ymax,zmax".into()),
+                };
+                let read_json = |p: &PathBuf| -> Result<serde_json::Value, String> {
+                    serde_json::from_str(
+                        &std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()))?,
+                    )
+                    .map_err(|e| format!("{}: {e}", p.display()))
+                };
+                match (sim, graph) {
+                    (Some(sp), _) => preview::preview_sim(&asset, &read_json(sp)?, out, &o, fit)?,
+                    (None, Some(gp)) => {
+                        preview::preview_graph(&asset, &read_json(gp)?, out, &o, fit)?
                     }
-                    None => preview::preview(&asset, &MaterialLibrary::builtin(), out, &o)?,
+                    (None, None) => preview::preview(&asset, &MaterialLibrary::builtin(), out, &o)?,
                 }
             } else {
                 // an input mesh (glb/gltf/obj/ply/stl) before baking

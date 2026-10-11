@@ -65,6 +65,8 @@ struct Args {
     rounds: usize,
     impact_rounds: usize,
     impact_g: f64,
+    analyze: Option<String>,
+    remove: String,
 }
 
 fn parse() -> Args {
@@ -99,6 +101,8 @@ fn parse() -> Args {
         rounds: num("--rounds", 1.0) as usize,
         impact_rounds: num("--impact-rounds", 8.0) as usize,
         impact_g: num("--impact-g", 3.0),
+        analyze: get("--analyze"),
+        remove: get("--remove").unwrap_or_else(|| "f0_col_21".into()),
     }
 }
 
@@ -145,6 +149,9 @@ struct Sim<'a> {
     /// factorizations of the islands' stiffness matrices, keyed by nodes and bonds
     fact: HashMap<Vec<u32>, SparseCholesky>,
     reinforce: HashMap<u32, f64>,
+    /// when set, stress() records each solved bond's [utilization, |force|,
+    /// normal force (+ tension)] here instead of breaking anything
+    record: Option<HashMap<u32, [f64; 3]>>,
 }
 
 impl<'a> Sim<'a> {
@@ -676,6 +683,10 @@ impl<'a> Sim<'a> {
                 let u = (fnr.max(0.0) / cap.t + mb / cap.m)
                     .max((-fnr).max(0.0) / cap.c)
                     .max(sh / cap.s);
+                if let Some(rec) = self.record.as_mut() {
+                    rec.insert(b, [u, fo.length(), fnr]);
+                    continue;
+                }
                 if let Some(margin) = design {
                     if u * margin > 1.0 {
                         self.reinforce.insert(b, self.reinforcement(b) * u * margin);
@@ -720,7 +731,7 @@ impl<'a> Sim<'a> {
                     .position(|x| *x == u32::MAX)
                     .is_some_and(|p| live.contains(&key[..p]))
         });
-        if design.is_some() {
+        if design.is_some() || self.record.is_some() {
             return gone.len();
         }
         for b in &gone {
@@ -821,6 +832,7 @@ fn main() {
         chunk_of_collider: HashMap::new(),
         fact: HashMap::new(),
         reinforce: HashMap::new(),
+        record: None,
     };
     for f in asset.hierarchy.level_ranges[args.level as usize].clone() {
         sim.active.insert(f);
@@ -845,6 +857,10 @@ fn main() {
             break;
         }
         sim.rebuild();
+    }
+    if args.analyze.is_some() {
+        analyze(&mut sim, &args, g);
+        return;
     }
     if let Ok(ids) = std::env::var("SIM_TEST_REFINE") {
         // diagnostic: refine the given chunks of the intact structure, solve, stop
@@ -1061,4 +1077,89 @@ fn main() {
     let out = serde_json::json!({ "fps": args.fps, "level": args.level, "frames": frames });
     std::fs::write(&args.out, serde_json::to_vec(&out).unwrap()).unwrap();
     eprintln!("wrote {} ({} frames)", args.out, frames.len());
+}
+
+/// `--analyze`: no simulation. Records every bond's load under gravity on
+/// the design-checked structure, then again with the component `--remove`
+/// taken out (its chunks' bonds removed), and writes both to OUT.json (the
+/// `--analyze` path) for tools/explainer/bond_graph.py.
+fn analyze(sim: &mut Sim, args: &Args, g: DVec3) {
+    let a = sim.a;
+    sim.record = Some(HashMap::new());
+    sim.stress(&[], 0.0, g, None);
+    let intact = sim.record.replace(HashMap::new()).unwrap();
+    let comp = a
+        .components
+        .iter()
+        .position(|c| c.name == args.remove)
+        .unwrap_or_else(|| panic!("--remove: no component {}", args.remove));
+    let in_comp = |f: u32| sim.frag(f).component.0 as usize == comp;
+    let removed_chunks: Vec<u32> = sim.active.iter().copied().filter(|&f| in_comp(f)).collect();
+    let cut: Vec<u32> = sim
+        .bonds
+        .iter()
+        .copied()
+        .filter(|&b| {
+            sim.ends(b)
+                .is_some_and(|(x, y)| in_comp(x) || y.is_some_and(in_comp))
+        })
+        .collect();
+    for b in &cut {
+        sim.bonds.remove(b);
+    }
+    sim.rebuild();
+    sim.stress(&[], 0.0, g, None);
+    let after = sim.record.take().unwrap();
+    let mut rows = Vec::new();
+    let mut ids: Vec<u32> = intact.keys().copied().collect();
+    ids.sort_unstable();
+    for b in ids {
+        let bd = &a.bonds[b as usize];
+        let (x, y) = sim.ends(b).unwrap_or((bd.a.0, None));
+        let other = match bd.b {
+            FragmentOrWorld::Fragment(_) => y.map_or(-1, |y| y as i64),
+            FragmentOrWorld::World => -1,
+        };
+        let i = intact[&b];
+        let kind = bd
+            .composition
+            .first()
+            .map_or("Monolithic".to_string(), |c| format!("{:?}", c.kind));
+        let r4 = |v: f64| (v * 1e4).round() / 1e4;
+        let mut row = vec![
+            serde_json::json!(b),
+            serde_json::json!(x),
+            serde_json::json!(other),
+            serde_json::json!(r4(bd.area)),
+            serde_json::json!(kind),
+            serde_json::json!([r4(bd.centroid.x), r4(bd.centroid.y), r4(bd.centroid.z)]),
+            serde_json::json!([r4(i[0]), i[1].round(), i[2].round()]),
+        ];
+        row.push(match after.get(&b) {
+            Some(v) => serde_json::json!([r4(v[0]), v[1].round(), v[2].round()]),
+            None => serde_json::Value::Null,
+        });
+        rows.push(serde_json::Value::Array(row));
+    }
+    let over = after.values().filter(|v| v[0] > 1.0).count();
+    let umax0 = intact.values().map(|v| v[0]).fold(0.0, f64::max);
+    eprintln!(
+        "analyze: {} bonds; intact max utilization {umax0:.2}; without {} ({} chunks, {} bonds cut): {over} over capacity",
+        rows.len(),
+        args.remove,
+        removed_chunks.len(),
+        cut.len()
+    );
+    let out = serde_json::json!({
+        "level": args.level,
+        "removed": args.remove,
+        "removed_chunks": removed_chunks,
+        "columns": ["bond", "a", "b (-1 ground)", "area", "kind", "centroid", "intact [u, |F|, Fn]", "removed [u, |F|, Fn]"],
+        "bonds": rows,
+    });
+    std::fs::write(
+        args.analyze.as_ref().unwrap(),
+        serde_json::to_vec(&out).unwrap(),
+    )
+    .unwrap();
 }
