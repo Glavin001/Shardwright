@@ -1,0 +1,21 @@
+{
+  "parts": {
+    "pipe": {
+      "component_role": null,
+      "material": "concrete_c30",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": null,
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    }
+  },
+  "connections": [],
+  "ground_height": null
+}

@@ -1,0 +1,245 @@
+# Built-in material library (illustrative values; calibrate per project).
+library_id = "prefracture_builtin"
+library_version = "1.0.0"
+reference_fracture_energy = 100.0
+
+[[material]]
+id = "concrete_c30"
+density = 2400.0
+youngs_modulus = 30.0e9
+poisson = 0.2
+tensile_strength = 2.9e6
+cohesion = 3.5e6
+friction_angle_deg = 37.0
+compressive_strength = 30.0e6
+fracture_energy = 120.0
+weibull_modulus = 8.0
+dif_curve = "concrete_default"
+recipe = "concrete_clustered_voronoi"
+noise_profile = "concrete_rough"
+chipping_ratio = 0.35
+interior_render_material = "concrete_interior"
+interior_color = [0.55, 0.53, 0.50, 1.0]
+exterior_color = [0.62, 0.62, 0.60, 1.0]
+interior_uv_scale = 2.0
+
+[[material]]
+id = "brick_clay"
+density = 1900.0
+youngs_modulus = 15.0e9
+poisson = 0.15
+tensile_strength = 3.0e6
+compressive_strength = 25.0e6
+fracture_energy = 60.0
+weibull_modulus = 6.0
+recipe = "masonry"
+noise_profile = "brick_rough"
+chipping_ratio = 0.3
+interior_render_material = "brick_interior"
+interior_color = [0.58, 0.30, 0.22, 1.0]
+exterior_color = [0.65, 0.33, 0.25, 1.0]
+joint_interface_material = "mortar_type_n"
+interior_uv_scale = 3.0
+
+[[material]]
+id = "pine"
+density = 500.0
+poisson = 0.3
+anisotropy = { axis = "grain", E_long = 11.0e9, E_trans = 0.6e9, G = 0.7e9 }
+tensile_strength = 40.0e6
+fracture_energy_along_grain = 300.0
+fracture_energy_across_grain = 8000.0
+weibull_modulus = 5.0
+recipe = "wood_anisotropic_voronoi"
+grain_stretch = 6.0
+noise_profile = "wood_splinter"
+chipping_ratio = 0.1
+interior_render_material = "pine_interior"
+interior_color = [0.80, 0.65, 0.42, 1.0]
+exterior_color = [0.70, 0.52, 0.32, 1.0]
+interior_uv_scale = 2.0
+
+[[material]]
+id = "glass_annealed"
+density = 2500.0
+youngs_modulus = 70.0e9
+poisson = 0.22
+tensile_strength = 45.0e6
+fracture_energy = 8.0
+weibull_modulus = 7.0
+recipe = "glass_annealed"
+noise_profile = "glass_smooth"
+chipping_ratio = 0.0
+interior_render_material = "glass_edge"
+interior_color = [0.70, 0.85, 0.80, 0.6]
+exterior_color = [0.85, 0.95, 0.95, 0.3]
+
+[[material]]
+id = "glass_tempered"
+density = 2500.0
+youngs_modulus = 70.0e9
+poisson = 0.22
+tensile_strength = 120.0e6
+fracture_energy = 8.0
+weibull_modulus = 7.0
+recipe = "glass_tempered"
+noise_profile = "glass_smooth"
+chipping_ratio = 0.0
+interior_color = [0.70, 0.85, 0.80, 0.6]
+exterior_color = [0.85, 0.95, 0.95, 0.3]
+
+[[material]]
+id = "drywall"
+density = 700.0
+youngs_modulus = 2.0e9
+poisson = 0.2
+tensile_strength = 0.4e6
+fracture_energy = 30.0
+weibull_modulus = 5.0
+recipe = "drywall"
+noise_profile = "plaster_ragged"
+chipping_ratio = 0.4
+interior_color = [0.92, 0.90, 0.85, 1.0]
+exterior_color = [0.95, 0.95, 0.93, 1.0]
+
+[[material]]
+id = "steel_s355"
+density = 7850.0
+youngs_modulus = 210.0e9
+poisson = 0.3
+tensile_strength = 510.0e6
+fracture_energy = 100000.0
+weibull_modulus = 20.0
+recipe = "steel"
+noise_profile = "steel_torn"
+chipping_ratio = 0.0
+interior_color = [0.55, 0.55, 0.58, 1.0]
+exterior_color = [0.40, 0.42, 0.45, 1.0]
+
+[[material]]
+id = "sandstone"
+density = 2300.0
+youngs_modulus = 20.0e9
+poisson = 0.25
+tensile_strength = 3.0e6
+fracture_energy = 80.0
+weibull_modulus = 7.0
+recipe = "stone"
+noise_profile = "stone_rough"
+chipping_ratio = 0.3
+interior_color = [0.80, 0.70, 0.52, 1.0]
+exterior_color = [0.76, 0.66, 0.50, 1.0]
+
+[[material]]
+id = "ceramic"
+density = 2300.0
+youngs_modulus = 60.0e9
+poisson = 0.22
+tensile_strength = 30.0e6
+fracture_energy = 20.0
+weibull_modulus = 9.0
+recipe = "ceramic"
+noise_profile = "ceramic_smooth"
+chipping_ratio = 0.25
+interior_color = [0.90, 0.88, 0.84, 1.0]
+exterior_color = [0.30, 0.45, 0.65, 1.0]
+analysis_cells_per_m3 = 20000.0
+
+[[interface_material]]
+id = "mortar_type_n"
+youngs_modulus = 5.0e9
+tensile_strength = 0.3e6
+cohesion = 0.4e6
+friction_angle_deg = 35.0
+fracture_energy = 10.0
+thickness = 0.01
+weibull_modulus = 5.0
+
+[[interface_material]]
+id = "cold_joint"
+youngs_modulus = 25.0e9
+tensile_strength = 1.0e6
+cohesion = 1.5e6
+friction_angle_deg = 35.0
+fracture_energy = 40.0
+thickness = 0.0
+
+[[interface_material]]
+id = "weld"
+youngs_modulus = 210.0e9
+tensile_strength = 450.0e6
+fracture_energy = 50000.0
+thickness = 0.0
+
+[[interface_material]]
+id = "adhesive"
+youngs_modulus = 3.0e9
+tensile_strength = 10.0e6
+fracture_energy = 200.0
+thickness = 0.001
+
+[[interface_material]]
+id = "bearing"
+youngs_modulus = 20.0e9
+tensile_strength = 0.0
+cohesion = 0.0
+friction_angle_deg = 30.0
+fracture_energy = 0.0
+thickness = 0.0
+
+[[noise_profile]]
+id = "concrete_rough"
+amplitude = 0.004
+hurst_exponent = 0.8
+min_wavelength = 0.002
+max_wavelength = 0.08
+
+[[noise_profile]]
+id = "brick_rough"
+amplitude = 0.002
+hurst_exponent = 0.8
+min_wavelength = 0.002
+max_wavelength = 0.04
+
+[[noise_profile]]
+id = "wood_splinter"
+amplitude = 0.003
+hurst_exponent = 0.7
+min_wavelength = 0.002
+max_wavelength = 0.05
+grain_stretch = 8.0
+
+[[noise_profile]]
+id = "glass_smooth"
+amplitude = 0.0002
+hurst_exponent = 0.9
+min_wavelength = 0.001
+max_wavelength = 0.01
+
+[[noise_profile]]
+id = "plaster_ragged"
+amplitude = 0.002
+hurst_exponent = 0.6
+min_wavelength = 0.002
+max_wavelength = 0.03
+
+[[noise_profile]]
+id = "steel_torn"
+amplitude = 0.001
+hurst_exponent = 0.8
+min_wavelength = 0.001
+max_wavelength = 0.02
+
+[[noise_profile]]
+id = "stone_rough"
+amplitude = 0.004
+hurst_exponent = 0.8
+min_wavelength = 0.003
+max_wavelength = 0.1
+
+[[noise_profile]]
+id = "ceramic_smooth"
+amplitude = 0.0004
+hurst_exponent = 0.85
+min_wavelength = 0.001
+max_wavelength = 0.01

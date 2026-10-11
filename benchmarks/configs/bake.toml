@@ -1,0 +1,36 @@
+# Default benchmark config (spec §15 excerpt).
+seed = 1337
+variants = 1
+levels = 4
+
+[cells]
+target_analysis_cells_per_m3 = 200
+fine_per_analysis = 8
+min_cell_volume = 1.0e-7
+min_thickness_ratio = 0.05
+
+[modes]
+enabled = true
+k = 10
+omega = 1.0e-3
+material_aware = true
+target_level1_fragments = 12
+max_iccm_iters = 50
+tet_edge_ratio = 0.33
+
+[collision]
+method = "coacd"
+concavity = 0.02
+# hull budget: compound convex shapes of <= 64-vertex hulls; 128 hulls per
+# fragment meet the spec §13.6 hull-fit / overshoot targets on the jagged
+# multi-cell fragments of the coarse levels (8, the library default, leaves
+# Level-1 fit ~0.08 and overshoot ~0.43 on the RC column)
+max_hulls_per_fragment = 128
+margin = 0.0005
+min_rigid_size = 0.01
+
+[render]
+lods = 3
+noise = true
+chipping = true
+interior_uv = "triplanar_asset_space"

@@ -1,0 +1,31 @@
+[package]
+name = "frac-cli"
+description = "prefracture command-line tool"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "prefracture"
+path = "src/main.rs"
+
+[dependencies]
+frac-core.workspace = true
+frac-geom.workspace = true
+frac-material.workspace = true
+frac-cells.workspace = true
+frac-io.workspace = true
+frac-pipeline.workspace = true
+frac-validate.workspace = true
+frac-patterns.workspace = true
+frac-collision.workspace = true
+png = "0.18"
+font8x8 = "0.3"
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+glam.workspace = true
+blake3.workspace = true
+rayon.workspace = true

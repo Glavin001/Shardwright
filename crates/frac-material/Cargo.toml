@@ -1,0 +1,12 @@
+[package]
+name = "frac-material"
+description = "Versioned material library shared with the stress solver (TOML)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+frac-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true

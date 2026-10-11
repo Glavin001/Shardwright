@@ -1,0 +1,16 @@
+[package]
+name = "frac-ingest"
+description = "Stage 0/1: import repair, solidification (generalized winding number), components, contacts"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+frac-core.workspace = true
+frac-geom.workspace = true
+frac-material.workspace = true
+glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rayon.workspace = true
+tracing.workspace = true

@@ -1,0 +1,25 @@
+{
+  "parts": {
+    "beam": {
+      "component_role": null,
+      "material": "pine",
+      "material_map": {},
+      "anchor": false,
+      "anchor_below": null,
+      "grain": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "density_boxes": [],
+      "forbidden_zones": [],
+      "rebar": [],
+      "masonry_layout": null,
+      "recipe": null,
+      "group": null,
+      "impact_center": null
+    }
+  },
+  "connections": [],
+  "ground_height": null
+}

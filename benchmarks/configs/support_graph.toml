@@ -1,0 +1,59 @@
+# Support-graph layout: the leaf level is the stress solver's chunk graph.
+#   L0 components -> L1 structural fragments (fracture modes) -> L2 chunks
+# With one fine cell per analysis cell, the fine cells ARE the analysis
+# cells: every L2 chunk is an exact Voronoi cell clipped to the solid, so it
+# is convex (one hull) wherever the solid is, and every L2-L2 bond is one
+# planar facet. Finer pieces are cosmetic debris (no bonds), split from each
+# chunk at bake time for the runtime to spawn when the chunk is crushed.
+seed = 1337
+variants = 1
+levels = 3
+
+[cells]
+target_analysis_cells_per_m3 = 200
+fine_per_analysis = 1
+# ignore per-part / per-material overrides: chunks must be single cells
+fixed_fine_per_analysis = true
+# chunk size by extent (m): max(A/(2e^2), V/e^3) chunks per part, so thin,
+# wide parts (floors) get chunks with footprints of about e x e; replaces the
+# volume density above
+max_chunk_extent = 0.3
+min_cell_volume = 1.0e-7
+min_thickness_ratio = 0.05
+
+[modes]
+enabled = true
+k = 10
+omega = 1.0e-3
+material_aware = true
+target_level1_fragments = 12
+# Level-1 pieces at most ~1.5 m across: large parts (floors) get more than 12
+max_fragment_extent = 1.5
+max_iccm_iters = 50
+tet_edge_ratio = 0.33
+
+[bonds]
+# Weibull weakest-link size effect: chunk bonds on L1 boundaries and L0
+# joints take the strength of the whole boundary surface they lie on, so
+# they are weaker per area than bonds inside an L1 fragment
+size_effect = true
+# Extra bias on top of the size effect, per boundary level:
+# [L0 joints, L1 boundaries]; 1 = none, below 1 = break there sooner.
+boundary_factors = [1.0, 1.0]
+anchor_factor = 1.0
+
+[collision]
+method = "coacd"
+concavity = 0.02
+max_hulls_per_fragment = 128
+margin = 0.0005
+min_rigid_size = 0.01
+
+[render]
+lods = 3
+noise = true
+chipping = true
+interior_uv = "triplanar_asset_space"
+
+[debris]
+pieces = 8

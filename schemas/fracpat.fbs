@@ -1,0 +1,55 @@
+// Runtime fracture pattern library (.fracpat), spec Stage 11 / milestone M5.
+// Patterns live in a canonical frame: the impact point is the origin, the
+// impact direction is -Z, and the pattern spans [-1,1]^2 x [-1,0] (solids)
+// or a unit slab of thickness `thickness` (panes). The runtime scales and
+// stamps patterns; cells arrive pre-bonded.
+namespace fracpat;
+
+struct Vec3 { x: float; y: float; z: float; }
+
+table Cell {
+  vertices: [Vec3];
+  // polygon faces (CCW outward): concatenated indices + per-face sizes
+  face_indices: [uint32];
+  face_sizes: [uint16];
+  volume: float;
+  com: Vec3;
+  // inertia about the COM for unit density, row-major 3x3
+  inertia: [float];
+}
+
+table Bond {
+  a: uint32;
+  b: uint32;
+  area: float;
+  centroid: Vec3;
+  normal: Vec3;          // from a to b
+  frame_u: Vec3;
+  frame_v: Vec3;
+  i_uu: float;
+  i_vv: float;
+  i_uv: float;
+  j: float;
+  kind: uint8;           // InterfaceKind
+  interface_material: int32 = -1;
+}
+
+table Pattern {
+  material: string;
+  mode: string;          // punch_cone, bending, shear, crater, crush, glass_radial
+  thickness: float;      // 0 for solids
+  cells: [Cell];
+  bonds: [Bond];
+}
+
+table PatternLibrary {
+  schema_version: uint16;
+  tool_version: string;
+  material_library_id: string;
+  material_library_version: string;
+  seed: uint64;
+  patterns: [Pattern];
+}
+
+root_type PatternLibrary;
+file_identifier "FPAT";
