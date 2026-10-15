@@ -551,6 +551,23 @@ $B patterns --out patterns.fracpat                   # runtime fracture-pattern 
 $B gen-bench                                         # regenerate benchmarks/assets
 ```
 
+### Single-file runtime GLB
+
+Package a completed bake without running the slow fracture pipeline again:
+
+```sh
+$B export-glb --input out/rc_column.glb --out out/rc_column.fracture.glb
+# For a simple browser loader without meshopt decoding:
+$B export-glb --input out/rc_column.glb --out out/rc_column.fracture.glb --uncompressed
+```
+
+The adjacent `.fracphys` is inferred (or pass `--physics`). Pass the same
+`--materials custom.toml` used to bake non-default libraries. This export embeds
+render data, the original verified FlatBuffers payload, and the resolved material
+library in one GLB. Nothing is cooked on load. `frac_io::write_fracture_glb` and
+`read_fracture_glb` expose the same operation to Rust callers. See
+[the versioned extension contract](docs/GLB_FRACTURE.md).
+
 ### Authoring metadata
 
 Metadata is optional. It goes in the `<input>.meta.json` sidecar (or TOML),

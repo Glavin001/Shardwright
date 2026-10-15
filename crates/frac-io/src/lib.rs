@@ -11,6 +11,7 @@
 mod debug;
 mod error;
 mod glb;
+mod fracture_glb;
 mod gltf_out;
 mod import;
 mod physics;
@@ -34,6 +35,8 @@ mod frac_generated;
 pub mod fb {
     pub use crate::frac_generated::frac::*;
 }
+
+pub use fracture_glb::{FRACTURE_EXTENSION, write_fracture_glb, read_fracture_glb};
 
 pub use debug::{asset_to_json, write_asset_json, write_obj, write_ply, write_ply_polys};
 pub use error::IoError;

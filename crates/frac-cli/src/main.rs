@@ -55,6 +55,24 @@ enum Cmd {
         #[arg(long)]
         seed: Option<u64>,
     },
+    /// Package an existing bake as one self-contained GLB (no re-fracturing).
+    ExportGlb {
+        /// Existing render GLB from the same bake as --physics.
+        #[arg(long)]
+        input: PathBuf,
+        /// Baked physics payload; defaults to INPUT with .fracphys extension.
+        #[arg(long)]
+        physics: Option<PathBuf>,
+        /// The material library used for the bake (default: built-in).
+        #[arg(long)]
+        materials: Option<PathBuf>,
+        /// Destination, e.g. building.fracture.glb.
+        #[arg(long)]
+        out: PathBuf,
+        /// Expand meshopt buffers for viewers without a meshopt decoder.
+        #[arg(long)]
+        uncompressed: bool,
+    },
     /// Re-validate a bake output and export bond-network results for the oracle harness.
     Validate {
         #[arg(long)]
@@ -1095,6 +1113,21 @@ fn main() -> ExitCode {
             debug_dump,
             *seed,
         ),
+        Cmd::ExportGlb { input, physics, materials, out, uncompressed } => (|| {
+            let mut render = std::fs::read(input).map_err(|e| e.to_string())?;
+            if *uncompressed {
+                if let Some(decoded) = frac_io::decompress_meshopt_glb(&render).map_err(|e| e.to_string())? {
+                    render = decoded;
+                }
+            }
+            let path = physics.clone().unwrap_or_else(|| input.with_extension("fracphys"));
+            let physics = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            let library = serde_json::to_value(load_lib(materials)?).map_err(|e| e.to_string())?;
+            let bytes = frac_io::write_fracture_glb(&render, &physics, &library).map_err(|e| e.to_string())?;
+            std::fs::write(out, &bytes).map_err(|e| format!("{}: {e}", out.display()))?;
+            println!("{}: {} bytes, self-contained render + physics + materials", out.display(), bytes.len());
+            Ok(true)
+        })(),
         Cmd::Validate {
             input,
             materials,
