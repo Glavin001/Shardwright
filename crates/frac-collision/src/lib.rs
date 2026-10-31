@@ -888,6 +888,21 @@ pub fn build_hulls(asset: &Asset, p: &CollisionParams) -> (Vec<Hull>, Vec<std::o
                         &coacd::greedy_subset(&s, p.max_hull_vertices, eps * scale),
                     );
                 }
+                // near-coplanar faces whose planes tilt once the vertices are
+                // rounded to f32 (as stored): the exact hull of the rounded
+                // vertices is convex for exactly the points stored
+                if !coacd::stored_hull_is_convex(&hull.vertices, &hull.faces) {
+                    let stored: Vec<DVec3> =
+                        hull.vertices.iter().map(|v| v.as_vec3().as_dvec3()).collect();
+                    if let Some(m) = frac_geom::hull::convex_hull(&stored) {
+                        N_O_REBUILD.fetch_add(1, AO::Relaxed);
+                        hull = Hull {
+                            fragment: FragmentId(fi as u32),
+                            vertices: m.verts,
+                            faces: m.tris.iter().map(|t| t.to_vec()).collect(),
+                        };
+                    }
+                }
                 tadd(&T_O_CONVEX, t1);
                 hulls.push(hull);
             }
