@@ -5,7 +5,9 @@
 //! oracle dataset), so the test always runs. When the oracle binary is
 //! available (`VORO_ORACLE`, else `$ORACLES/voro_oracle`, else
 //! /opt/oracles/voro_oracle; `tools/setup.sh` builds it) it is run as well
-//! and must reproduce the frozen output; `VORO_WRITE_GOLDEN=1` refreshes it.
+//! and must reproduce the frozen output: the same cells, ids and vertex
+//! counts, every value within the same 1e-9 relative (compilers differ in the
+//! last bits of Voro++'s arithmetic); `VORO_WRITE_GOLDEN=1` refreshes it.
 
 use frac_cells::clip::Clipper;
 use frac_cells::complex::Complex;
@@ -66,14 +68,51 @@ fn oracle_output(name: &str, seeds: &[[f64; 3]], lo: DVec3, hi: DVec3) -> String
         )
     });
     if let Some(text) = live {
-        assert_eq!(
-            text,
-            frozen,
-            "live Voro++ output differs from the frozen golden file {}",
-            path.display()
-        );
+        if let Err(e) = same_output(&text, &frozen) {
+            panic!(
+                "live Voro++ output differs from the frozen golden file {}: {e}",
+                path.display()
+            );
+        }
     }
     frozen
+}
+
+/// Live and frozen oracle output agree: the same lines and tokens, integers
+/// (cell id, vertex count) exactly, values within 1e-9 relative (of the larger
+/// magnitude, at least 1).
+fn same_output(live: &str, frozen: &str) -> Result<(), String> {
+    let (a, b): (Vec<&str>, Vec<&str>) = (live.lines().collect(), frozen.lines().collect());
+    if a.len() != b.len() {
+        return Err(format!("{} lines, frozen {}", a.len(), b.len()));
+    }
+    for (i, (la, lb)) in a.iter().zip(&b).enumerate() {
+        let (ta, tb): (Vec<&str>, Vec<&str>) = (
+            la.split_whitespace().collect(),
+            lb.split_whitespace().collect(),
+        );
+        if ta.len() != tb.len() {
+            return Err(format!(
+                "line {}: {} tokens, frozen {}",
+                i + 1,
+                ta.len(),
+                tb.len()
+            ));
+        }
+        for (x, y) in ta.iter().zip(&tb) {
+            if x == y {
+                continue;
+            }
+            let (fx, fy) = match (x.parse::<f64>(), y.parse::<f64>()) {
+                (Ok(fx), Ok(fy)) if x.contains(['.', 'e']) || y.contains(['.', 'e']) => (fx, fy),
+                _ => return Err(format!("line {}: {x} vs frozen {y}", i + 1)),
+            };
+            if (fx - fy).abs() > 1e-9 * fx.abs().max(fy.abs()).max(1.0) {
+                return Err(format!("line {}: {x} vs frozen {y}", i + 1));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn run_case(name: &str, seed: u64, n: usize, lo: DVec3, hi: DVec3) {
