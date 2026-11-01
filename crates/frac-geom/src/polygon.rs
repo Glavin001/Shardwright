@@ -3,6 +3,20 @@
 
 use glam::{DMat3, DVec2, DVec3};
 
+/// Whether polygon faces (vertex indices) bound a closed surface: every
+/// directed edge appears exactly once and its reverse exactly once. Faces
+/// that overlap (two coplanar faces covering the same region, as duplicate
+/// half-spaces of a clipped polytope give) or leave a hole fail.
+pub fn closed_surface(faces: &[Vec<u32>]) -> bool {
+    let mut edges: std::collections::HashMap<(u32, u32), u32> = std::collections::HashMap::new();
+    for f in faces {
+        for i in 0..f.len() {
+            *edges.entry((f[i], f[(i + 1) % f.len()])).or_insert(0) += 1;
+        }
+    }
+    edges.iter().all(|(&(a, b), &n)| n == 1 && edges.get(&(b, a)) == Some(&1))
+}
+
 /// Newell area vector of a closed loop: `0.5 * sum(p_i x p_{i+1})`.
 /// Its length is the loop area; its direction is the right-hand normal.
 pub fn newell(loop_: &[DVec3]) -> DVec3 {

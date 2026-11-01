@@ -1945,3 +1945,609 @@ mod tests {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// 7. Galleon stern: the after half of a warship, built plank by plank
+
+/// The after half of a two-deck sailing warship, as a set: tarred hull
+/// strakes on oak frames, an oak main deck on beams, a raised quarterdeck
+/// behind a planked breast, two flights of stairs down from it with turned
+/// balusters and handrails, a balustrade along the quarterdeck front,
+/// bulwarks with gun ports, iron guns on oak carriages, two mast stubs and
+/// a transom. x runs aft (the open, cut-away end is at x = 0), y up, z
+/// across the beam with the centreline at z = 0. Every member is its own
+/// part with its grain along its length, so the wood splinters the way the
+/// member was cut; members meet only on coplanar faces.
+#[derive(Clone, Debug)]
+pub struct GalleonStern {
+    /// Length of the set along x (stern transom at x = length).
+    pub length: f64,
+    /// Outer half beam.
+    pub half_beam: f64,
+    /// Where the quarterdeck breast stands.
+    pub breast_x: f64,
+    /// Main deck top and quarterdeck top.
+    pub main_deck: f64,
+    pub quarter_deck: f64,
+    /// Number of stair steps from the main deck to the quarterdeck.
+    pub steps: usize,
+    /// The two stair flights, as (inner |z|, outer |z|).
+    pub stair: (f64, f64),
+}
+
+impl Default for GalleonStern {
+    fn default() -> Self {
+        GalleonStern {
+            length: 22.0,
+            half_beam: 4.5,
+            breast_x: 12.0,
+            main_deck: 3.08,
+            quarter_deck: 5.48,
+            steps: 8,
+            stair: (1.0, 2.4),
+        }
+    }
+}
+
+/// Planks between `a` and `b`, butt-jointed at `joints` (the joints that
+/// fall strictly inside the range).
+fn spans(a: f64, b: f64, joints: &[f64]) -> Vec<(f64, f64)> {
+    let mut cuts = vec![a];
+    cuts.extend(joints.iter().copied().filter(|&j| j > a + 1e-9 && j < b - 1e-9));
+    cuts.push(b);
+    cuts.windows(2).map(|w| (w[0], w[1])).collect()
+}
+
+/// Regular octagon in a plane, as a 2D outline with flat faces on its
+/// axes (so it can stand on, or carry, a flat face).
+fn octagon(cx: f64, cy: f64, r: f64) -> Vec<[f64; 2]> {
+    (0..8)
+        .map(|i| {
+            let a = std::f64::consts::TAU * (i as f64 + 0.5) / 8.0;
+            [cx + r * a.cos(), cy + r * a.sin()]
+        })
+        .collect()
+}
+
+/// Regular octagon with circumradius `r` standing on its bottom face at
+/// `y0` (exactly, so it bonds to the face it stands on).
+fn octagon_on(cx: f64, y0: f64, r: f64) -> Vec<[f64; 2]> {
+    let (a, b) = (r * (PI / 8.0).cos(), r * (PI / 8.0).sin());
+    vec![
+        [cx - b, y0],
+        [cx + b, y0],
+        [cx + a, y0 + a - b],
+        [cx + a, y0 + a + b],
+        [cx + b, y0 + 2.0 * a],
+        [cx - b, y0 + 2.0 * a],
+        [cx - a, y0 + a + b],
+        [cx - a, y0 + a - b],
+    ]
+}
+
+impl GalleonStern {
+    pub fn build(&self) -> (Vec<BuildingPart>, Vec<ConnectionSpec>) {
+        let (len, hb, bx) = (self.length, self.half_beam, self.breast_x);
+        let (yd, yq) = (self.main_deck, self.quarter_deck);
+        // hull strake thickness and inner half beam
+        let st = 0.12;
+        let w = hb - st;
+        let (beam_d, plank_t, frame_w) = (0.2, 0.08, 0.15);
+        let bt = 0.08; // breast board thickness, its fore face at bx - bt
+        let hull = "pine_tarred";
+        let oak = "oak";
+        let dark = "oak_dark";
+        let mut parts: Vec<BuildingPart> = Vec::new();
+        let mut push = |p: BuildingPart| parts.push(p);
+
+        // --- hull strakes, both sides: full length up to the main deck, the
+        // quarter section up to the quarterdeck; butt joints staggered
+        let strake_h = 0.308;
+        let n_low = ((yd / strake_h).round() as usize).max(1);
+        let n_high = (((yq - yd) / 0.3).round() as usize).max(1);
+        for (side, sgn) in [("p", -1.0), ("s", 1.0)] {
+            let (z0, z1) = if sgn < 0.0 { (-hb, -w) } else { (w, hb) };
+            for k in 0..n_low {
+                let (y0, y1) = (k as f64 * strake_h, (k + 1) as f64 * strake_h);
+                let joints: &[f64] = if k % 2 == 0 { &[7.5, 15.0] } else { &[4.5, 12.0, 18.0] };
+                let mat = if k == n_low - 2 { "oak_ochre" } else { hull };
+                for (i, (xa, xb)) in spans(0.0, len, joints).into_iter().enumerate() {
+                    let mut p = grain(
+                        bpart(
+                            format!("{side}_strake_{k}_{i}"),
+                            box_at(DVec3::new(xa, y0, z0), DVec3::new(xb, y1, z1)),
+                            mat,
+                            "generic",
+                        ),
+                        DVec3::X,
+                    );
+                    if k == 0 {
+                        p = anchored(p);
+                    }
+                    push(p);
+                }
+            }
+            for k in 0..n_high {
+                let dy = (yq - yd) / n_high as f64;
+                let (y0, y1) = (yd + k as f64 * dy, yd + (k + 1) as f64 * dy);
+                let joints: &[f64] = if k % 2 == 0 { &[16.5] } else { &[15.0, 19.0] };
+                let mat = if k == n_high - 1 { "oak_ochre" } else { hull };
+                for (i, (xa, xb)) in spans(bx - bt, len, joints).into_iter().enumerate() {
+                    push(grain(
+                        bpart(
+                            format!("{side}_qstrake_{k}_{i}"),
+                            box_at(DVec3::new(xa, y0, z0), DVec3::new(xb, y1, z1)),
+                            mat,
+                            "generic",
+                        ),
+                        DVec3::X,
+                    ));
+                }
+            }
+        }
+
+        // --- transom: horizontal boards across the stern, full height
+        let tt = 0.12;
+        let top = yq + 0.9;
+        let nt = ((top / 0.3).round() as usize).max(1);
+        for k in 0..nt {
+            let (y0, y1) = (top * k as f64 / nt as f64, top * (k + 1) as f64 / nt as f64);
+            let mut p = grain(
+                bpart(
+                    format!("transom_{k}"),
+                    box_at(DVec3::new(len, y0, -hb), DVec3::new(len + tt, y1, hb)),
+                    hull,
+                    "generic",
+                ),
+                DVec3::Z,
+            );
+            if k == 0 {
+                p = anchored(p);
+            }
+            push(p);
+        }
+
+        // --- main deck: frames under beams, beams across, planks fore and aft
+        let main_beams: Vec<f64> = (0..15).map(|i| 0.75 + 1.5 * i as f64).collect();
+        let yb = yd - plank_t; // beam top
+        for (i, &x) in main_beams.iter().enumerate() {
+            let (xa, xb) = (x - 0.1, x + 0.1);
+            push(grain(
+                bpart(
+                    format!("beam_{i}"),
+                    box_at(DVec3::new(xa, yb - beam_d, -w), DVec3::new(xb, yb, w)),
+                    oak,
+                    "beam",
+                ),
+                DVec3::Z,
+            ));
+            for (side, z0, z1) in [("p", -w, -w + frame_w), ("s", w - frame_w, w)] {
+                push(anchored(grain(
+                    bpart(
+                        format!("{side}_frame_{i}"),
+                        box_at(DVec3::new(xa, 0.0, z0), DVec3::new(xb, yb - beam_d, z1)),
+                        oak,
+                        "column",
+                    ),
+                    DVec3::Y,
+                )));
+            }
+        }
+        let n_planks = 35;
+        let pw = 2.0 * w / n_planks as f64;
+        for j in 0..n_planks {
+            let (z0, z1) = (-w + j as f64 * pw, -w + (j + 1) as f64 * pw);
+            let joints: &[f64] = match j % 3 {
+                0 => &[6.75, 14.25],
+                1 => &[3.75, 11.25, 18.75],
+                _ => &[9.75, 17.25],
+            };
+            for (i, (xa, xb)) in spans(0.0, len, joints).into_iter().enumerate() {
+                push(grain(
+                    bpart(
+                        format!("deck_{j}_{i}"),
+                        box_at(DVec3::new(xa, yb, z0), DVec3::new(xb, yd, z1)),
+                        oak,
+                        "slab",
+                    ),
+                    DVec3::X,
+                ));
+            }
+        }
+
+        // --- quarterdeck: breast boards, frames and pillars, beams, planks
+        let nb = 8;
+        for k in 0..nb {
+            let dy = (yq - yd) / nb as f64;
+            let (y0, y1) = (yd + k as f64 * dy, yd + (k + 1) as f64 * dy);
+            push(grain(
+                bpart(
+                    format!("breast_{k}"),
+                    box_at(DVec3::new(bx - bt, y0, -w), DVec3::new(bx, y1, w)),
+                    dark,
+                    "generic",
+                ),
+                DVec3::Z,
+            ));
+        }
+        let yqb = yq - plank_t;
+        let q_beams: Vec<f64> = {
+            let n = 7;
+            (0..n)
+                .map(|i| bx + 0.1 + (len - 0.1 - (bx + 0.1)) * i as f64 / (n - 1) as f64)
+                .collect()
+        };
+        for (i, &x) in q_beams.iter().enumerate() {
+            let (xa, xb) = (x - 0.1, x + 0.1);
+            push(grain(
+                bpart(
+                    format!("qbeam_{i}"),
+                    box_at(DVec3::new(xa, yqb - beam_d, -w), DVec3::new(xb, yqb, w)),
+                    oak,
+                    "beam",
+                ),
+                DVec3::Z,
+            ));
+            for (side, z0, z1) in [("p", -w, -w + frame_w), ("s", w - frame_w, w)] {
+                push(grain(
+                    bpart(
+                        format!("{side}_qframe_{i}"),
+                        box_at(DVec3::new(xa, yd, z0), DVec3::new(xb, yqb - beam_d, z1)),
+                        oak,
+                        "column",
+                    ),
+                    DVec3::Y,
+                ));
+            }
+            if i > 0 && i + 1 < q_beams.len() && i % 2 == 0 {
+                for (side, zc) in [("p", -1.6), ("s", 1.6)] {
+                    push(grain(
+                        bpart(
+                            format!("{side}_pillar_{i}"),
+                            box_at(
+                                DVec3::new(xa, yd, zc - 0.1),
+                                DVec3::new(xb, yqb - beam_d, zc + 0.1),
+                            ),
+                            oak,
+                            "column",
+                        ),
+                        DVec3::Y,
+                    ));
+                }
+            }
+        }
+        for j in 0..n_planks {
+            let (z0, z1) = (-w + j as f64 * pw, -w + (j + 1) as f64 * pw);
+            let joints: &[f64] = if j % 2 == 0 {
+                &[q_beams[3]]
+            } else {
+                &[q_beams[2], q_beams[4]]
+            };
+            for (i, (xa, xb)) in spans(bx, len, joints).into_iter().enumerate() {
+                push(grain(
+                    bpart(
+                        format!("qdeck_{j}_{i}"),
+                        box_at(DVec3::new(xa, yqb, z0), DVec3::new(xb, yq, z1)),
+                        oak,
+                        "slab",
+                    ),
+                    DVec3::X,
+                ));
+            }
+        }
+
+        // --- bulwarks: boards on the top strake, a cap rail, stanchions
+        // inside; gun ports through the main-deck bulwark
+        let ports = [2.6, 6.2, 9.4];
+        let port_w = 0.8;
+        for (side, sgn) in [("p", -1.0), ("s", 1.0)] {
+            // flush with the strakes below
+            let (z0, z1) = if sgn < 0.0 { (-hb, -w) } else { (w, hb) };
+            // main deck bulwark, x in [0, bx - bt]
+            let xe = bx - bt;
+            let hgt = 1.1;
+            let nbd = 3;
+            for k in 0..nbd {
+                let dy = hgt / nbd as f64;
+                let (y0, y1) = (yd + k as f64 * dy, yd + (k + 1) as f64 * dy);
+                let segs: Vec<(f64, f64)> = if k == 0 {
+                    vec![(0.0, xe)]
+                } else {
+                    let mut cuts = vec![0.0];
+                    for &p in &ports {
+                        cuts.push(p - 0.5 * port_w);
+                        cuts.push(p + 0.5 * port_w);
+                    }
+                    cuts.push(xe);
+                    cuts.chunks(2).map(|c| (c[0], c[1])).collect()
+                };
+                for (i, (xa, xb)) in segs.into_iter().enumerate() {
+                    push(grain(
+                        bpart(
+                            format!("{side}_bulwark_{k}_{i}"),
+                            box_at(DVec3::new(xa, y0, z0), DVec3::new(xb, y1, z1)),
+                            hull,
+                            "generic",
+                        ),
+                        DVec3::X,
+                    ));
+                }
+            }
+            let rail_z = if sgn < 0.0 { (-hb, -hb + 0.16) } else { (hb - 0.16, hb) };
+            push(grain(
+                bpart(
+                    format!("{side}_caprail"),
+                    box_at(
+                        DVec3::new(0.0, yd + hgt, rail_z.0),
+                        DVec3::new(xe, yd + hgt + 0.08, rail_z.1),
+                    ),
+                    dark,
+                    "beam",
+                ),
+                DVec3::X,
+            ));
+            // stanchions inside the bulwark, between the ports, on the
+            // outermost deck plank
+            let (za, zb) = if sgn < 0.0 { (-w, -w + 0.1) } else { (w - 0.1, w) };
+            for (i, x) in [0.9, 4.4, 7.8, 11.0].into_iter().enumerate() {
+                push(grain(
+                    bpart(
+                        format!("{side}_stanchion_{i}"),
+                        box_at(DVec3::new(x - 0.06, yd, za), DVec3::new(x + 0.06, yd + hgt, zb)),
+                        oak,
+                        "column",
+                    ),
+                    DVec3::Y,
+                ));
+            }
+            // quarterdeck bulwark: boards on the top quarter strake, cap rail
+            for k in 0..3 {
+                let dy = 0.9 / 3.0;
+                let (y0, y1) = (yq + k as f64 * dy, yq + (k + 1) as f64 * dy);
+                for (i, (xa, xb)) in spans(xe, len, if k == 1 { &[17.0] } else { &[] })
+                    .into_iter()
+                    .enumerate()
+                {
+                    push(grain(
+                        bpart(
+                            format!("{side}_qbulwark_{k}_{i}"),
+                            box_at(DVec3::new(xa, y0, z0), DVec3::new(xb, y1, z1)),
+                            hull,
+                            "generic",
+                        ),
+                        DVec3::X,
+                    ));
+                }
+            }
+            push(grain(
+                bpart(
+                    format!("{side}_qcaprail"),
+                    box_at(
+                        DVec3::new(xe, yq + 0.9, rail_z.0),
+                        DVec3::new(len, yq + 0.98, rail_z.1),
+                    ),
+                    dark,
+                    "beam",
+                ),
+                DVec3::X,
+            ));
+        }
+
+        // --- stairs: two flights against the breast, stringers with seat
+        // cuts, treads, balusters and a handrail on both sides of each flight
+        let (r, g) = ((yq - yd) / self.steps as f64, 0.3);
+        let n = self.steps;
+        let xf = bx - bt; // breast fore face
+        let tread_t = 0.05;
+        let x_foot = xf - (n - 1) as f64 * g; // fore edge of the first tread
+        let rail_h = 0.85;
+        let (zi, zo) = self.stair;
+        for (side, sgn) in [("p", -1.0), ("s", 1.0)] {
+            let za = sgn * zi;
+            let zb = sgn * zo;
+            let (zlo, zhi) = (za.min(zb), za.max(zb));
+            // stringers
+            let sw = 0.06;
+            let mut poly = vec![[x_foot, yd], [x_foot + 0.35, yd]];
+            let slope = r / g;
+            poly.push([xf, yd + (xf - x_foot - 0.35) * slope]);
+            for k in (1..n).rev() {
+                let seat = yd + k as f64 * r - tread_t;
+                let (x0, x1) = (xf - (n - k) as f64 * g, xf - (n - k - 1) as f64 * g);
+                poly.push([x1, seat]);
+                poly.push([x0, seat]);
+            }
+            for (tag, z0, z1) in [("a", zlo, zlo + sw), ("b", zhi - sw, zhi)] {
+                let dir = DVec3::new(g, r, 0.0);
+                push(grain(
+                    bpart(format!("{side}_stringer_{tag}"), prism(&poly, z0, z1), oak, "beam"),
+                    dir,
+                ));
+            }
+            for k in 1..n {
+                let (x0, x1) = (xf - (n - k) as f64 * g, xf - (n - k - 1) as f64 * g);
+                let yt = yd + k as f64 * r;
+                push(grain(
+                    bpart(
+                        format!("{side}_tread_{k}"),
+                        box_at(DVec3::new(x0, yt - tread_t, zlo), DVec3::new(x1, yt, zhi)),
+                        oak,
+                        "slab",
+                    ),
+                    DVec3::Z,
+                ));
+            }
+            // handrail under-line: y = yd + rail_h + (x - (x_foot - 0.5 g))
+            // * slope, through each tread's centre at rail_h above it
+            let x_c0 = x_foot - 0.5 * g;
+            let rail_y = |x: f64| yd + rail_h + (x - x_c0) * slope;
+            let (newel, rail_t) = (0.12, 0.08);
+            for (tag, zc) in [("a", zlo + 0.04), ("b", zhi - 0.04)] {
+                for k in 1..n {
+                    let xc = xf - (n - k) as f64 * g + 0.5 * g;
+                    let (x0, x1) = (xc - 0.025, xc + 0.025);
+                    let yt = yd + k as f64 * r;
+                    let quad = [[x0, yt], [x1, yt], [x1, rail_y(x1)], [x0, rail_y(x0)]];
+                    push(grain(
+                        bpart(
+                            format!("{side}_baluster_{tag}_{k}"),
+                            prism(&quad, zc - 0.025, zc + 0.025),
+                            dark,
+                            "column",
+                        ),
+                        DVec3::Y,
+                    ));
+                }
+                // newels: at the foot on the main deck, at the head on the
+                // quarterdeck
+                let xn0 = x_foot - newel;
+                let xn1 = bx;
+                let (nz0, nz1) = (zc - 0.5 * newel, zc + 0.5 * newel);
+                push(grain(
+                    bpart(
+                        format!("{side}_newel_foot_{tag}"),
+                        box_at(DVec3::new(xn0, yd, nz0), DVec3::new(x_foot, rail_y(x_foot) + rail_t + 0.15, nz1)),
+                        dark,
+                        "column",
+                    ),
+                    DVec3::Y,
+                ));
+                push(grain(
+                    bpart(
+                        format!("{side}_newel_head_{tag}"),
+                        box_at(DVec3::new(xn1, yq, nz0), DVec3::new(xn1 + newel, yq + 1.0, nz1)),
+                        dark,
+                        "column",
+                    ),
+                    DVec3::Y,
+                ));
+                let rail = [
+                    [x_foot, rail_y(x_foot)],
+                    [xn1, rail_y(xn1)],
+                    [xn1, rail_y(xn1) + rail_t],
+                    [x_foot, rail_y(x_foot) + rail_t],
+                ];
+                push(grain(
+                    bpart(
+                        format!("{side}_handrail_{tag}"),
+                        prism(&rail, zc - 0.04, zc + 0.04),
+                        dark,
+                        "beam",
+                    ),
+                    DVec3::new(g, r, 0.0),
+                ));
+            }
+        }
+
+        // --- quarterdeck front balustrade between the stair heads and the
+        // bulwarks: bottom rail, turned balusters, cap rail
+        let (bx0, bx1) = (bx, bx + 0.12);
+        let newel_half = 0.06;
+        let segs = [
+            (-w, -(zo - 0.04) - newel_half),
+            (-(zi + 0.04) + newel_half, (zi + 0.04) - newel_half),
+            ((zo - 0.04) + newel_half, w),
+        ];
+        let (rb, rc) = (0.08, 0.08);
+        let bal_top = yq + 1.0 - rc;
+        for (si, &(z0, z1)) in segs.iter().enumerate() {
+            push(grain(
+                bpart(
+                    format!("qrail_bottom_{si}"),
+                    box_at(DVec3::new(bx0, yq, z0), DVec3::new(bx1, yq + rb, z1)),
+                    dark,
+                    "beam",
+                ),
+                DVec3::Z,
+            ));
+            push(grain(
+                bpart(
+                    format!("qrail_cap_{si}"),
+                    box_at(DVec3::new(bx0, bal_top, z0), DVec3::new(bx1, yq + 1.0, z1)),
+                    dark,
+                    "beam",
+                ),
+                DVec3::Z,
+            ));
+            let nbal = ((z1 - z0) / 0.18).floor() as usize;
+            for k in 0..nbal {
+                let zc = z0 + (k as f64 + 0.5) * (z1 - z0) / nbal as f64;
+                push(grain(
+                    bpart(
+                        format!("qbaluster_{si}_{k}"),
+                        prism_xz(&octagon(0.5 * (bx0 + bx1), zc, 0.04), yq + rb, bal_top),
+                        dark,
+                        "column",
+                    ),
+                    DVec3::Y,
+                ));
+            }
+        }
+
+        // --- masts: octagonal, tapered, stepped on the decks
+        for (name, x, y0, h, r0) in [("mainmast", 5.25, yd, 9.0, 0.24), ("mizzenmast", 17.5, yq, 7.0, 0.19)] {
+            let a = ring(DVec3::new(x, y0, 0.0), DVec3::Y, r0, DVec3::X, 8);
+            let b = ring(DVec3::new(x, y0 + h, 0.0), DVec3::Y, r0 * 0.7, DVec3::X, 8);
+            push(grain(bpart(name, frustum(&a, &b), oak, "column"), DVec3::Y));
+        }
+        // ship's wheel post and binnacle on the quarterdeck
+        push(grain(
+            bpart(
+                "wheel_post",
+                box_at(DVec3::new(19.6, yq, -0.12), DVec3::new(19.84, yq + 1.3, 0.12)),
+                dark,
+                "column",
+            ),
+            DVec3::Y,
+        ));
+
+        // --- guns: iron barrels on oak carriages behind each port
+        for (side, sgn) in [("p", -1.0), ("s", 1.0)] {
+            for (i, &x) in ports.iter().enumerate() {
+                let (zi0, zo0) = (w - 1.7, w - 0.45);
+                let (z0, z1) = if sgn < 0.0 { (-zo0, -zi0) } else { (zi0, zo0) };
+                let ch = 0.45;
+                push(grain(
+                    bpart(
+                        format!("{side}_carriage_{i}"),
+                        box_at(DVec3::new(x - 0.3, yd, z0), DVec3::new(x + 0.3, yd + ch, z1)),
+                        oak,
+                        "prop",
+                    ),
+                    DVec3::Z,
+                ));
+                // stool bed under the barrel, as wide as the barrel's flat
+                // bottom face so the two share a face edge to edge
+                let (bed, rr) = (0.06, 0.15);
+                let fb = rr * (PI / 8.0).sin();
+                push(grain(
+                    bpart(
+                        format!("{side}_bed_{i}"),
+                        box_at(
+                            DVec3::new(x - fb, yd + ch, z0 + 0.1),
+                            DVec3::new(x + fb, yd + ch + bed, z1 - 0.1),
+                        ),
+                        oak,
+                        "prop",
+                    ),
+                    DVec3::Z,
+                ));
+                let (bz0, bz1) = if sgn < 0.0 { (-(w - 0.2), z1 + 0.3) } else { (z0 - 0.3, w - 0.2) };
+                push(bpart(
+                    format!("{side}_gun_{i}"),
+                    prism(&octagon_on(x, yd + ch + bed, rr), bz0, bz1),
+                    "steel_s355",
+                    "prop",
+                ));
+            }
+        }
+
+        let wood = |m: &str| m.starts_with("oak") || m.starts_with("pine");
+        let conns = auto_conns(&parts, |a, b| match (wood(&a.material), wood(&b.material)) {
+            (true, true) => Some(("bolted", None)),
+            (true, false) | (false, true) => Some(("bearing", None)),
+            _ => None,
+        });
+        (parts, conns)
+    }
+}

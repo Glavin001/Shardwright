@@ -424,6 +424,8 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
         write_asset(dir, "conifer", from_building(parts), conns, Some(0.0))?;
         let (parts, conns) = SteelOffice::default().build();
         write_asset(dir, "steel_office", from_building(parts), conns, Some(-0.4))?;
+        let (parts, conns) = GalleonStern::default().build();
+        write_asset(dir, "galleon_stern", from_building(parts), conns, Some(0.0))?;
     }
     // held-out set (never tuned on)
     let held = dir.join("held_out");

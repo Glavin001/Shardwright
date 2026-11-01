@@ -740,19 +740,35 @@ pub fn greedy_subset(poly: &ConvexPolytope, max_v: usize, eps: f64) -> ConvexPol
     cur.map(|c| c.poly).unwrap_or_else(|| poly.clone())
 }
 
-/// Convexity of a stored hull (vertices, polygon faces) as checked by the
-/// `collision_shapes` validation gate: every vertex on or behind every face
-/// plane (Newell normal through the face centroid), relative 1e-9.
+/// A stored hull (vertices, polygon faces) is a closed convex polyhedron, as
+/// checked by the `collision_shapes` validation gate: the faces bound a
+/// closed surface ([`frac_geom::polygon::closed_surface`]; consumers take the
+/// faces as given, and overlapping coplanar faces would count their region
+/// twice), and every vertex is on or behind every face plane (Newell normal
+/// through the face centroid), relative 1e-9. The physics payload stores
+/// vertices as f32, so the hull must also be convex as stored: rounded to
+/// f32, within that rounding (2^-20 of the largest coordinate). A sliver face
+/// between near-duplicate vertices passes in f64 but its plane tilts once
+/// rounded, and a consumer's convexity check then rejects the hull.
 pub fn stored_hull_is_convex(verts: &[DVec3], faces: &[Vec<u32>]) -> bool {
     let scale = Aabb::from_points(verts.iter()).diagonal().max(1e-300);
-    let tol = 1e-9 * scale;
+    let stored: Vec<DVec3> = verts.iter().map(|v| v.as_vec3().as_dvec3()).collect();
+    let max_abs = stored.iter().map(|v| v.abs().max_element()).fold(0.0, f64::max);
     !faces.is_empty()
-        && faces.iter().all(|f| {
-            let pts: Vec<DVec3> = f.iter().map(|&i| verts[i as usize]).collect();
-            let n = frac_geom::polygon::newell(&pts).normalize_or_zero();
-            let c = pts.iter().fold(DVec3::ZERO, |a, p| a + *p) / pts.len().max(1) as f64;
-            n != DVec3::ZERO && verts.iter().all(|v| (*v - c).dot(n) <= tol)
-        })
+        && frac_geom::polygon::closed_surface(faces)
+        && behind_every_face(verts, faces, 1e-9 * scale)
+        && behind_every_face(&stored, faces, (1e-9 * scale).max(max_abs * 2f64.powi(-20)))
+}
+
+/// Every vertex on or behind every face plane (Newell normal through the face
+/// centroid), within `tol`.
+fn behind_every_face(verts: &[DVec3], faces: &[Vec<u32>], tol: f64) -> bool {
+    faces.iter().all(|f| {
+        let pts: Vec<DVec3> = f.iter().map(|&i| verts[i as usize]).collect();
+        let n = frac_geom::polygon::newell(&pts).normalize_or_zero();
+        let c = pts.iter().fold(DVec3::ZERO, |a, p| a + *p) / pts.len().max(1) as f64;
+        n != DVec3::ZERO && verts.iter().all(|v| (*v - c).dot(n) <= tol)
+    })
 }
 
 /// Hull volume only (MCTS rewards need nothing else).

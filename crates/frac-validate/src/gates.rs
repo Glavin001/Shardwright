@@ -477,26 +477,14 @@ pub fn run_gates(
         detail: "run `prefracture bake --check-determinism` or CI cross-OS job".into(),
     });
 
-    // ---- collision shapes: every hull convex and within the vertex limit;
-    // every fragment that is not a particle candidate has hulls
+    // ---- collision shapes: every hull a closed convex polyhedron within the
+    // vertex limit; every fragment that is not a particle candidate has hulls
     let limit = vs.max_hull_vertices.max(4) as usize;
     let checks: Vec<(usize, usize, bool)> = asset
         .hulls
         .par_iter()
         .map(|hh| {
-            // convex: every vertex on or behind every stored face plane
-            // (Newell normal through the face centroid), relative 1e-9
-            let scale = frac_geom::Aabb::from_points(hh.vertices.iter())
-                .diagonal()
-                .max(1e-300);
-            let tol = 1e-9 * scale;
-            let convex = !hh.faces.is_empty()
-                && hh.faces.iter().all(|f| {
-                    let pts: Vec<DVec3> = f.iter().map(|&i| hh.vertices[i as usize]).collect();
-                    let n = frac_geom::polygon::newell(&pts).normalize_or_zero();
-                    let c = pts.iter().fold(DVec3::ZERO, |a, p| a + *p) / pts.len().max(1) as f64;
-                    n != DVec3::ZERO && hh.vertices.iter().all(|v| (*v - c).dot(n) <= tol)
-                });
+            let convex = frac_collision::coacd::stored_hull_is_convex(&hh.vertices, &hh.faces);
             (hh.vertices.len(), hh.fragment.idx(), convex)
         })
         .collect();
@@ -513,7 +501,7 @@ pub fn run_gates(
         over == 0 && nonconvex == 0 && missing == 0,
         (over + nonconvex + missing) as f64,
         0.0,
-        format!("{} hulls: {over} over {limit} vertices (max {max_v}), {nonconvex} non-convex; {missing} fragments without hulls", checks.len()),
+        format!("{} hulls: {over} over {limit} vertices (max {max_v}), {nonconvex} not closed convex; {missing} fragments without hulls", checks.len()),
     ));
 
     // ---- schema

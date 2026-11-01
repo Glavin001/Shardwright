@@ -145,6 +145,83 @@ interior_color = [0.90, 0.88, 0.84, 1.0]
 exterior_color = [0.30, 0.45, 0.65, 1.0]
 analysis_cells_per_m3 = 20000.0
 
+# Pine planking tarred black on the outside (ship hulls): pine underneath.
+[[material]]
+id = "pine_tarred"
+density = 520.0
+poisson = 0.3
+anisotropy = { axis = "grain", E_long = 11.0e9, E_trans = 0.6e9, G = 0.7e9 }
+tensile_strength = 40.0e6
+fracture_energy_along_grain = 300.0
+fracture_energy_across_grain = 8000.0
+weibull_modulus = 5.0
+recipe = "wood_anisotropic_voronoi"
+grain_stretch = 6.0
+noise_profile = "wood_splinter"
+chipping_ratio = 0.1
+interior_render_material = "pine_interior"
+interior_color = [0.80, 0.65, 0.42, 1.0]
+exterior_color = [0.10, 0.085, 0.075, 1.0]
+interior_uv_scale = 2.0
+
+# White oak: denser, stiffer and tougher than pine (Wood Handbook FPL-GTR-282,
+# white oak at 12% moisture: 750 kg/m3, E_L 12.3 GPa).
+[[material]]
+id = "oak"
+density = 750.0
+poisson = 0.35
+anisotropy = { axis = "grain", E_long = 12.3e9, E_trans = 1.0e9, G = 0.8e9 }
+tensile_strength = 55.0e6
+fracture_energy_along_grain = 350.0
+fracture_energy_across_grain = 10000.0
+weibull_modulus = 5.0
+recipe = "wood_anisotropic_voronoi"
+grain_stretch = 6.0
+noise_profile = "wood_splinter"
+chipping_ratio = 0.1
+interior_render_material = "oak_interior"
+interior_color = [0.84, 0.68, 0.46, 1.0]
+exterior_color = [0.56, 0.40, 0.24, 1.0]
+interior_uv_scale = 2.0
+
+# Oak finished dark (rails, balusters, joinery): oak underneath.
+[[material]]
+id = "oak_dark"
+density = 750.0
+poisson = 0.35
+anisotropy = { axis = "grain", E_long = 12.3e9, E_trans = 1.0e9, G = 0.8e9 }
+tensile_strength = 55.0e6
+fracture_energy_along_grain = 350.0
+fracture_energy_across_grain = 10000.0
+weibull_modulus = 5.0
+recipe = "wood_anisotropic_voronoi"
+grain_stretch = 6.0
+noise_profile = "wood_splinter"
+chipping_ratio = 0.1
+interior_render_material = "oak_interior"
+interior_color = [0.80, 0.62, 0.40, 1.0]
+exterior_color = [0.22, 0.12, 0.07, 1.0]
+interior_uv_scale = 2.0
+
+# Oak painted ochre (a hull's gun-deck stripe): oak underneath.
+[[material]]
+id = "oak_ochre"
+density = 750.0
+poisson = 0.35
+anisotropy = { axis = "grain", E_long = 12.3e9, E_trans = 1.0e9, G = 0.8e9 }
+tensile_strength = 55.0e6
+fracture_energy_along_grain = 350.0
+fracture_energy_across_grain = 10000.0
+weibull_modulus = 5.0
+recipe = "wood_anisotropic_voronoi"
+grain_stretch = 6.0
+noise_profile = "wood_splinter"
+chipping_ratio = 0.1
+interior_render_material = "oak_interior"
+interior_color = [0.84, 0.68, 0.46, 1.0]
+exterior_color = [0.70, 0.50, 0.16, 1.0]
+interior_uv_scale = 2.0
+
 [[interface_material]]
 id = "mortar_type_n"
 youngs_modulus = 5.0e9
