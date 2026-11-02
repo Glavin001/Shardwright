@@ -447,6 +447,8 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
             conns,
             Some(0.0),
         )?;
+        let (parts, conns) = timber_yard();
+        write_asset(dir, "timber_yard", from_building(parts), conns, Some(0.0))?;
     }
     // held-out set (never tuned on)
     let held = dir.join("held_out");

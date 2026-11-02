@@ -3181,3 +3181,39 @@ impl PlankWall {
         (parts, conns)
     }
 }
+
+/// The timber house with plank walls standing in front of it as range
+/// targets, one scene: the house as built ([`TimberHouse::default`]), and
+/// at `z = -2.5` a plain wall left of it and a wall with a window left of
+/// that, clad faces to the front (-z). Each wall stands on its own
+/// anchored sill.
+pub fn timber_yard() -> (Vec<BuildingPart>, Vec<ConnectionSpec>) {
+    let (mut parts, mut conns) = TimberHouse::default().build();
+    let window = PlankWall {
+        window: Some(Opening {
+            a: 1.2,
+            b: 2.4,
+            sill: 0.9,
+            head: 2.1,
+        }),
+        ..Default::default()
+    };
+    for (name, wall, x0) in [
+        ("range_plain", PlankWall::default(), -5.0),
+        ("range_window", window, -10.0),
+    ] {
+        let (wp, wc) = wall.build();
+        let at = DVec3::new(x0, 0.0, -2.5);
+        parts.extend(wp.into_iter().map(|mut p| {
+            p.name = format!("{name}_{}", p.name);
+            p.mesh = p.mesh.transformed(|q| q + at);
+            p
+        }));
+        conns.extend(wc.into_iter().map(|c| ConnectionSpec {
+            a: format!("{name}_{}", c.a),
+            b: format!("{name}_{}", c.b),
+            ..c
+        }));
+    }
+    (parts, conns)
+}
