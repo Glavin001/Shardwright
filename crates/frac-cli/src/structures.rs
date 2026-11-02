@@ -550,6 +550,151 @@ fn wall_loops(u0: f64, u1: f64, h: f64, openings: &[Opening], lintel: bool) -> V
     loops
 }
 
+/// Stud wall member as (name, role, u, v, grain along u).
+type FrameMember = (String, &'static str, [f64; 2], [f64; 2], bool);
+
+/// Stud wall of height `h` between `u0` and `u1`: plates (the bottom one
+/// cut at doors), common studs at `spacing` centres, and king/jack studs,
+/// headers, sills and cripples around the openings.
+fn stud_frame(h: f64, spacing: f64, u0: f64, u1: f64, openings: &[Opening]) -> Vec<FrameMember> {
+    let s = STUD;
+    let top = h - 2.0 * PLATE; // underside of the doubled top plate
+    let mut m = Vec::new();
+    // bottom plate, cut at doors
+    let mut cuts: Vec<[f64; 2]> = openings
+        .iter()
+        .filter(|o| o.sill <= 0.0)
+        .map(|o| [o.a, o.b])
+        .collect();
+    cuts.sort_by(|p, q| p[0].total_cmp(&q[0]));
+    let mut start = u0;
+    for (k, c) in cuts.iter().chain([[u1, u1]].iter()).enumerate() {
+        m.push((
+            format!("plate_bot_{k}"),
+            "beam",
+            [start, c[0]],
+            [0.0, PLATE],
+            true,
+        ));
+        start = c[1];
+    }
+    m.push((
+        "plate_top_0".into(),
+        "beam",
+        [u0, u1],
+        [top, top + PLATE],
+        true,
+    ));
+    m.push((
+        "plate_top_1".into(),
+        "beam",
+        [u0, u1],
+        [top + PLATE, h],
+        true,
+    ));
+    // common studs at regular centres, skipping the framed openings
+    let clear = |u: f64| {
+        openings
+            .iter()
+            .all(|o| u + s <= o.a - 2.0 * s + 1e-9 || u >= o.b + 2.0 * s - 1e-9)
+    };
+    let mut studs = Vec::new();
+    let mut u = u0;
+    while u + 2.0 * s <= u1 {
+        studs.push(u);
+        u += spacing;
+    }
+    studs.push(u1 - s);
+    for (k, &u) in studs.iter().enumerate() {
+        if clear(u) {
+            m.push((
+                format!("stud_{k}"),
+                "column",
+                [u, u + s],
+                [PLATE, top],
+                false,
+            ));
+        }
+    }
+    for (k, o) in openings.iter().enumerate() {
+        let (a, b) = (o.a, o.b);
+        m.push((
+            format!("o{k}_king_a"),
+            "column",
+            [a - 2.0 * s, a - s],
+            [PLATE, top],
+            false,
+        ));
+        m.push((
+            format!("o{k}_king_b"),
+            "column",
+            [b + s, b + 2.0 * s],
+            [PLATE, top],
+            false,
+        ));
+        m.push((
+            format!("o{k}_jack_a"),
+            "column",
+            [a - s, a],
+            [PLATE, o.head],
+            false,
+        ));
+        m.push((
+            format!("o{k}_jack_b"),
+            "column",
+            [b, b + s],
+            [PLATE, o.head],
+            false,
+        ));
+        m.push((
+            format!("o{k}_header"),
+            "beam",
+            [a - s, b + s],
+            [o.head, o.head + HEADER],
+            true,
+        ));
+        // cripples on the stud grid between the jacks
+        let mut grid: Vec<f64> = studs
+            .iter()
+            .copied()
+            .filter(|&u| u >= a + 1e-9 && u + s <= b - 1e-9)
+            .collect();
+        if grid.is_empty() {
+            grid.push(0.5 * (a + b - s));
+        }
+        if o.head + HEADER < top - 1e-9 {
+            for (j, &u) in grid.iter().enumerate() {
+                m.push((
+                    format!("o{k}_cripple_top_{j}"),
+                    "column",
+                    [u, u + s],
+                    [o.head + HEADER, top],
+                    false,
+                ));
+            }
+        }
+        if o.sill > 0.0 {
+            m.push((
+                format!("o{k}_sill"),
+                "beam",
+                [a, b],
+                [o.sill - PLATE, o.sill],
+                true,
+            ));
+            for (j, &u) in grid.iter().enumerate() {
+                m.push((
+                    format!("o{k}_cripple_bot_{j}"),
+                    "column",
+                    [u, u + s],
+                    [PLATE, o.sill - PLATE],
+                    false,
+                ));
+            }
+        }
+    }
+    m
+}
+
 /// Maps wall-local boxes and panels to house coordinates.
 #[derive(Clone, Copy)]
 struct WallFrame {
@@ -587,149 +732,8 @@ impl WallFrame {
 
 impl VeneerHouse {
     /// Stud wall members as (name, role, u, v, grain along u).
-    fn frame_members(
-        &self,
-        u0: f64,
-        u1: f64,
-        openings: &[Opening],
-    ) -> Vec<(String, &'static str, [f64; 2], [f64; 2], bool)> {
-        let s = STUD;
-        let h = self.wall_height;
-        let top = h - 2.0 * PLATE; // underside of the doubled top plate
-        let mut m = Vec::new();
-        // bottom plate, cut at doors
-        let mut cuts: Vec<[f64; 2]> = openings
-            .iter()
-            .filter(|o| o.sill <= 0.0)
-            .map(|o| [o.a, o.b])
-            .collect();
-        cuts.sort_by(|p, q| p[0].total_cmp(&q[0]));
-        let mut start = u0;
-        for (k, c) in cuts.iter().chain([[u1, u1]].iter()).enumerate() {
-            m.push((
-                format!("plate_bot_{k}"),
-                "beam",
-                [start, c[0]],
-                [0.0, PLATE],
-                true,
-            ));
-            start = c[1];
-        }
-        m.push((
-            "plate_top_0".into(),
-            "beam",
-            [u0, u1],
-            [top, top + PLATE],
-            true,
-        ));
-        m.push((
-            "plate_top_1".into(),
-            "beam",
-            [u0, u1],
-            [top + PLATE, h],
-            true,
-        ));
-        // common studs at regular centres, skipping the framed openings
-        let clear = |u: f64| {
-            openings
-                .iter()
-                .all(|o| u + s <= o.a - 2.0 * s + 1e-9 || u >= o.b + 2.0 * s - 1e-9)
-        };
-        let mut studs = Vec::new();
-        let mut u = u0;
-        while u + 2.0 * s <= u1 {
-            studs.push(u);
-            u += self.stud_spacing;
-        }
-        studs.push(u1 - s);
-        for (k, &u) in studs.iter().enumerate() {
-            if clear(u) {
-                m.push((
-                    format!("stud_{k}"),
-                    "column",
-                    [u, u + s],
-                    [PLATE, top],
-                    false,
-                ));
-            }
-        }
-        for (k, o) in openings.iter().enumerate() {
-            let (a, b) = (o.a, o.b);
-            m.push((
-                format!("o{k}_king_a"),
-                "column",
-                [a - 2.0 * s, a - s],
-                [PLATE, top],
-                false,
-            ));
-            m.push((
-                format!("o{k}_king_b"),
-                "column",
-                [b + s, b + 2.0 * s],
-                [PLATE, top],
-                false,
-            ));
-            m.push((
-                format!("o{k}_jack_a"),
-                "column",
-                [a - s, a],
-                [PLATE, o.head],
-                false,
-            ));
-            m.push((
-                format!("o{k}_jack_b"),
-                "column",
-                [b, b + s],
-                [PLATE, o.head],
-                false,
-            ));
-            m.push((
-                format!("o{k}_header"),
-                "beam",
-                [a - s, b + s],
-                [o.head, o.head + HEADER],
-                true,
-            ));
-            // cripples on the stud grid between the jacks
-            let mut grid: Vec<f64> = studs
-                .iter()
-                .copied()
-                .filter(|&u| u >= a + 1e-9 && u + s <= b - 1e-9)
-                .collect();
-            if grid.is_empty() {
-                grid.push(0.5 * (a + b - s));
-            }
-            if o.head + HEADER < top - 1e-9 {
-                for (j, &u) in grid.iter().enumerate() {
-                    m.push((
-                        format!("o{k}_cripple_top_{j}"),
-                        "column",
-                        [u, u + s],
-                        [o.head + HEADER, top],
-                        false,
-                    ));
-                }
-            }
-            if o.sill > 0.0 {
-                m.push((
-                    format!("o{k}_sill"),
-                    "beam",
-                    [a, b],
-                    [o.sill - PLATE, o.sill],
-                    true,
-                ));
-                for (j, &u) in grid.iter().enumerate() {
-                    m.push((
-                        format!("o{k}_cripple_bot_{j}"),
-                        "column",
-                        [u, u + s],
-                        [PLATE, o.sill - PLATE],
-                        false,
-                    ));
-                }
-            }
-        }
-        m
+    fn frame_members(&self, u0: f64, u1: f64, openings: &[Opening]) -> Vec<FrameMember> {
+        stud_frame(self.wall_height, self.stud_spacing, u0, u1, openings)
     }
 
     pub fn build(&self) -> (Vec<BuildingPart>, Vec<ConnectionSpec>) {
@@ -2547,6 +2551,632 @@ impl GalleonStern {
             (true, true) => Some(("bolted", None)),
             (true, false) | (false, true) => Some(("bearing", None)),
             _ => None,
+        });
+        (parts, conns)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 8. Timber-frame house and plank wall, clad in boards
+
+/// Cladding board thickness and height. Opening sills and heads, and the
+/// storey heights, are multiples of the board height, so whole boards
+/// stop on the framing around every opening.
+const BOARD_T: f64 = 0.025;
+const BOARD_H: f64 = 0.15;
+/// Boards butt-joint on every `BOARD_RUN`th stud or joist, staggered row by
+/// row.
+const BOARD_RUN: usize = 4;
+
+/// The convex polygon `poly` (CCW) clipped to the convex polygon `clip`
+/// (CCW), Sutherland-Hodgman.
+fn clip_convex(poly: &[[f64; 2]], clip: &[[f64; 2]]) -> Vec<[f64; 2]> {
+    let mut out = poly.to_vec();
+    for i in 0..clip.len() {
+        let (a, b) = (clip[i], clip[(i + 1) % clip.len()]);
+        let side = |p: [f64; 2]| (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+        let input = std::mem::take(&mut out);
+        for j in 0..input.len() {
+            let (p, q) = (input[j], input[(j + 1) % input.len()]);
+            let (sp, sq) = (side(p), side(q));
+            if sp >= 0.0 {
+                out.push(p);
+            }
+            if (sp >= 0.0) != (sq >= 0.0) {
+                let t = sp / (sp - sq);
+                out.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]);
+            }
+        }
+        if out.is_empty() {
+            break;
+        }
+    }
+    // drop repeated points left where the outline passes through a corner
+    out.dedup_by(|p, q| (p[0] - q[0]).abs() < 1e-9 && (p[1] - q[1]).abs() < 1e-9);
+    while out.len() > 1 && {
+        let (f, l) = (out[0], out[out.len() - 1]);
+        (f[0] - l[0]).abs() < 1e-9 && (f[1] - l[1]).abs() < 1e-9
+    } {
+        out.pop();
+    }
+    out
+}
+
+/// Butt joints on every `BOARD_RUN`th of `centres`, shifted by `row` so
+/// neighbouring rows break joint.
+fn staggered(centres: &[f64], row: usize) -> Vec<f64> {
+    centres
+        .iter()
+        .enumerate()
+        .filter(|(k, _)| k % BOARD_RUN == (row * 2 + 1) % BOARD_RUN)
+        .map(|(_, &c)| c)
+        .collect()
+}
+
+/// Horizontal cladding boards over a wall face. `outline` (CCW, convex, in
+/// the wall's (u, y)) bounds the cladding, so gables follow the roof line;
+/// `openings` are in the same (u, y) and boards stop at their sides;
+/// `joints` are the stud centres boards may butt-joint on.
+fn cladding(
+    wname: &str,
+    wf: WallFrame,
+    d: [f64; 2],
+    outline: &[[f64; 2]],
+    y0: f64,
+    openings: &[Opening],
+    joints: &[f64],
+    material: &str,
+) -> Vec<BuildingPart> {
+    let (u0, u1) = outline
+        .iter()
+        .fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p[0]), b.max(p[0])));
+    let y1 = outline.iter().fold(f64::MIN, |a, p| a.max(p[1]));
+    let mut parts = Vec::new();
+    let mut row = 0;
+    let mut v0 = y0;
+    while v0 < y1 - 1e-6 {
+        let v1 = (v0 + BOARD_H).min(y1);
+        // runs between the openings this band crosses
+        let mut blocked: Vec<[f64; 2]> = openings
+            .iter()
+            .filter(|o| o.sill < v1 - 1e-9 && o.head > v0 + 1e-9)
+            .map(|o| [o.a, o.b])
+            .collect();
+        blocked.sort_by(|p, q| p[0].total_cmp(&q[0]));
+        let mut free = Vec::new();
+        let mut a = u0;
+        for b in &blocked {
+            if b[0] > a + 1e-9 {
+                free.push((a, b[0]));
+            }
+            a = a.max(b[1]);
+        }
+        if u1 > a + 1e-9 {
+            free.push((a, u1));
+        }
+        let cuts = staggered(joints, row);
+        let mut k = 0;
+        for (a, b) in free {
+            for (s0, s1) in spans(a, b, &cuts) {
+                let rect = [[s0, v0], [s1, v0], [s1, v1], [s0, v1]];
+                let poly = clip_convex(&rect, outline);
+                if poly.len() < 3 || signed_area(&poly).abs() < 1e-4 {
+                    continue;
+                }
+                parts.push(grain(
+                    bpart(
+                        format!("{wname}_board_{row}_{k}"),
+                        wf.panel(&[ccw(&poly)], d),
+                        material,
+                        "wall",
+                    ),
+                    wf.u_axis(),
+                ));
+                k += 1;
+            }
+        }
+        row += 1;
+        v0 = v1;
+    }
+    parts
+}
+
+/// Stud frame of one wall standing at `y0`, in house coordinates.
+fn framed_wall(
+    wname: &str,
+    wf: WallFrame,
+    d: [f64; 2],
+    h: f64,
+    spacing: f64,
+    u: [f64; 2],
+    y0: f64,
+    openings: &[Opening],
+) -> Vec<BuildingPart> {
+    stud_frame(h, spacing, u[0], u[1], openings)
+        .into_iter()
+        .map(|(name, role, mu, mv, along_u)| {
+            let g = if along_u { wf.u_axis() } else { DVec3::Y };
+            grain(
+                bpart(
+                    format!("{wname}_{name}"),
+                    wf.cuboid(mu, [y0 + mv[0], y0 + mv[1]], d),
+                    "pine",
+                    role,
+                ),
+                g,
+            )
+        })
+        .collect()
+}
+
+/// Stud centres of a wall frame, for the cladding's butt joints.
+fn stud_centres(u0: f64, u1: f64, spacing: f64) -> Vec<f64> {
+    let mut c = Vec::new();
+    let mut u = u0;
+    while u + 2.0 * STUD <= u1 {
+        c.push(u + 0.5 * STUD);
+        u += spacing;
+    }
+    c
+}
+
+/// Opening `o` raised by `dy` (storey-local to house heights).
+fn raised(o: &Opening, dy: f64) -> Opening {
+    Opening {
+        sill: if o.sill <= 0.0 { dy } else { o.sill + dy },
+        head: o.head + dy,
+        ..*o
+    }
+}
+
+/// Two-storey timber-frame house, all wood above a concrete plinth: pine
+/// stud walls (plates, studs at 600 mm centres, king/jack studs, headers,
+/// sills, cripples) clad outside in horizontal boards that butt-joint on
+/// the studs; a platform first floor (rim joists, joists bearing on the
+/// front and back walls and on a ground-floor partition, a board deck);
+/// upper walls standing on the deck; ceiling joists, rafters on seat cuts,
+/// a ridge board, gable studs and a boarded roof. A front door leaf hangs
+/// on its jack. x runs along the front, z from front (z = 0) to back, y up
+/// from the ground.
+#[derive(Clone, Debug)]
+pub struct TimberHouse {
+    pub length: f64,
+    pub depth: f64,
+    /// Storey wall height (a multiple of the board height).
+    pub wall_height: f64,
+    pub pitch_deg: f64,
+    pub stud_spacing: f64,
+    /// Plinth height above the ground.
+    pub plinth: f64,
+    /// Openings per storey and wall (front, back, west, east), storey-local
+    /// heights; u as for `VeneerHouse`.
+    pub openings: [[Vec<Opening>; 4]; 2],
+    /// Doorway in the ground-floor partition (along x at mid depth).
+    pub partition_door: Opening,
+}
+
+impl Default for TimberHouse {
+    fn default() -> Self {
+        let win = |a: f64, b: f64| Opening {
+            a,
+            b,
+            sill: 0.9,
+            head: 2.1,
+        };
+        let door = |a: f64, b: f64| Opening {
+            a,
+            b,
+            sill: 0.0,
+            head: 2.1,
+        };
+        TimberHouse {
+            length: 8.0,
+            depth: 6.0,
+            wall_height: 2.4,
+            pitch_deg: 35.0,
+            stud_spacing: 0.6,
+            plinth: 0.3,
+            openings: [
+                [
+                    vec![win(1.2, 2.4), door(3.6, 4.5), win(5.7, 6.9)],
+                    vec![win(1.5, 2.7), win(5.3, 6.5)],
+                    vec![win(2.4, 3.6)],
+                    vec![win(2.4, 3.6)],
+                ],
+                [
+                    vec![win(1.2, 2.4), win(3.45, 4.65), win(5.7, 6.9)],
+                    vec![win(1.5, 2.7), win(5.3, 6.5)],
+                    vec![win(2.4, 3.6)],
+                    vec![win(2.4, 3.6)],
+                ],
+            ],
+            partition_door: door(3.0, 3.9),
+        }
+    }
+}
+
+impl TimberHouse {
+    pub fn build(&self) -> (Vec<BuildingPart>, Vec<ConnectionSpec>) {
+        let (lx, lz, h, sp) = (self.length, self.depth, self.wall_height, self.stud_spacing);
+        let p = self.plinth;
+        let c = BOARD_T; // cladding, outside the frame
+        let s = STUD;
+        let mut parts = Vec::new();
+        parts.push(anchored(bpart(
+            "plinth",
+            box_at(DVec3::ZERO, DVec3::new(lx, p, lz)),
+            "concrete_c30",
+            "slab",
+        )));
+        // heights: ground walls, the floor platform (rim and joists, then the
+        // deck), upper walls, ceiling joists; the platform is two boards
+        // deep so the upper openings line up with the cladding too
+        let jf = 2.0 * BOARD_H - BOARD_T; // floor joist depth
+        let jc = 0.19; // ceiling joist depth
+        let y_floor = p + h; // top of the ground walls
+        let y_deck = y_floor + jf;
+        let y_up = y_deck + BOARD_T; // upper walls stand here
+        let y_ceil = y_up + h;
+        let yj = y_ceil + jc; // rafter seats
+        // joist (and rafter) positions along x, the end ones over the side
+        // walls
+        let x_end = lx - c - s;
+        let mut xs = Vec::new();
+        let mut x = c;
+        while x < x_end - 0.3 {
+            xs.push(x);
+            x += sp;
+        }
+        xs.push(x_end);
+        let joist_centres: Vec<f64> = xs.iter().map(|x| x + 0.5 * s).collect();
+        // roof: rafters seated on the ceiling joists, plumb-cut on a ridge
+        let th = self.pitch_deg.to_radians();
+        let (z0, seat, ridge) = (c, 0.15, 0.045);
+        let zr = 0.5 * lz - 0.5 * ridge;
+        let hv = 0.14 / th.cos();
+        let h0 = hv - seat * th.tan();
+        let y_bot = |z: f64| yj + (z - z0 - seat) * th.tan();
+        let y_top = |z: f64| yj + h0 + (z - z0) * th.tan();
+        let roof_line = |u: f64| y_top(u.min(lz - u).min(zr));
+
+        let walls = [
+            ("front", true, 0.0, 1.0),
+            ("back", true, lz, -1.0),
+            ("west", false, 0.0, 1.0),
+            ("east", false, lx, -1.0),
+        ];
+        for (wi, &(wname, along_x, base, inward)) in walls.iter().enumerate() {
+            let wf = WallFrame { along_x };
+            let span = if along_x { lx } else { lz };
+            let layer = |d0: f64, d1: f64| {
+                let (a, b) = (base + inward * d0, base + inward * d1);
+                [a.min(b), a.max(b)]
+            };
+            let (d_clad, d_frame) = (layer(0.0, c), layer(c, c + FRAME));
+            // front and back frames run through the corners, the side
+            // frames fit between them
+            let (fu0, fu1) = if along_x {
+                (c, span - c)
+            } else {
+                (c + FRAME, span - c - FRAME)
+            };
+            let mut house_openings = Vec::new();
+            for (storey, y0) in [(0, p), (1, y_up)] {
+                let ops = &self.openings[storey][wi];
+                parts.extend(framed_wall(
+                    &format!("{wname}{storey}"),
+                    wf,
+                    d_frame,
+                    h,
+                    sp,
+                    [fu0, fu1],
+                    y0,
+                    ops,
+                ));
+                house_openings.extend(ops.iter().map(|o| raised(o, y0)));
+            }
+            // cladding from the plinth to the ceiling joists, and on the
+            // side walls up the gable to the underside of the roof boards
+            let (cu0, cu1) = if along_x { (0.0, span) } else { (c, span - c) };
+            let outline: Vec<[f64; 2]> = if along_x {
+                vec![[cu0, p], [cu1, p], [cu1, yj], [cu0, yj]]
+            } else {
+                vec![
+                    [cu0, p],
+                    [cu1, p],
+                    [cu1, roof_line(cu1)],
+                    [lz - zr, roof_line(zr)],
+                    [zr, roof_line(zr)],
+                    [cu0, roof_line(cu0)],
+                ]
+            };
+            let joints = stud_centres(fu0, fu1, sp);
+            parts.extend(cladding(
+                wname,
+                wf,
+                d_clad,
+                &outline,
+                p,
+                &house_openings,
+                &joints,
+                "pine",
+            ));
+            // front door leaf, hung on the hinge-side jack
+            if wi == 0 {
+                for (k, o) in self.openings[0][0].iter().enumerate() {
+                    if o.sill > 0.0 {
+                        continue;
+                    }
+                    let mid = 0.5 * (d_frame[0] + d_frame[1]);
+                    parts.push(grain(
+                        bpart(
+                            format!("front_door_{k}"),
+                            wf.cuboid(
+                                [o.a, o.b - 0.01],
+                                [p + 0.01, p + o.head - 0.005],
+                                [mid - 0.02, mid + 0.02],
+                            ),
+                            "oak",
+                            "prop",
+                        ),
+                        DVec3::Y,
+                    ));
+                }
+            }
+        }
+
+        // ground-floor partition along x at mid depth, carrying the floor
+        // joists at mid span
+        let zp = 0.5 * (lz - FRAME);
+        parts.extend(framed_wall(
+            "partition",
+            WallFrame { along_x: true },
+            [zp, zp + FRAME],
+            h,
+            sp,
+            [c + FRAME, lx - c - FRAME],
+            p,
+            &[self.partition_door],
+        ));
+
+        // floor platform: rim joists over the front and back walls, joists
+        // between them, a deck of boards across the joists
+        for (name, za) in [("rim_front", c), ("rim_back", lz - c - s)] {
+            parts.push(grain(
+                bpart(
+                    name,
+                    box_at(
+                        DVec3::new(c, y_floor, za),
+                        DVec3::new(lx - c, y_deck, za + s),
+                    ),
+                    "pine",
+                    "beam",
+                ),
+                DVec3::X,
+            ));
+        }
+        for (k, &x) in xs.iter().enumerate() {
+            parts.push(grain(
+                bpart(
+                    format!("floor_joist_{k}"),
+                    box_at(
+                        DVec3::new(x, y_floor, c + s),
+                        DVec3::new(x + s, y_deck, lz - c - s),
+                    ),
+                    "pine",
+                    "beam",
+                ),
+                DVec3::Z,
+            ));
+        }
+        let mut row = 0;
+        let mut za = c;
+        while za < lz - c - 1e-6 {
+            let zb = (za + BOARD_H).min(lz - c);
+            for (k, (xa, xb)) in spans(c, lx - c, &staggered(&joist_centres, row))
+                .into_iter()
+                .enumerate()
+            {
+                parts.push(grain(
+                    bpart(
+                        format!("deck_{row}_{k}"),
+                        box_at(DVec3::new(xa, y_deck, za), DVec3::new(xb, y_up, zb)),
+                        "oak",
+                        "slab",
+                    ),
+                    DVec3::X,
+                ));
+            }
+            row += 1;
+            za = zb;
+        }
+
+        // ceiling joists across the depth, bearing on the upper front and
+        // back top plates (ends flush with the plates' outer faces)
+        for (k, &x) in xs.iter().enumerate() {
+            parts.push(grain(
+                bpart(
+                    format!("ceiling_joist_{k}"),
+                    box_at(DVec3::new(x, y_ceil, c), DVec3::new(x + s, yj, lz - c)),
+                    "pine",
+                    "beam",
+                ),
+                DVec3::Z,
+            ));
+        }
+        // rafters
+        let rafter = [
+            [z0, yj],
+            [z0 + seat, yj],
+            [zr, y_bot(zr)],
+            [zr, y_top(zr)],
+            [z0, y_top(z0)],
+        ];
+        let mirror = |poly: &[[f64; 2]]| -> Vec<[f64; 2]> {
+            poly.iter().map(|q| [lz - q[0], q[1]]).collect()
+        };
+        for (k, &x) in xs.iter().enumerate() {
+            parts.push(grain(
+                bpart(
+                    format!("rafter_f_{k}"),
+                    prism_zy(&rafter, x, x + s),
+                    "pine",
+                    "beam",
+                ),
+                DVec3::new(0.0, th.sin(), th.cos()),
+            ));
+            parts.push(grain(
+                bpart(
+                    format!("rafter_b_{k}"),
+                    prism_zy(&mirror(&rafter), x, x + s),
+                    "pine",
+                    "beam",
+                ),
+                DVec3::new(0.0, th.sin(), -th.cos()),
+            ));
+        }
+        parts.push(grain(
+            bpart(
+                "ridge",
+                box_at(
+                    DVec3::new(xs[0], y_bot(zr) - 0.02, zr),
+                    DVec3::new(x_end + s, y_top(zr), zr + ridge),
+                ),
+                "pine",
+                "beam",
+            ),
+            DVec3::X,
+        ));
+        // gable studs on the end ceiling joists, their tops cut to the
+        // underside of the end rafters
+        for (end, &x) in [("w", &xs[0]), ("e", &x_end)] {
+            let mut z = z0 + seat + sp;
+            let mut k = 0;
+            while z + s <= zr - 0.05 {
+                if y_bot(z) - yj > 0.1 {
+                    let stud = [[z, yj], [z + s, yj], [z + s, y_bot(z + s)], [z, y_bot(z)]];
+                    for (half, poly) in [("f", stud.to_vec()), ("b", mirror(&stud))] {
+                        parts.push(grain(
+                            bpart(
+                                format!("gable_stud_{end}{half}_{k}"),
+                                prism_zy(&poly, x, x + s),
+                                "pine",
+                                "column",
+                            ),
+                            DVec3::Y,
+                        ));
+                    }
+                    k += 1;
+                }
+                z += sp;
+            }
+        }
+        // roof boards along x on the rafter backs, plumb-edged so each
+        // shares a face with the next one up the slope, with eaves past the
+        // walls and verges past the gables
+        let tv = BOARD_T / th.cos();
+        let dz = 0.2 * th.cos();
+        let (eave, verge) = (-0.35, 0.3);
+        let mut row = 0;
+        let mut za = eave;
+        while za < zr - 1e-6 {
+            let zb = (za + dz).min(zr);
+            let board = [
+                [za, y_top(za)],
+                [zb, y_top(zb)],
+                [zb, y_top(zb) + tv],
+                [za, y_top(za) + tv],
+            ];
+            let runs = spans(-verge, lx + verge, &staggered(&joist_centres, row));
+            for (half, poly) in [("f", board.to_vec()), ("b", mirror(&board))] {
+                for (k, &(xa, xb)) in runs.iter().enumerate() {
+                    parts.push(grain(
+                        bpart(
+                            format!("roof_{half}_{row}_{k}"),
+                            prism_zy(&poly, xa, xb),
+                            "pine_tarred",
+                            "slab",
+                        ),
+                        DVec3::X,
+                    ));
+                }
+            }
+            row += 1;
+            za = zb;
+        }
+
+        let wood = |m: &str| m.starts_with("oak") || m.starts_with("pine");
+        let conns = auto_conns(&parts, |a, b| {
+            match (wood(&a.material), wood(&b.material)) {
+                (true, true) => Some(("bolted", None)),
+                // anchor-bolted sole plates
+                (true, false) | (false, true) => Some(("bolted", None)),
+                _ => None,
+            }
+        });
+        (parts, conns)
+    }
+}
+
+/// Free-standing stud wall clad on its front face (z = 0) in boards, on an
+/// anchored concrete sill: a shooting-range target, with an optional window.
+#[derive(Clone, Debug)]
+pub struct PlankWall {
+    pub length: f64,
+    pub height: f64,
+    pub stud_spacing: f64,
+    pub plinth: f64,
+    pub window: Option<Opening>,
+}
+
+impl Default for PlankWall {
+    fn default() -> Self {
+        PlankWall {
+            length: 4.0,
+            height: 2.4,
+            stud_spacing: 0.6,
+            plinth: 0.15,
+            window: None,
+        }
+    }
+}
+
+impl PlankWall {
+    pub fn build(&self) -> (Vec<BuildingPart>, Vec<ConnectionSpec>) {
+        let (l, h, p) = (self.length, self.height, self.plinth);
+        let c = BOARD_T;
+        let wf = WallFrame { along_x: true };
+        let ops: Vec<Opening> = self.window.iter().copied().collect();
+        let mut parts = vec![anchored(bpart(
+            "plinth",
+            box_at(DVec3::ZERO, DVec3::new(l, p, c + FRAME)),
+            "concrete_c30",
+            "slab",
+        ))];
+        parts.extend(framed_wall(
+            "wall",
+            wf,
+            [c, c + FRAME],
+            h,
+            self.stud_spacing,
+            [0.0, l],
+            p,
+            &ops,
+        ));
+        let raised_ops: Vec<Opening> = ops.iter().map(|o| raised(o, p)).collect();
+        parts.extend(cladding(
+            "wall",
+            wf,
+            [0.0, c],
+            &[[0.0, p], [l, p], [l, p + h], [0.0, p + h]],
+            p,
+            &raised_ops,
+            &stud_centres(0.0, l, self.stud_spacing),
+            "pine",
+        ));
+        let wood = |m: &str| m.starts_with("oak") || m.starts_with("pine");
+        let conns = auto_conns(&parts, |a, b| {
+            (wood(&a.material) || wood(&b.material)).then_some(("bolted", None))
         });
         (parts, conns)
     }

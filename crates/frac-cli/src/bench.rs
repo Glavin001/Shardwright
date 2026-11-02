@@ -426,6 +426,27 @@ pub fn generate(dir: &Path, only: &[String]) -> Result<(), String> {
         write_asset(dir, "steel_office", from_building(parts), conns, Some(-0.4))?;
         let (parts, conns) = GalleonStern::default().build();
         write_asset(dir, "galleon_stern", from_building(parts), conns, Some(0.0))?;
+        let (parts, conns) = TimberHouse::default().build();
+        write_asset(dir, "timber_house", from_building(parts), conns, Some(0.0))?;
+        let (parts, conns) = PlankWall::default().build();
+        write_asset(dir, "plank_wall", from_building(parts), conns, Some(0.0))?;
+        let (parts, conns) = PlankWall {
+            window: Some(Opening {
+                a: 1.2,
+                b: 2.4,
+                sill: 0.9,
+                head: 2.1,
+            }),
+            ..Default::default()
+        }
+        .build();
+        write_asset(
+            dir,
+            "plank_wall_window",
+            from_building(parts),
+            conns,
+            Some(0.0),
+        )?;
     }
     // held-out set (never tuned on)
     let held = dir.join("held_out");
